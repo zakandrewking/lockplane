@@ -11,6 +11,16 @@ recording a ledger of all applied plans.
 
 ---
 
+## Work Plan
+- Anchor sprint charter around MCP-first surface and Postgres determinism goals so every deliverable ties back to the Summary and Principles sections.
+- **M1 – DSL & Planner**: lock DSL syntax and schema coverage, build diff engine plus transactional executor, wire shadow-DB dry runs, and publish golden tests with a CLI demo.
+- **M2 – pgroll Integration**: prototype dual-schema flow, script pgroll handoff, add rollback and timeout guards from the safety model, and document migration playbooks.
+- **M3 – RLS & Policy Matrix**: implement `policy_evaluate` plus policy export, extend DSL RLS blocks, generate matrix reports, and dogfood with sample tenants.
+- **M4 – Observability & Drift**: emit structured receipts, integrate OTLP hooks, schedule periodic drift diffs, and surface ledger hash verification inside the MCP server.
+- Resolve open questions by running design spikes on enum/domain rollout, concurrent plan merging, and audit metadata, then feed outcomes into the relevant milestones before freeze.
+
+---
+
 ## Problem
 - SQL migrations are often ambiguous and non-reproducible.
 - AI or automation tools cannot safely reason about DDL state or rollback.
