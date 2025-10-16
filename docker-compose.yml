@@ -1,0 +1,3 @@
+services:
+  pg:
+    image: postgres:16
