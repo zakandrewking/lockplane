@@ -130,54 +130,54 @@ release:
     sha256sum -c checksums.txt
     ```
 
-# Homebrew tap (optional, for macOS/Linux users)
-brews:
-  - ids:
-      - tar
-    repository:
-      owner: lockplane
-      name: homebrew-tap
-    directory: Formula
-    homepage: https://github.com/lockplane/lockplane
-    description: Postgres-first control plane for safe, AI-friendly schema management
-    license: MIT
-    test: |
-      system "#{bin}/lockplane --help"
-    install: |
-      bin.install "lockplane"
+# Homebrew tap (disabled for now - requires homebrew-tap repository)
+# brews:
+#   - ids:
+#       - tar
+#     repository:
+#       owner: lockplane
+#       name: homebrew-tap
+#     directory: Formula
+#     homepage: https://github.com/lockplane/lockplane
+#     description: Postgres-first control plane for safe, AI-friendly schema management
+#     license: MIT
+#     test: |
+#       system "#{bin}/lockplane --help"
+#     install: |
+#       bin.install "lockplane"
 
-# Docker images (optional)
-dockers:
-  - image_templates:
-      - "lockplane/lockplane:{{ .Version }}-amd64"
-      - "lockplane/lockplane:latest-amd64"
-    use: buildx
-    dockerfile: Dockerfile.goreleaser
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-  - image_templates:
-      - "lockplane/lockplane:{{ .Version }}-arm64"
-      - "lockplane/lockplane:latest-arm64"
-    use: buildx
-    goarch: arm64
-    dockerfile: Dockerfile.goreleaser
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-
-docker_manifests:
-  - name_template: lockplane/lockplane:{{ .Version }}
-    image_templates:
-      - lockplane/lockplane:{{ .Version }}-amd64
-      - lockplane/lockplane:{{ .Version }}-arm64
-  - name_template: lockplane/lockplane:latest
-    image_templates:
-      - lockplane/lockplane:latest-amd64
-      - lockplane/lockplane:latest-arm64
+# Docker images (disabled for now - requires Docker Hub credentials)
+# dockers:
+#   - image_templates:
+#       - "lockplane/lockplane:{{ .Version }}-amd64"
+#       - "lockplane/lockplane:latest-amd64"
+#     use: buildx
+#     dockerfile: Dockerfile.goreleaser
+#     build_flag_templates:
+#       - "--platform=linux/amd64"
+#       - "--label=org.opencontainers.image.created={{.Date}}"
+#       - "--label=org.opencontainers.image.title={{.ProjectName}}"
+#       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+#       - "--label=org.opencontainers.image.version={{.Version}}"
+#   - image_templates:
+#       - "lockplane/lockplane:{{ .Version }}-arm64"
+#       - "lockplane/lockplane:latest-arm64"
+#     use: buildx
+#     goarch: arm64
+#     dockerfile: Dockerfile.goreleaser
+#     build_flag_templates:
+#       - "--platform=linux/arm64"
+#       - "--label=org.opencontainers.image.created={{.Date}}"
+#       - "--label=org.opencontainers.image.title={{.ProjectName}}"
+#       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+#       - "--label=org.opencontainers.image.version={{.Version}}"
+#
+# docker_manifests:
+#   - name_template: lockplane/lockplane:{{ .Version }}
+#     image_templates:
+#       - lockplane/lockplane:{{ .Version }}-amd64
+#       - lockplane/lockplane:{{ .Version }}-arm64
+#   - name_template: lockplane/lockplane:latest
+#     image_templates:
+#       - lockplane/lockplane:latest-amd64
+#       - lockplane/lockplane:latest-arm64
