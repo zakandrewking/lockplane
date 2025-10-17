@@ -1,0 +1,16 @@
+{
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        }
+      ],
+      "indexes": []
+    }
+  ]
+}
