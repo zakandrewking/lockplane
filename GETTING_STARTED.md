@@ -85,27 +85,34 @@ volumes:
 
 **Key difference:** You now have two databases. Main for real data, shadow for testing.
 
-**Your new migrations/001_initial.json:**
-```json
-{
-  "steps": [
+**Your new migrations/001_initial.cue:**
+```cue
+package plan
+
+import "github.com/lockplane/lockplane/schema"
+
+schema.#Plan & {
+  steps: [
     {
-      "description": "Create users table",
-      "sql": "CREATE TABLE users (id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT NOW())"
+      description: "Create users table"
+      sql:         "CREATE TABLE users (id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT NOW())"
     },
     {
-      "description": "Create notes table",
-      "sql": "CREATE TABLE notes (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title TEXT NOT NULL, content TEXT, created_at TIMESTAMP DEFAULT NOW())"
+      description: "Create notes table"
+      sql:         "CREATE TABLE notes (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title TEXT NOT NULL, content TEXT, created_at TIMESTAMP DEFAULT NOW())"
     },
     {
-      "description": "Add index on notes user_id",
-      "sql": "CREATE INDEX idx_notes_user_id ON notes(user_id)"
+      description: "Add index on notes user_id"
+      sql:         "CREATE INDEX idx_notes_user_id ON notes(user_id)"
     }
   ]
 }
 ```
 
-**Key difference:** Migration is a structured plan, not raw SQL. Each step has a description explaining what it does.
+**Key differences:**
+- Migration is a structured CUE plan with type safety
+- Each step has a description explaining what it does
+- CUE validates the structure before you run it
 
 ## The Lockplane Workflow
 
@@ -120,13 +127,17 @@ Both databases are empty.
 **2. See what you have:**
 
 ```bash
-go run main.go
+lockplane introspect
 ```
 
 Output:
-```json
-{
-  "tables": null
+```cue
+package schema
+
+import "github.com/lockplane/lockplane/schema"
+
+schema.#Schema & {
+  tables: []
 }
 ```
 
@@ -134,16 +145,17 @@ Nothing yet. This is your baseline.
 
 **3. Apply your migration:**
 
+In your Go code:
 ```go
-// Load the plan
-plan := loadPlan("migrations/001_initial.json")
+// Load the plan from CUE
+plan, err := LoadCUEPlan("migrations/001_initial.cue")
 
 // Connect to both databases
 mainDB := connect("localhost:5432/notesapp")
 shadowDB := connect("localhost:5433/notesapp_shadow")
 
 // Apply with shadow DB validation
-result, err := applyPlan(ctx, mainDB, &plan, shadowDB)
+result, err := applyPlan(ctx, mainDB, plan, shadowDB)
 ```
 
 **What happens:**
@@ -155,26 +167,30 @@ result, err := applyPlan(ctx, mainDB, &plan, shadowDB)
 **4. Verify it worked:**
 
 ```bash
-go run main.go
+lockplane introspect
 ```
 
 Output:
-```json
-{
-  "tables": [
+```cue
+package schema
+
+import "github.com/lockplane/lockplane/schema"
+
+schema.#Schema & {
+  tables: [
     {
-      "name": "users",
-      "columns": [
-        {"name": "id", "type": "integer", "nullable": false, "is_primary_key": true},
-        {"name": "email", "type": "text", "nullable": false, "is_primary_key": false},
-        {"name": "created_at", "type": "timestamp without time zone", "nullable": true}
-      ],
-      "indexes": [...]
+      name: "users"
+      columns: [
+        {name: "id", type: "integer", nullable: false, is_primary_key: true},
+        {name: "email", type: "text", nullable: false, is_primary_key: false},
+        {name: "created_at", type: "timestamp without time zone", nullable: true}
+      ]
+      indexes: [...]
     },
     {
-      "name": "notes",
-      "columns": [...],
-      "indexes": [...]
+      name: "notes"
+      columns: [...]
+      indexes: [...]
     }
   ]
 }
@@ -197,7 +213,7 @@ A week later, you need tags.
 **1. See current state:**
 
 ```bash
-go run main.go > current_schema.json
+lockplane introspect > current_schema.cue
 ```
 
 Claude can now see exactly what exists.
@@ -211,18 +227,22 @@ Claude knows:
 - What columns are already there
 - What would conflict
 
-**3. Claude creates migrations/002_add_tags.json:**
+**3. Claude creates migrations/002_add_tags.cue:**
 
-```json
-{
-  "steps": [
+```cue
+package plan
+
+import "github.com/lockplane/lockplane/schema"
+
+schema.#Plan & {
+  steps: [
     {
-      "description": "Create tags table",
-      "sql": "CREATE TABLE tags (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE)"
+      description: "Create tags table"
+      sql:         "CREATE TABLE tags (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE)"
     },
     {
-      "description": "Create note_tags junction table",
-      "sql": "CREATE TABLE note_tags (note_id INTEGER REFERENCES notes(id), tag_id INTEGER REFERENCES tags(id), PRIMARY KEY (note_id, tag_id))"
+      description: "Create note_tags junction table"
+      sql:         "CREATE TABLE note_tags (note_id INTEGER REFERENCES notes(id), tag_id INTEGER REFERENCES tags(id), PRIMARY KEY (note_id, tag_id))"
     }
   ]
 }
@@ -248,8 +268,11 @@ project/
 **Frontend needs to know the schema:**
 
 ```bash
-# Generate current schema for frontend
-go run main.go > frontend/schema.json
+# Generate current schema for frontend (CUE format)
+lockplane introspect > frontend/schema.cue
+
+# Or JSON if your frontend tooling needs it
+lockplane introspect --format json > frontend/schema.json
 ```
 
 Your frontend can now:
@@ -259,10 +282,10 @@ Your frontend can now:
 
 **When schema changes:**
 
-1. Create migration plan
+1. Create migration plan (in CUE)
 2. Test with shadow DB
 3. Apply to main DB
-4. Regenerate schema.json
+4. Regenerate schema file
 5. Update frontend types
 6. Deploy together
 
@@ -338,14 +361,14 @@ services:
 pg_dump notesapp > backup_$(date +%Y%m%d).sql
 
 # 2. Apply migrations (no shadow DB)
-go run apply.go --plan migrations/002_add_tags.json
+# (Use your apply function with LoadCUEPlan)
 
 # 3. Deploy new app code
 docker compose up -d app
 
 # 4. Verify
-go run main.go  # Confirm schema is correct
-curl /health    # Confirm app works
+lockplane introspect  # Confirm schema is correct
+curl /health          # Confirm app works
 ```
 
 **If something breaks:**
@@ -397,17 +420,18 @@ Long-running migrations (adding indexes, changing column types) should:
 **With Lockplane:**
 
 1. Claude introspects (sees exact current state)
-2. Claude writes migration plan
-3. Shadow DB tests it first
-4. Transaction ensures atomicity
-5. You always know what's in the database
-6. Rollback plans are generated (coming soon)
+2. Claude writes migration plan in CUE
+3. CUE validates the plan structure
+4. Shadow DB tests it first
+5. Transaction ensures atomicity
+6. You always know what's in the database
+7. Rollback plans are automatically generated
 
 **The big wins:**
 
 - **For Claude:** No more guessing what's in the database
-- **For you:** Clear plans you can review before execution
-- **For your team:** Migration history is readable JSON, not raw SQL
+- **For you:** Clear plans you can review before execution, with type safety
+- **For your team:** Migration history is readable CUE with validation
 - **For production:** Shadow testing catches issues early
 
 ## Common Workflows
@@ -416,21 +440,21 @@ Long-running migrations (adding indexes, changing column types) should:
 
 ```bash
 # See current state
-go run main.go > schema_before.json
+lockplane introspect > schema_before.cue
 
 # Build feature (Claude writes migrations)
 # ...
 
 # See what changed
-go run main.go > schema_after.json
-diff schema_before.json schema_after.json
+lockplane introspect > schema_after.cue
+lockplane diff schema_before.cue schema_after.cue
 ```
 
 **Reviewing a pull request:**
 
 ```bash
 # Check migration plans
-cat migrations/003_add_comments.json
+cat migrations/003_add_comments.cue
 
 # Test locally with shadow DB
 go test
@@ -451,16 +475,18 @@ go test
 ## What's Next
 
 **Current state (works today):**
-- Introspection (see what's in the database)
-- Migration executor (safe, transactional)
-- Shadow DB validation (test before applying)
-- Diff engine (compare two schemas)
+- ✅ CUE DSL for type-safe schema definitions
+- ✅ Introspection (see what's in the database)
+- ✅ Diff engine (compare two schemas)
+- ✅ Plan generator (auto-create migrations from desired state)
+- ✅ Rollback generator (automatic reverse migrations)
+- ✅ Migration executor (safe, transactional)
+- ✅ Shadow DB validation (test before applying)
 
 **Coming soon:**
-- Plan generator (auto-create migrations from desired state)
-- Rollback generator (automatic reverse migrations)
 - Durable execution (long-running operations with retries)
 - MCP server (AI agents can use Lockplane as a tool)
+- Catalog hash computation and ledger
 
 ## Tips for Working with Claude
 

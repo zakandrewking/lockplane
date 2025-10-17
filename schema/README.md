@@ -32,18 +32,17 @@ users: schema.#Table & {
 cue vet myapp.cue
 ```
 
-**3. Export to JSON:**
+**3. Use with Lockplane:**
 
 ```bash
-go run cmd/cue-export/main.go -cue myapp.cue -json desired_schema.json
-```
+# Get current database state
+lockplane introspect > current.cue
 
-**4. Use with Lockplane:**
+# Compare schemas and generate migration plan
+lockplane plan --from current.cue --to myapp.cue > migration.cue
 
-```bash
-# Compare with current schema
-go run main.go > current_schema.json
-# (Diff engine will compare these in the future)
+# Generate rollback plan
+lockplane rollback --plan migration.cue --from current.cue > rollback.cue
 ```
 
 ## IDE Support

@@ -62,19 +62,17 @@ recording a ledger of all applied plans.
 
 ## Implementation Status
 
-**Completed (M1 Foundation):**
-- ✅ Schema introspector - reads Postgres catalog, outputs JSON
+**Completed (M1 - DSL & Planner):**
+- ✅ Schema introspector - reads Postgres catalog, outputs CUE (or JSON)
+- ✅ CUE DSL for defining desired schema state with type safety
+- ✅ Diff engine to compare schemas
+- ✅ Automatic plan generator - generates SQL migrations from schema diffs
+- ✅ Automatic rollback generator - generates reverse migrations
 - ✅ Plan structure - migration steps with SQL and descriptions
 - ✅ Transactional executor - applies plans atomically
 - ✅ Shadow DB validation - dry-run testing before production
 - ✅ Golden test suite - fixture-based testing framework
 - ✅ Docker Compose setup - main and shadow databases
-
-**In Progress:**
-- DSL format for defining desired schema state
-- Diff engine to compare desired vs actual
-- Plan generator to auto-create migrations
-- Rollback plan generation
 
 **Planned:**
 - MCP server interface
@@ -90,7 +88,7 @@ recording a ledger of all applied plans.
 Reads current schema from Postgres `information_schema` and `pg_catalog`:
 - Tables, columns (types, nullability, defaults, primary keys)
 - Indexes (name, unique flag)
-- Outputs canonical JSON representation
+- Outputs canonical CUE representation (JSON also available)
 
 ### Executor
 Applies migration plans with safety guarantees:
@@ -100,17 +98,23 @@ Applies migration plans with safety guarantees:
 - Automatic rollback on any failure
 
 ### Plan Structure
-JSON format defining migration steps:
-```json
-{
-  "steps": [
+CUE format defining migration steps:
+```cue
+package plan
+
+import "github.com/lockplane/lockplane/schema"
+
+schema.#Plan & {
+  steps: [
     {
-      "description": "Create users table",
-      "sql": "CREATE TABLE users (id SERIAL PRIMARY KEY, email TEXT)"
+      description: "Create users table"
+      sql:         "CREATE TABLE users (id SERIAL PRIMARY KEY, email TEXT)"
     }
   ]
 }
 ```
+
+JSON format also supported for backward compatibility.
 
 ---
 
