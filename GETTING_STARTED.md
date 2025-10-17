@@ -1,54 +1,91 @@
 # Getting Started: Building Your First App with Lockplane
 
-You're building an app with Claude Code and need a database. Here's how Lockplane fits in.
+You want to build an app. Here's how Lockplane fits into that journey.
 
-## The Scenario
+## Starting with Claude Code (No Lockplane)
 
-You're asking Claude to build a note-taking app. You need:
-- A `users` table for accounts
-- A `notes` table for storing notes
-- Indexes for fast lookups
+You ask Claude: "Build me a note-taking app with user accounts."
 
-Without Lockplane, Claude would write migration files and you'd hope they work. With Lockplane, Claude gets:
-- Current schema state (what's in the database now)
-- Safe testing before changes hit production
-- Clear diffs showing exactly what will change
+Claude gives you:
 
-## Initial Setup
+**docker-compose.yml:**
+```yaml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_USER: myuser
+      POSTGRES_DB: notesapp
+    ports:
+      - "5432:5432"
+```
 
-**1. Start your databases:**
+**migrations/001_initial.sql:**
+```sql
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
 
+CREATE TABLE notes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  title TEXT NOT NULL,
+  content TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_notes_user_id ON notes(user_id);
+```
+
+You run the migration:
 ```bash
 docker compose up -d
+psql -U myuser -d notesapp < migrations/001_initial.sql
 ```
 
-This starts two Postgres databases:
-- Main database (port 5432) - your real data
-- Shadow database (port 5433) - for testing migrations
+**This works. But there are problems:**
 
-**2. Check current state:**
+1. No way to test migrations before running them
+2. If migration fails halfway, database is in unknown state
+3. Hard to see what changed between versions
+4. Can't safely roll back if something breaks
+5. Claude has to guess what's in the database
 
-```bash
-go run main.go
+## Adding Lockplane to Your Setup
+
+**Your new docker-compose.yml:**
+```yaml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: lockplane
+      POSTGRES_USER: lockplane
+      POSTGRES_DB: notesapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+  shadow:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: lockplane
+      POSTGRES_USER: lockplane
+      POSTGRES_DB: notesapp_shadow
+    ports:
+      - "5433:5432"
+
+volumes:
+  dbdata:
 ```
 
-You'll see empty JSON:
-```json
-{
-  "tables": null
-}
-```
+**Key difference:** You now have two databases. Main for real data, shadow for testing.
 
-This is your starting point. No tables yet.
-
-## Creating Your First Schema
-
-**Option A: Let Claude write migration plans**
-
-Tell Claude: "Create a migration plan for a notes app with users and notes tables."
-
-Claude will create a JSON plan:
-
+**Your new migrations/001_initial.json:**
 ```json
 {
   "steps": [
@@ -68,44 +105,70 @@ Claude will create a JSON plan:
 }
 ```
 
-Save this as `migrations/001_initial_schema.json`.
+**Key difference:** Migration is a structured plan, not raw SQL. Each step has a description explaining what it does.
 
-**Option B: Write SQL directly**
+## The Lockplane Workflow
 
-If you prefer, just write SQL and have Claude convert it to a plan format.
+**1. Start fresh:**
 
-## Applying Changes
-
-**Test on shadow database first:**
-
-```go
-// Load your plan
-plan := loadPlan("migrations/001_initial_schema.json")
-
-// Test on shadow DB
-shadowDB := connectToShadow()
-result, err := applyPlan(ctx, mainDB, &plan, shadowDB)
+```bash
+docker compose up -d
 ```
 
-Lockplane runs the migration on the shadow database first. If it fails, your real database is untouched.
+Both databases are empty.
 
-**Apply to main database:**
-
-If shadow testing passes, the same migration runs on your main database in a transaction. Either all steps succeed or none do.
-
-**Verify it worked:**
+**2. See what you have:**
 
 ```bash
 go run main.go
 ```
 
-Now you'll see your schema:
+Output:
+```json
+{
+  "tables": null
+}
+```
+
+Nothing yet. This is your baseline.
+
+**3. Apply your migration:**
+
+```go
+// Load the plan
+plan := loadPlan("migrations/001_initial.json")
+
+// Connect to both databases
+mainDB := connect("localhost:5432/notesapp")
+shadowDB := connect("localhost:5433/notesapp_shadow")
+
+// Apply with shadow DB validation
+result, err := applyPlan(ctx, mainDB, &plan, shadowDB)
+```
+
+**What happens:**
+1. Shadow DB gets the migration first
+2. If shadow succeeds, main DB gets the same migration
+3. If shadow fails, main DB is untouched
+4. Everything runs in a transaction (all or nothing)
+
+**4. Verify it worked:**
+
+```bash
+go run main.go
+```
+
+Output:
 ```json
 {
   "tables": [
     {
       "name": "users",
-      "columns": [...],
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false, "is_primary_key": true},
+        {"name": "email", "type": "text", "nullable": false, "is_primary_key": false},
+        {"name": "created_at", "type": "timestamp without time zone", "nullable": true}
+      ],
       "indexes": [...]
     },
     {
@@ -117,21 +180,38 @@ Now you'll see your schema:
 }
 ```
 
+Now you can see exactly what's in your database. Claude can see it too.
+
 ## Making Changes
 
-A week later, you need to add tags to notes.
+A week later, you need tags.
 
-**See what you have:**
+**Without Lockplane:**
+- Write new SQL file
+- Hope it doesn't conflict with existing schema
+- Run it, pray it works
+- If it fails halfway, fix the database by hand
+
+**With Lockplane:**
+
+**1. See current state:**
 
 ```bash
 go run main.go > current_schema.json
 ```
 
-**Create the change:**
+Claude can now see exactly what exists.
 
-Tell Claude: "Add a tags table and a junction table for many-to-many."
+**2. Tell Claude what you need:**
 
-Claude writes a new plan:
+"Add a tags table and a many-to-many relationship with notes."
+
+Claude knows:
+- What tables already exist
+- What columns are already there
+- What would conflict
+
+**3. Claude creates migrations/002_add_tags.json:**
 
 ```json
 {
@@ -148,85 +228,274 @@ Claude writes a new plan:
 }
 ```
 
-**Test and apply:**
+**4. Test on shadow, then apply:**
 
-Same process - shadow DB test, then main DB. Your existing data is safe because:
-- Shadow DB catches errors before production
-- Transaction ensures all-or-nothing execution
-- You can see exactly what SQL will run
+Same workflow. Shadow DB catches errors. Main DB stays safe.
 
-## How This Helps Claude Code
+## Working with a Frontend
 
-**1. Claude can see current state**
+**Your typical setup:**
 
-Instead of guessing what's in your database, Claude runs the introspector and knows exactly what exists.
+```
+project/
+├── frontend/        # React, Vue, etc
+├── backend/         # API server
+├── migrations/      # Lockplane migration plans
+├── docker-compose.yml
+└── main.go         # Lockplane introspector
+```
 
-**2. Claude can diff schemas**
+**Frontend needs to know the schema:**
 
-When you ask for changes, Claude compares current vs desired and generates only the needed migrations.
+```bash
+# Generate current schema for frontend
+go run main.go > frontend/schema.json
+```
 
-**3. Claude can validate before running**
+Your frontend can now:
+- Generate TypeScript types from the schema
+- Know what fields exist on each table
+- Validate data before sending to API
 
-Shadow database testing means Claude can try risky changes without breaking your app.
+**When schema changes:**
 
-**4. You can review changes**
+1. Create migration plan
+2. Test with shadow DB
+3. Apply to main DB
+4. Regenerate schema.json
+5. Update frontend types
+6. Deploy together
 
-Every migration plan is a JSON file you can read. You see exactly what SQL will run before it runs.
+No surprises. Frontend and backend stay in sync.
 
-## Common Workflow
+## Deployment
 
-**Daily development:**
+### Development
 
-1. Tell Claude what you need ("add user profile pictures")
-2. Claude introspects current schema
-3. Claude writes migration plan
-4. You review the plan
-5. Claude tests on shadow DB
-6. Claude applies to main DB
-7. You verify with another introspection
+You're already doing this:
+- Main DB for real data
+- Shadow DB for testing
+- Migration plans in git
 
-**When things go wrong:**
+### Staging
 
-Because migrations run in transactions, failures roll back automatically. Your database stays consistent.
+**Your staging setup:**
 
-The shadow database caught the error before it touched real data.
+```yaml
+# docker-compose.staging.yml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: lockplane
+      POSTGRES_DB: notesapp_staging
+    volumes:
+      - staging_data:/var/lib/postgresql/data
+
+  shadow:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: lockplane
+      POSTGRES_DB: notesapp_staging_shadow
+```
+
+**Deploy flow:**
+
+1. Git push to staging branch
+2. CI runs: `go test` (verifies migrations work)
+3. Apply migrations to staging DB (with shadow validation)
+4. Deploy new app code
+5. Verify with smoke tests
+
+### Production
+
+**Key differences:**
+
+1. **No shadow DB in production** (too expensive, not needed)
+2. **Migrations run without shadow validation** (already tested in staging)
+3. **Backups before migrations** (can restore if needed)
+
+**docker-compose.production.yml:**
+
+```yaml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: lockplane
+      POSTGRES_DB: notesapp
+    volumes:
+      - /var/lib/postgresql/data:/var/lib/postgresql/data
+```
+
+**Production deploy flow:**
+
+```bash
+# 1. Backup database
+pg_dump notesapp > backup_$(date +%Y%m%d).sql
+
+# 2. Apply migrations (no shadow DB)
+go run apply.go --plan migrations/002_add_tags.json
+
+# 3. Deploy new app code
+docker compose up -d app
+
+# 4. Verify
+go run main.go  # Confirm schema is correct
+curl /health    # Confirm app works
+```
+
+**If something breaks:**
+
+```bash
+# Restore from backup
+psql notesapp < backup_20250101.sql
+
+# Deploy previous app version
+git checkout previous-version
+docker compose up -d app
+```
+
+### Production Best Practices
+
+**1. Separate migration deployments from app deployments**
+
+Deploy migrations first, verify they work, then deploy app code. This way:
+- Database changes can't break the current app
+- Rollback is simpler (just the app, not migrations)
+
+**2. Use read-only shadow DB in staging**
+
+Instead of a full shadow DB in production, keep one in staging:
+```bash
+# Daily: copy production to staging shadow
+pg_dump production | psql staging_shadow
+```
+
+This catches issues that only appear with real data volumes.
+
+**3. Schedule risky migrations**
+
+Long-running migrations (adding indexes, changing column types) should:
+- Run during low-traffic windows
+- Use Lockplane's durable execution (coming soon)
+- Have tested rollback plans
+
+## How Lockplane Changes Your Development
+
+**Before Lockplane:**
+
+1. Claude writes SQL
+2. You run it
+3. Hope for the best
+4. Database state is a mystery
+5. Rollback is manual and scary
+
+**With Lockplane:**
+
+1. Claude introspects (sees exact current state)
+2. Claude writes migration plan
+3. Shadow DB tests it first
+4. Transaction ensures atomicity
+5. You always know what's in the database
+6. Rollback plans are generated (coming soon)
+
+**The big wins:**
+
+- **For Claude:** No more guessing what's in the database
+- **For you:** Clear plans you can review before execution
+- **For your team:** Migration history is readable JSON, not raw SQL
+- **For production:** Shadow testing catches issues early
+
+## Common Workflows
+
+**Starting a new feature:**
+
+```bash
+# See current state
+go run main.go > schema_before.json
+
+# Build feature (Claude writes migrations)
+# ...
+
+# See what changed
+go run main.go > schema_after.json
+diff schema_before.json schema_after.json
+```
+
+**Reviewing a pull request:**
+
+```bash
+# Check migration plans
+cat migrations/003_add_comments.json
+
+# Test locally with shadow DB
+go test
+
+# Approve if migrations are safe
+```
+
+**Production deployment:**
+
+```bash
+# Staging first
+./deploy-staging.sh
+# Verify staging works
+# Then production
+./deploy-production.sh
+```
 
 ## What's Next
 
-Right now you write migration plans as JSON. Soon:
-- Diff engine will auto-detect what changed
-- Plan generator will create migrations for you
-- Rollback plans will be generated automatically
+**Current state (works today):**
+- Introspection (see what's in the database)
+- Migration executor (safe, transactional)
+- Shadow DB validation (test before applying)
+- Diff engine (compare two schemas)
 
-But the core workflow stays the same: introspect, plan, test, apply.
+**Coming soon:**
+- Plan generator (auto-create migrations from desired state)
+- Rollback generator (automatic reverse migrations)
+- Durable execution (long-running operations with retries)
+- MCP server (AI agents can use Lockplane as a tool)
 
 ## Tips for Working with Claude
 
-**Always introspect first:**
+**Always start with introspection:**
 ```
-"Show me the current schema, then add a comments table"
-```
-
-**Ask for migration plans, not raw SQL:**
-```
-"Create a migration plan to add full-text search to notes"
+"Show me the current schema, then add a comments feature"
 ```
 
-**Review plans before applying:**
+**Ask for migration plans:**
 ```
-"Show me what SQL will run before we apply this"
+"Create a migration plan to add full-text search"
+```
+(Not: "Write SQL for full-text search")
+
+**Review before applying:**
+```
+"Show me exactly what SQL will run"
 ```
 
-**Use shadow DB for risky changes:**
+**Test risky changes:**
 ```
-"Test this migration on shadow DB first - it changes column types"
+"This changes column types - test on shadow DB first"
 ```
+
+**Think in states, not scripts:**
+```
+"The database should have these tables: [list]"
+```
+(Let Claude figure out the migrations)
 
 ## Getting Help
 
-- Full design doc: `0001-design.md`
-- Example plans: `testdata/plans/`
+- Full design: `0001-design.md`
+- Example migrations: `testdata/plans/`
 - Example schemas: `testdata/fixtures/`
 - Tests: `go test -v`
 
-Lockplane makes database changes safe for AI and humans. Your data stays consistent, changes are explainable, and you can always see what's happening.
+Lockplane makes database changes safe for AI and humans. Your data stays consistent, changes are explainable, and you always know what's happening.
