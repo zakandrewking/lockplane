@@ -1,16 +1,18 @@
-// Lockplane schema definitions
-// Import this to get type checking and validation for your database schemas
-//
-// BACKWARDS COMPATIBILITY: This file re-exports PostgreSQL definitions by default.
-// For explicit dialect support, import from:
-//   - github.com/lockplane/lockplane/schema/postgres
-//   - github.com/lockplane/lockplane/schema/sqlite
-//
-// All schemas inherit from base.cue which contains common structure definitions.
+// PostgreSQL-specific schema definitions
+// Import this for PostgreSQL databases to get type checking for Postgres-specific types
 
-package schema
+package postgres
 
-// PostgreSQL column types (for backwards compatibility)
+import base "github.com/lockplane/lockplane/schema"
+
+// Re-export base definitions
+#Schema: base.#Schema
+#Table:  base.#Table
+#Index:  base.#Index
+#Plan:   base.#Plan
+#PlanStep: base.#PlanStep
+
+// PostgreSQL column types
 #ColumnType:
 	"text" |
 	"varchar" |
@@ -57,16 +59,24 @@ package schema
 	"polygon" |
 	"circle"
 
-// Override base Column to enforce Postgres types (for backwards compatibility)
-#Column: #Column & {
+// Override the base Column to use Postgres types
+#Column: base.#Column & {
 	type: #ColumnType
 }
 
-// PostgreSQL-specific common column patterns (for backwards compatibility)
+// PostgreSQL-specific common column patterns
 
 #ID: #Column & {
 	name: "id"
 	type: "integer"
+	nullable: false
+	is_primary_key: true
+	default: "nextval('${_table}_id_seq'::regclass)"
+}
+
+#BigID: #Column & {
+	name: "id"
+	type: "bigint"
 	nullable: false
 	is_primary_key: true
 	default: "nextval('${_table}_id_seq'::regclass)"
@@ -78,6 +88,20 @@ package schema
 	nullable: false
 	is_primary_key: true
 	default: "gen_random_uuid()"
+}
+
+#Serial: #Column & {
+	name: "id"
+	type: "serial"
+	nullable: false
+	is_primary_key: true
+}
+
+#BigSerial: #Column & {
+	name: "id"
+	type: "bigserial"
+	nullable: false
+	is_primary_key: true
 }
 
 #CreatedAt: #Column & {
@@ -100,7 +124,7 @@ package schema
 	nullable: false
 }
 
-// Common naming conventions (for backwards compatibility)
+// Common naming conventions
 
 #TimestampColumn: #Column & {
 	name: =~"_at$" // must end in _at
@@ -110,4 +134,8 @@ package schema
 #BooleanColumn: #Column & {
 	name: =~"^(is_|has_|can_|should_)" // booleans start with is/has/can/should
 	type: "boolean"
+}
+
+#JSONColumn: #Column & {
+	type: "json" | "jsonb"
 }

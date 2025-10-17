@@ -1,19 +1,19 @@
-// Example: Simple schema showing minimal syntax
+// Example: Simple PostgreSQL schema showing minimal syntax
 // Use this as a starting point for your own schemas
 
 package simple
 
-import "github.com/lockplane/lockplane/schema"
+import postgres "github.com/lockplane/lockplane/schema/postgres"
 
-schema.#Schema & {
+postgres.#Schema & {
 	tables: [users]
 }
 
-users: schema.#Table & {
+users: postgres.#Table & {
 	name: "users"
 	columns: [
-		schema.#ID,
-		schema.#Email,
-		schema.#CreatedAt,
+		postgres.#ID,
+		postgres.#Email,
+		postgres.#CreatedAt,
 	]
 }

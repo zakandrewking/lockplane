@@ -1,17 +1,17 @@
-// Example: Note-taking app schema
+// Example: Note-taking app schema (PostgreSQL)
 // This shows basic table definitions with relationships
 
 package notesapp
 
-import "github.com/lockplane/lockplane/schema"
+import postgres "github.com/lockplane/lockplane/schema/postgres"
 
 // Full schema export
-schema.#Schema & {
+postgres.#Schema & {
 	tables: [users, notes, tags, note_tags]
 }
 
 // Users table
-users: schema.#Table & {
+users: postgres.#Table & {
 	name: "users"
 	columns: [
 		{
@@ -21,8 +21,8 @@ users: schema.#Table & {
 			is_primary_key: true
 			default: "nextval('users_id_seq'::regclass)"
 		},
-		schema.#Email,
-		schema.#CreatedAt,
+		postgres.#Email,
+		postgres.#CreatedAt,
 	]
 	indexes: [
 		{
@@ -34,7 +34,7 @@ users: schema.#Table & {
 }
 
 // Notes table
-notes: schema.#Table & {
+notes: postgres.#Table & {
 	name: "notes"
 	columns: [
 		{
@@ -59,8 +59,8 @@ notes: schema.#Table & {
 			type: "text"
 			nullable: true
 		},
-		schema.#CreatedAt,
-		schema.#UpdatedAt,
+		postgres.#CreatedAt,
+		postgres.#UpdatedAt,
 	]
 	indexes: [
 		{
@@ -72,7 +72,7 @@ notes: schema.#Table & {
 }
 
 // Tags table
-tags: schema.#Table & {
+tags: postgres.#Table & {
 	name: "tags"
 	columns: [
 		{
@@ -98,7 +98,7 @@ tags: schema.#Table & {
 }
 
 // Note-Tags junction table (many-to-many)
-note_tags: schema.#Table & {
+note_tags: postgres.#Table & {
 	name: "note_tags"
 	columns: [
 		{
