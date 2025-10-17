@@ -1,0 +1,8 @@
+{
+  "steps": [
+    {
+      "description": "Create posts table",
+      "sql": "CREATE TABLE posts (id SERIAL PRIMARY KEY, title TEXT NOT NULL, content TEXT, created_at TIMESTAMP DEFAULT NOW())"
+    }
+  ]
+}

@@ -208,3 +208,88 @@ func getEnv(key, defaultValue string) string {
 	}
 	return defaultValue
 }
+
+// Plan represents a migration plan with a series of steps
+type Plan struct {
+	Steps []PlanStep `json:"steps"`
+}
+
+// PlanStep represents a single migration operation
+type PlanStep struct {
+	Description string `json:"description"`
+	SQL         string `json:"sql"`
+}
+
+// ExecutionResult tracks the outcome of executing a plan
+type ExecutionResult struct {
+	Success      bool     `json:"success"`
+	StepsApplied int      `json:"steps_applied"`
+	Errors       []string `json:"errors,omitempty"`
+}
+
+// applyPlan executes a migration plan with optional shadow DB validation
+func applyPlan(ctx context.Context, db *sql.DB, plan *Plan, shadowDB *sql.DB) (*ExecutionResult, error) {
+	result := &ExecutionResult{
+		Success: false,
+		Errors:  []string{},
+	}
+
+	// If shadow DB provided, run dry-run first
+	if shadowDB != nil {
+		if err := dryRunPlan(ctx, shadowDB, plan); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("dry-run failed: %v", err))
+			return result, fmt.Errorf("dry-run validation failed: %w", err)
+		}
+	}
+
+	// Execute plan in a transaction
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to begin transaction: %v", err))
+		return result, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer func() {
+		if !result.Success {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Execute each step
+	for i, step := range plan.Steps {
+		_, err := tx.ExecContext(ctx, step.SQL)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("step %d (%s) failed: %v", i, step.Description, err))
+			return result, fmt.Errorf("step %d failed: %w", i, err)
+		}
+		result.StepsApplied++
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		result.Errors = append(result.Errors, fmt.Sprintf("failed to commit: %v", err))
+		return result, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	result.Success = true
+	return result, nil
+}
+
+// dryRunPlan validates a plan by executing it on shadow DB and rolling back
+func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan) error {
+	tx, err := shadowDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin shadow transaction: %w", err)
+	}
+	defer tx.Rollback() // Always rollback shadow DB changes
+
+	// Execute each step
+	for i, step := range plan.Steps {
+		_, err := tx.ExecContext(ctx, step.SQL)
+		if err != nil {
+			return fmt.Errorf("shadow DB step %d (%s) failed: %w", i, step.Description, err)
+		}
+	}
+
+	return nil
+}

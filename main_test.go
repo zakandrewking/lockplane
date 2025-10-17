@@ -222,3 +222,239 @@ func TestComprehensiveSchema(t *testing.T) {
 func TestIndexesSchema(t *testing.T) {
 	goldenTest(t, "indexes")
 }
+
+// Executor tests
+
+func TestApplyPlan_CreateTable(t *testing.T) {
+	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	if err := db.PingContext(ctx); err != nil {
+		t.Skipf("Database not available (this is okay in CI): %v", err)
+	}
+
+	// Clean up
+	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
+	defer func() {
+		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
+	}()
+
+	// Load plan
+	planBytes, err := os.ReadFile("testdata/plans/create_table.json")
+	if err != nil {
+		t.Fatalf("Failed to read plan: %v", err)
+	}
+
+	var plan Plan
+	if err := json.Unmarshal(planBytes, &plan); err != nil {
+		t.Fatalf("Failed to parse plan: %v", err)
+	}
+
+	// Execute plan
+	result, err := applyPlan(ctx, db, &plan, nil)
+	if err != nil {
+		t.Fatalf("Failed to apply plan: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success=true, got false")
+	}
+
+	if result.StepsApplied != 1 {
+		t.Errorf("Expected 1 step applied, got %d", result.StepsApplied)
+	}
+
+	// Verify table was created
+	var exists bool
+	err = db.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'posts')").Scan(&exists)
+	if err != nil {
+		t.Fatalf("Failed to check table existence: %v", err)
+	}
+
+	if !exists {
+		t.Error("Expected posts table to exist")
+	}
+}
+
+func TestApplyPlan_WithShadowDB(t *testing.T) {
+	mainConnStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	shadowConnStr := getEnv("SHADOW_DATABASE_URL", "postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable")
+
+	mainDB, err := sql.Open("postgres", mainConnStr)
+	if err != nil {
+		t.Fatalf("Failed to connect to main database: %v", err)
+	}
+	defer mainDB.Close()
+
+	shadowDB, err := sql.Open("postgres", shadowConnStr)
+	if err != nil {
+		t.Fatalf("Failed to connect to shadow database: %v", err)
+	}
+	defer shadowDB.Close()
+
+	ctx := context.Background()
+	if err := mainDB.PingContext(ctx); err != nil {
+		t.Skipf("Main database not available (this is okay in CI): %v", err)
+	}
+	if err := shadowDB.PingContext(ctx); err != nil {
+		t.Skipf("Shadow database not available (this is okay in CI): %v", err)
+	}
+
+	// Clean up both databases
+	_, _ = mainDB.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
+	_, _ = shadowDB.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
+	defer func() {
+		_, _ = mainDB.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
+		_, _ = shadowDB.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
+	}()
+
+	// Load plan
+	planBytes, err := os.ReadFile("testdata/plans/create_table.json")
+	if err != nil {
+		t.Fatalf("Failed to read plan: %v", err)
+	}
+
+	var plan Plan
+	if err := json.Unmarshal(planBytes, &plan); err != nil {
+		t.Fatalf("Failed to parse plan: %v", err)
+	}
+
+	// Execute plan with shadow DB validation
+	result, err := applyPlan(ctx, mainDB, &plan, shadowDB)
+	if err != nil {
+		t.Fatalf("Failed to apply plan: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success=true, got false")
+	}
+
+	// Verify table exists in main DB
+	var mainExists bool
+	err = mainDB.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'posts')").Scan(&mainExists)
+	if err != nil {
+		t.Fatalf("Failed to check main table existence: %v", err)
+	}
+	if !mainExists {
+		t.Error("Expected posts table to exist in main database")
+	}
+
+	// Verify table does NOT exist in shadow DB (should have been rolled back)
+	var shadowExists bool
+	err = shadowDB.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'posts')").Scan(&shadowExists)
+	if err != nil {
+		t.Fatalf("Failed to check shadow table existence: %v", err)
+	}
+	if shadowExists {
+		t.Error("Expected posts table to NOT exist in shadow database (should be rolled back)")
+	}
+}
+
+func TestApplyPlan_InvalidSQL(t *testing.T) {
+	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	if err := db.PingContext(ctx); err != nil {
+		t.Skipf("Database not available (this is okay in CI): %v", err)
+	}
+
+	// Load invalid plan
+	planBytes, err := os.ReadFile("testdata/plans/invalid.json")
+	if err != nil {
+		t.Fatalf("Failed to read plan: %v", err)
+	}
+
+	var plan Plan
+	if err := json.Unmarshal(planBytes, &plan); err != nil {
+		t.Fatalf("Failed to parse plan: %v", err)
+	}
+
+	// Execute plan - should fail
+	result, err := applyPlan(ctx, db, &plan, nil)
+	if err == nil {
+		t.Error("Expected error for invalid SQL, got nil")
+	}
+
+	if result.Success {
+		t.Error("Expected success=false for invalid SQL")
+	}
+
+	if len(result.Errors) == 0 {
+		t.Error("Expected errors to be recorded")
+	}
+}
+
+func TestApplyPlan_AddColumn(t *testing.T) {
+	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	if err := db.PingContext(ctx); err != nil {
+		t.Skipf("Database not available (this is okay in CI): %v", err)
+	}
+
+	// Set up - create users table first
+	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS users CASCADE")
+	_, err = db.ExecContext(ctx, "CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL)")
+	if err != nil {
+		t.Fatalf("Failed to create users table: %v", err)
+	}
+	defer func() {
+		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS users CASCADE")
+	}()
+
+	// Load plan to add email column
+	planBytes, err := os.ReadFile("testdata/plans/add_column.json")
+	if err != nil {
+		t.Fatalf("Failed to read plan: %v", err)
+	}
+
+	var plan Plan
+	if err := json.Unmarshal(planBytes, &plan); err != nil {
+		t.Fatalf("Failed to parse plan: %v", err)
+	}
+
+	// Execute plan
+	result, err := applyPlan(ctx, db, &plan, nil)
+	if err != nil {
+		t.Fatalf("Failed to apply plan: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success=true, got false")
+	}
+
+	if result.StepsApplied != 2 {
+		t.Errorf("Expected 2 steps applied, got %d", result.StepsApplied)
+	}
+
+	// Verify email column was added
+	var hasEmail bool
+	err = db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT FROM information_schema.columns
+			WHERE table_name = 'users' AND column_name = 'email'
+		)
+	`).Scan(&hasEmail)
+	if err != nil {
+		t.Fatalf("Failed to check column existence: %v", err)
+	}
+
+	if !hasEmail {
+		t.Error("Expected email column to exist")
+	}
+}

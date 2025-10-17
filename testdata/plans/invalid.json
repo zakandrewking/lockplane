@@ -1,0 +1,8 @@
+{
+  "steps": [
+    {
+      "description": "This should fail - invalid SQL",
+      "sql": "INVALID SQL STATEMENT HERE"
+    }
+  ]
+}
