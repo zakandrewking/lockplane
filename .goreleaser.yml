@@ -1,6 +1,8 @@
 # GoReleaser configuration for Lockplane
 # Builds and packages releases for multiple platforms
 
+version: 2
+
 before:
   hooks:
     # Run tests before building
