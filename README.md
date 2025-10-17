@@ -12,6 +12,12 @@ A Postgres-first control plane for safe, AI-friendly schema management.
 
 **Long-running operations will execute durably.** Building an index on 100M rows? Backfilling a column? Lockplane will handle timeouts, retries, and progress tracking so operations complete even if connections drop. *(Planned)*
 
+---
+
+**New to Lockplane?** See [GETTING_STARTED.md](./GETTING_STARTED.md) for a guide to building your first app with Claude Code and Lockplane.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
