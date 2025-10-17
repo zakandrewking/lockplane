@@ -403,7 +403,7 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS users CASCADE")
 	}()
 
-	// Load plan to add email column from JSON
+	// Load plan to add age column from JSON
 	planPtr, err := LoadJSONPlan("testdata/plans-json/add_column.json")
 	if err != nil {
 		t.Fatalf("Failed to load plan: %v", err)
@@ -420,23 +420,23 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 		t.Errorf("Expected success=true, got false")
 	}
 
-	if result.StepsApplied != 2 {
-		t.Errorf("Expected 2 steps applied, got %d", result.StepsApplied)
+	if result.StepsApplied != 1 {
+		t.Errorf("Expected 1 step applied, got %d", result.StepsApplied)
 	}
 
-	// Verify email column was added
-	var hasEmail bool
+	// Verify age column was added
+	var hasAge bool
 	err = db.QueryRowContext(ctx, `
 		SELECT EXISTS (
 			SELECT FROM information_schema.columns
-			WHERE table_name = 'users' AND column_name = 'email'
+			WHERE table_name = 'users' AND column_name = 'age'
 		)
-	`).Scan(&hasEmail)
+	`).Scan(&hasAge)
 	if err != nil {
 		t.Fatalf("Failed to check column existence: %v", err)
 	}
 
-	if !hasEmail {
-		t.Error("Expected email column to exist")
+	if !hasAge {
+		t.Error("Expected age column to exist")
 	}
 }
