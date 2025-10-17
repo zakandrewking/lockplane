@@ -78,18 +78,24 @@ Tests run automatically on:
 
 ### Before Committing
 
-Run these commands to ensure code quality:
+**ALWAYS run these commands before pushing to ensure code quality:**
 
 ```bash
 # Format code
 go fmt ./...
 
-# Vet code for issues
+# Vet code for issues (catches common errors)
 go vet ./...
 
 # Run tests
 go test ./...
 ```
+
+**Critical**: Always run `go vet ./...` before pushing. It catches errors like:
+- Unchecked error return values
+- Printf format string issues
+- Unreachable code
+- Common mistakes
 
 ### Linting
 

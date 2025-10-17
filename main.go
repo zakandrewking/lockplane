@@ -479,7 +479,9 @@ func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin shadow transaction: %w", err)
 	}
-	defer tx.Rollback() // Always rollback shadow DB changes
+	defer func() {
+		_ = tx.Rollback() // Always rollback shadow DB changes
+	}()
 
 	// Execute each step
 	for i, step := range plan.Steps {
