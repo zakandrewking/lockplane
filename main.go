@@ -4,11 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
+)
+
+// Version information (set by goreleaser during build)
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 type Schema struct {
@@ -36,6 +45,42 @@ type Index struct {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		// Default to introspect command for backward compatibility
+		runIntrospect(os.Args[1:])
+		return
+	}
+
+	command := os.Args[1]
+
+	switch command {
+	case "version", "-v", "--version":
+		fmt.Printf("lockplane %s\n", version)
+		fmt.Printf("  commit: %s\n", commit)
+		fmt.Printf("  built:  %s\n", date)
+		return
+	case "help", "-h", "--help":
+		printHelp()
+		return
+	case "introspect":
+		runIntrospect(os.Args[2:])
+	case "diff":
+		runDiff(os.Args[2:])
+	case "plan":
+		runPlan(os.Args[2:])
+	case "rollback":
+		runRollback(os.Args[2:])
+	default:
+		// If not a recognized command, assume it's a flag for introspect
+		runIntrospect(os.Args[1:])
+	}
+}
+
+func runIntrospect(args []string) {
+	fs := flag.NewFlagSet("introspect", flag.ExitOnError)
+	outputFormat := fs.String("format", "cue", "Output format: cue or json")
+	fs.Parse(args)
+
 	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
 
 	db, err := sql.Open("postgres", connStr)
@@ -54,12 +99,163 @@ func main() {
 		log.Fatalf("Failed to introspect schema: %v", err)
 	}
 
-	output, err := json.MarshalIndent(schema, "", "  ")
-	if err != nil {
-		log.Fatalf("Failed to marshal schema: %v", err)
+	var output string
+	switch *outputFormat {
+	case "json":
+		jsonBytes, err := json.MarshalIndent(schema, "", "  ")
+		if err != nil {
+			log.Fatalf("Failed to marshal schema to JSON: %v", err)
+		}
+		output = string(jsonBytes)
+	case "cue":
+		output = schemaToCUE(schema)
+	default:
+		log.Fatalf("Invalid output format: %s (use 'cue' or 'json')", *outputFormat)
 	}
 
-	fmt.Println(string(output))
+	fmt.Println(output)
+}
+
+func runDiff(args []string) {
+	fs := flag.NewFlagSet("diff", flag.ExitOnError)
+	outputFormat := fs.String("format", "cue", "Output format: cue or json")
+	fs.Parse(args)
+
+	if fs.NArg() != 2 {
+		log.Fatalf("Usage: lockplane diff <before.cue> <after.cue>")
+	}
+
+	beforePath := fs.Arg(0)
+	afterPath := fs.Arg(1)
+
+	// Load schemas
+	before, err := LoadCUESchema(beforePath)
+	if err != nil {
+		log.Fatalf("Failed to load before schema: %v", err)
+	}
+
+	after, err := LoadCUESchema(afterPath)
+	if err != nil {
+		log.Fatalf("Failed to load after schema: %v", err)
+	}
+
+	// Generate diff
+	diff := DiffSchemas(before, after)
+
+	// Output diff
+	var output string
+	switch *outputFormat {
+	case "json":
+		jsonBytes, err := json.MarshalIndent(diff, "", "  ")
+		if err != nil {
+			log.Fatalf("Failed to marshal diff to JSON: %v", err)
+		}
+		output = string(jsonBytes)
+	case "cue":
+		output = diffToCUE(diff)
+	default:
+		log.Fatalf("Invalid output format: %s (use 'cue' or 'json')", *outputFormat)
+	}
+
+	fmt.Println(output)
+}
+
+func runPlan(args []string) {
+	fs := flag.NewFlagSet("plan", flag.ExitOnError)
+	outputFormat := fs.String("format", "cue", "Output format: cue or json")
+	fromSchema := fs.String("from", "", "Source schema file (before)")
+	toSchema := fs.String("to", "", "Target schema file (after)")
+	fs.Parse(args)
+
+	// Generate diff first
+	var diff *SchemaDiff
+
+	if *fromSchema != "" && *toSchema != "" {
+		// Generate diff from two schemas
+		before, err := LoadCUESchema(*fromSchema)
+		if err != nil {
+			log.Fatalf("Failed to load from schema: %v", err)
+		}
+
+		after, err := LoadCUESchema(*toSchema)
+		if err != nil {
+			log.Fatalf("Failed to load to schema: %v", err)
+		}
+
+		diff = DiffSchemas(before, after)
+	} else {
+		log.Fatalf("Usage: lockplane plan --from <before.cue> --to <after.cue>")
+	}
+
+	// Generate plan
+	plan, err := GeneratePlan(diff)
+	if err != nil {
+		log.Fatalf("Failed to generate plan: %v", err)
+	}
+
+	// Output plan
+	var output string
+	switch *outputFormat {
+	case "json":
+		jsonBytes, err := json.MarshalIndent(plan, "", "  ")
+		if err != nil {
+			log.Fatalf("Failed to marshal plan to JSON: %v", err)
+		}
+		output = string(jsonBytes)
+	case "cue":
+		output = planToCUE(plan)
+	default:
+		log.Fatalf("Invalid output format: %s (use 'cue' or 'json')", *outputFormat)
+	}
+
+	fmt.Println(output)
+}
+
+func runRollback(args []string) {
+	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
+	outputFormat := fs.String("format", "cue", "Output format: cue or json")
+	planPath := fs.String("plan", "", "Forward migration plan file")
+	fromSchema := fs.String("from", "", "Source schema file (before state)")
+	fs.Parse(args)
+
+	if *planPath == "" || *fromSchema == "" {
+		log.Fatalf("Usage: lockplane rollback --plan <forward.cue> --from <before.cue>")
+	}
+
+	// Load the forward plan
+	forwardPlan, err := LoadCUEPlan(*planPath)
+	if err != nil {
+		log.Fatalf("Failed to load forward plan: %v", err)
+	}
+
+	// Load the before schema
+	beforeSchema, err := LoadCUESchema(*fromSchema)
+	if err != nil {
+		log.Fatalf("Failed to load before schema: %v", err)
+	}
+
+	// Generate rollback plan
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	if err != nil {
+		log.Fatalf("Failed to generate rollback: %v", err)
+	}
+
+	// Output rollback plan
+	var output string
+	switch *outputFormat {
+	case "json":
+		jsonBytes, err := json.MarshalIndent(rollbackPlan, "", "  ")
+		if err != nil {
+			log.Fatalf("Failed to marshal rollback to JSON: %v", err)
+		}
+		output = string(jsonBytes)
+	case "cue":
+		output = planToCUE(rollbackPlan)
+	default:
+		log.Fatalf("Invalid output format: %s (use 'cue' or 'json')", *outputFormat)
+	}
+
+	fmt.Println(output)
 }
 
 func introspectSchema(ctx context.Context, db *sql.DB) (*Schema, error) {
@@ -209,6 +405,108 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+// schemaToCUE converts a Schema to CUE format
+func schemaToCUE(schema *Schema) string {
+	var sb strings.Builder
+
+	sb.WriteString("package schema\n\n")
+	sb.WriteString("import \"github.com/lockplane/lockplane/schema\"\n\n")
+	sb.WriteString("schema.#Schema & {\n")
+	sb.WriteString("\ttables: [\n")
+
+	for i, table := range schema.Tables {
+		sb.WriteString("\t\t{\n")
+		sb.WriteString(fmt.Sprintf("\t\t\tname: %q\n", table.Name))
+		sb.WriteString("\t\t\tcolumns: [\n")
+
+		for _, col := range table.Columns {
+			sb.WriteString("\t\t\t\t{\n")
+			sb.WriteString(fmt.Sprintf("\t\t\t\t\tname:           %q\n", col.Name))
+			sb.WriteString(fmt.Sprintf("\t\t\t\t\ttype:           %q\n", col.Type))
+			sb.WriteString(fmt.Sprintf("\t\t\t\t\tnullable:       %t\n", col.Nullable))
+			if col.Default != nil {
+				sb.WriteString(fmt.Sprintf("\t\t\t\t\tdefault:        %q\n", *col.Default))
+			}
+			sb.WriteString(fmt.Sprintf("\t\t\t\t\tis_primary_key: %t\n", col.IsPrimaryKey))
+			sb.WriteString("\t\t\t\t},\n")
+		}
+
+		sb.WriteString("\t\t\t]\n")
+
+		if len(table.Indexes) > 0 {
+			sb.WriteString("\t\t\tindexes: [\n")
+			for _, idx := range table.Indexes {
+				sb.WriteString("\t\t\t\t{\n")
+				sb.WriteString(fmt.Sprintf("\t\t\t\t\tname:    %q\n", idx.Name))
+
+				// Format columns array
+				if len(idx.Columns) == 0 {
+					sb.WriteString("\t\t\t\t\tcolumns: []\n")
+				} else {
+					sb.WriteString("\t\t\t\t\tcolumns: [")
+					for j, colName := range idx.Columns {
+						if j > 0 {
+							sb.WriteString(", ")
+						}
+						sb.WriteString(fmt.Sprintf("%q", colName))
+					}
+					sb.WriteString("]\n")
+				}
+
+				sb.WriteString(fmt.Sprintf("\t\t\t\t\tunique:  %t\n", idx.Unique))
+				sb.WriteString("\t\t\t\t},\n")
+			}
+			sb.WriteString("\t\t\t]\n")
+		}
+
+		sb.WriteString("\t\t}")
+		if i < len(schema.Tables)-1 {
+			sb.WriteString(",")
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\t]\n")
+	sb.WriteString("}\n")
+
+	return sb.String()
+}
+
+func printHelp() {
+	fmt.Print(`Lockplane - Postgres-first control plane for safe schema management
+
+USAGE:
+  lockplane <command> [options]
+
+COMMANDS:
+  introspect       Introspect database and output current schema
+  diff             Compare two schemas and show differences
+  plan             Generate migration plan from schema diff
+  rollback         Generate rollback plan from forward migration
+  version          Show version information
+  help             Show this help message
+
+EXAMPLES:
+  # Introspect current database
+  lockplane introspect > current.cue
+
+  # Compare schemas
+  lockplane diff before.cue after.cue
+
+  # Generate migration plan
+  lockplane plan --from current.cue --to desired.cue > migration.cue
+
+  # Generate rollback plan
+  lockplane rollback --plan migration.cue --from current.cue > rollback.cue
+
+ENVIRONMENT:
+  DATABASE_URL            Postgres connection string
+                          (default: postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable)
+
+For more information: https://github.com/lockplane/lockplane
+`)
+}
+
 // Plan represents a migration plan with a series of steps
 type Plan struct {
 	Steps []PlanStep `json:"steps"`
@@ -292,4 +590,99 @@ func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan) error {
 	}
 
 	return nil
+}
+
+// diffToCUE converts a SchemaDiff to CUE format (simplified human-readable output)
+func diffToCUE(diff *SchemaDiff) string {
+	var sb strings.Builder
+
+	sb.WriteString("// Schema Diff\n\n")
+
+	if len(diff.AddedTables) > 0 {
+		sb.WriteString("added_tables: [\n")
+		for _, table := range diff.AddedTables {
+			sb.WriteString(fmt.Sprintf("\t%q,\n", table.Name))
+		}
+		sb.WriteString("]\n\n")
+	}
+
+	if len(diff.RemovedTables) > 0 {
+		sb.WriteString("removed_tables: [\n")
+		for _, table := range diff.RemovedTables {
+			sb.WriteString(fmt.Sprintf("\t%q,\n", table.Name))
+		}
+		sb.WriteString("]\n\n")
+	}
+
+	if len(diff.ModifiedTables) > 0 {
+		sb.WriteString("modified_tables: [\n")
+		for _, tableDiff := range diff.ModifiedTables {
+			sb.WriteString(fmt.Sprintf("\t{\n"))
+			sb.WriteString(fmt.Sprintf("\t\tname: %q\n", tableDiff.TableName))
+
+			if len(tableDiff.AddedColumns) > 0 {
+				sb.WriteString("\t\tadded_columns: [")
+				for i, col := range tableDiff.AddedColumns {
+					if i > 0 {
+						sb.WriteString(", ")
+					}
+					sb.WriteString(fmt.Sprintf("%q", col.Name))
+				}
+				sb.WriteString("]\n")
+			}
+
+			if len(tableDiff.RemovedColumns) > 0 {
+				sb.WriteString("\t\tremoved_columns: [")
+				for i, col := range tableDiff.RemovedColumns {
+					if i > 0 {
+						sb.WriteString(", ")
+					}
+					sb.WriteString(fmt.Sprintf("%q", col.Name))
+				}
+				sb.WriteString("]\n")
+			}
+
+			if len(tableDiff.ModifiedColumns) > 0 {
+				sb.WriteString("\t\tmodified_columns: [")
+				for i, col := range tableDiff.ModifiedColumns {
+					if i > 0 {
+						sb.WriteString(", ")
+					}
+					sb.WriteString(fmt.Sprintf("%q", col.ColumnName))
+				}
+				sb.WriteString("]\n")
+			}
+
+			sb.WriteString("\t},\n")
+		}
+		sb.WriteString("]\n")
+	}
+
+	if diff.IsEmpty() {
+		sb.WriteString("// No changes\n")
+	}
+
+	return sb.String()
+}
+
+// planToCUE converts a Plan to CUE format
+func planToCUE(plan *Plan) string {
+	var sb strings.Builder
+
+	sb.WriteString("package plan\n\n")
+	sb.WriteString("import \"github.com/lockplane/lockplane/schema\"\n\n")
+	sb.WriteString("schema.#Plan & {\n")
+	sb.WriteString("\tsteps: [\n")
+
+	for _, step := range plan.Steps {
+		sb.WriteString("\t\t{\n")
+		sb.WriteString(fmt.Sprintf("\t\t\tdescription: %q\n", step.Description))
+		sb.WriteString(fmt.Sprintf("\t\t\tsql:         %q\n", step.SQL))
+		sb.WriteString("\t\t},\n")
+	}
+
+	sb.WriteString("\t]\n")
+	sb.WriteString("}\n")
+
+	return sb.String()
 }

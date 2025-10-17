@@ -1,0 +1,9 @@
+# Dockerfile for GoReleaser
+FROM scratch
+
+# Copy the binary from goreleaser
+COPY lockplane /lockplane
+
+# Run the binary
+ENTRYPOINT ["/lockplane"]
+CMD ["help"]

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,17 +35,13 @@ func goldenTest(t *testing.T, fixtureName string) {
 		t.Fatalf("Failed to read SQL fixture: %v", err)
 	}
 
-	// Read expected output
-	expectedPath := filepath.Join(fixtureDir, "expected.json")
-	expectedBytes, err := os.ReadFile(expectedPath)
+	// Read expected output from CUE file
+	expectedPath := filepath.Join(fixtureDir, "expected.cue")
+	expectedSchema, err := LoadCUESchema(expectedPath)
 	if err != nil {
-		t.Fatalf("Failed to read expected output: %v", err)
+		t.Fatalf("Failed to load expected CUE schema: %v", err)
 	}
-
-	var expected Schema
-	if err := json.Unmarshal(expectedBytes, &expected); err != nil {
-		t.Fatalf("Failed to parse expected output: %v", err)
-	}
+	expected := *expectedSchema
 
 	// Clean up tables first (extract table names from expected output)
 	for _, table := range expected.Tables {
@@ -244,16 +239,12 @@ func TestApplyPlan_CreateTable(t *testing.T) {
 		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
 	}()
 
-	// Load plan
-	planBytes, err := os.ReadFile("testdata/plans/create_table.json")
+	// Load plan from CUE
+	planPtr, err := LoadCUEPlan("testdata/plans/create_table.cue")
 	if err != nil {
-		t.Fatalf("Failed to read plan: %v", err)
+		t.Fatalf("Failed to load plan: %v", err)
 	}
-
-	var plan Plan
-	if err := json.Unmarshal(planBytes, &plan); err != nil {
-		t.Fatalf("Failed to parse plan: %v", err)
-	}
+	plan := *planPtr
 
 	// Execute plan
 	result, err := applyPlan(ctx, db, &plan, nil)
@@ -313,16 +304,12 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 		_, _ = shadowDB.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
 	}()
 
-	// Load plan
-	planBytes, err := os.ReadFile("testdata/plans/create_table.json")
+	// Load plan from CUE
+	planPtr, err := LoadCUEPlan("testdata/plans/create_table.cue")
 	if err != nil {
-		t.Fatalf("Failed to read plan: %v", err)
+		t.Fatalf("Failed to load plan: %v", err)
 	}
-
-	var plan Plan
-	if err := json.Unmarshal(planBytes, &plan); err != nil {
-		t.Fatalf("Failed to parse plan: %v", err)
-	}
+	plan := *planPtr
 
 	// Execute plan with shadow DB validation
 	result, err := applyPlan(ctx, mainDB, &plan, shadowDB)
@@ -368,16 +355,12 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 		t.Skipf("Database not available (this is okay in CI): %v", err)
 	}
 
-	// Load invalid plan
-	planBytes, err := os.ReadFile("testdata/plans/invalid.json")
+	// Load invalid plan from CUE
+	planPtr, err := LoadCUEPlan("testdata/plans/invalid.cue")
 	if err != nil {
-		t.Fatalf("Failed to read plan: %v", err)
+		t.Fatalf("Failed to load plan: %v", err)
 	}
-
-	var plan Plan
-	if err := json.Unmarshal(planBytes, &plan); err != nil {
-		t.Fatalf("Failed to parse plan: %v", err)
-	}
+	plan := *planPtr
 
 	// Execute plan - should fail
 	result, err := applyPlan(ctx, db, &plan, nil)
@@ -417,16 +400,12 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS users CASCADE")
 	}()
 
-	// Load plan to add email column
-	planBytes, err := os.ReadFile("testdata/plans/add_column.json")
+	// Load plan to add email column from CUE
+	planPtr, err := LoadCUEPlan("testdata/plans/add_column.cue")
 	if err != nil {
-		t.Fatalf("Failed to read plan: %v", err)
+		t.Fatalf("Failed to load plan: %v", err)
 	}
-
-	var plan Plan
-	if err := json.Unmarshal(planBytes, &plan); err != nil {
-		t.Fatalf("Failed to parse plan: %v", err)
-	}
+	plan := *planPtr
 
 	// Execute plan
 	result, err := applyPlan(ctx, db, &plan, nil)

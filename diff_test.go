@@ -1,31 +1,24 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
 	"testing"
 )
 
-// loadSchemaFixture loads a schema from a JSON file
+// loadSchemaFixture loads a schema from a CUE file
 func loadSchemaFixture(t *testing.T, path string) *Schema {
 	t.Helper()
 
-	data, err := os.ReadFile(path)
+	schema, err := LoadCUESchema(path)
 	if err != nil {
-		t.Fatalf("Failed to read fixture %s: %v", path, err)
+		t.Fatalf("Failed to load CUE schema from %s: %v", path, err)
 	}
 
-	var schema Schema
-	if err := json.Unmarshal(data, &schema); err != nil {
-		t.Fatalf("Failed to parse fixture %s: %v", path, err)
-	}
-
-	return &schema
+	return schema
 }
 
 func TestDiffSchemas_AddTable(t *testing.T) {
-	before := loadSchemaFixture(t, "testdata/diffs/add_table/before.json")
-	after := loadSchemaFixture(t, "testdata/diffs/add_table/after.json")
+	before := loadSchemaFixture(t, "testdata/diffs/add_table/before.cue")
+	after := loadSchemaFixture(t, "testdata/diffs/add_table/after.cue")
 
 	diff := DiffSchemas(before, after)
 
@@ -47,8 +40,8 @@ func TestDiffSchemas_AddTable(t *testing.T) {
 }
 
 func TestDiffSchemas_AddColumn(t *testing.T) {
-	before := loadSchemaFixture(t, "testdata/diffs/add_column/before.json")
-	after := loadSchemaFixture(t, "testdata/diffs/add_column/after.json")
+	before := loadSchemaFixture(t, "testdata/diffs/add_column/before.cue")
+	after := loadSchemaFixture(t, "testdata/diffs/add_column/after.cue")
 
 	diff := DiffSchemas(before, after)
 
@@ -71,8 +64,8 @@ func TestDiffSchemas_AddColumn(t *testing.T) {
 }
 
 func TestDiffSchemas_RemoveColumn(t *testing.T) {
-	before := loadSchemaFixture(t, "testdata/diffs/remove_column/before.json")
-	after := loadSchemaFixture(t, "testdata/diffs/remove_column/after.json")
+	before := loadSchemaFixture(t, "testdata/diffs/remove_column/before.cue")
+	after := loadSchemaFixture(t, "testdata/diffs/remove_column/after.cue")
 
 	diff := DiffSchemas(before, after)
 
@@ -91,8 +84,8 @@ func TestDiffSchemas_RemoveColumn(t *testing.T) {
 }
 
 func TestDiffSchemas_ModifyColumn(t *testing.T) {
-	before := loadSchemaFixture(t, "testdata/diffs/modify_column/before.json")
-	after := loadSchemaFixture(t, "testdata/diffs/modify_column/after.json")
+	before := loadSchemaFixture(t, "testdata/diffs/modify_column/before.cue")
+	after := loadSchemaFixture(t, "testdata/diffs/modify_column/after.cue")
 
 	diff := DiffSchemas(before, after)
 
@@ -128,8 +121,8 @@ func TestDiffSchemas_ModifyColumn(t *testing.T) {
 }
 
 func TestDiffSchemas_AddIndex(t *testing.T) {
-	before := loadSchemaFixture(t, "testdata/diffs/add_index/before.json")
-	after := loadSchemaFixture(t, "testdata/diffs/add_index/after.json")
+	before := loadSchemaFixture(t, "testdata/diffs/add_index/before.cue")
+	after := loadSchemaFixture(t, "testdata/diffs/add_index/after.cue")
 
 	diff := DiffSchemas(before, after)
 
@@ -152,7 +145,7 @@ func TestDiffSchemas_AddIndex(t *testing.T) {
 }
 
 func TestDiffSchemas_NoChanges(t *testing.T) {
-	schema := loadSchemaFixture(t, "testdata/diffs/add_table/before.json")
+	schema := loadSchemaFixture(t, "testdata/diffs/add_table/before.cue")
 
 	diff := DiffSchemas(schema, schema)
 

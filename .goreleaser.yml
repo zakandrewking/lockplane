@@ -1,0 +1,183 @@
+# GoReleaser configuration for Lockplane
+# Builds and packages releases for multiple platforms
+
+version: 2
+
+before:
+  hooks:
+    # Run tests before building
+    - go test ./...
+    # Ensure go.mod is tidy
+    - go mod tidy
+
+builds:
+  - id: lockplane
+    binary: lockplane
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Skip some combinations
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: tar
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE*
+      - GETTING_STARTED.md
+      - examples/**/*
+  - id: zip
+    formats:
+      - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE*
+      - GETTING_STARTED.md
+      - examples/**/*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: lockplane
+    name: lockplane
+  draft: false
+  prerelease: auto
+  mode: append
+  header: |
+    ## Lockplane {{ .Tag }}
+
+    A Postgres-first control plane for safe, AI-friendly schema management.
+
+    ### Installation
+
+    Download the appropriate binary for your platform below, extract it, and add it to your PATH.
+
+    Alternatively, use the installation script:
+    ```bash
+    curl -sSL https://raw.githubusercontent.com/lockplane/lockplane/main/install.sh | bash
+    ```
+
+  footer: |
+    ---
+
+    **Full Changelog**: https://github.com/lockplane/lockplane/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    ### Verification
+
+    All binaries are checksummed. Verify downloads with:
+    ```bash
+    sha256sum -c checksums.txt
+    ```
+
+# Homebrew tap (optional, for macOS/Linux users)
+brews:
+  - ids:
+      - tar
+    repository:
+      owner: lockplane
+      name: homebrew-tap
+    directory: Formula
+    homepage: https://github.com/lockplane/lockplane
+    description: Postgres-first control plane for safe, AI-friendly schema management
+    license: MIT
+    test: |
+      system "#{bin}/lockplane --help"
+    install: |
+      bin.install "lockplane"
+
+# Docker images (optional)
+dockers:
+  - image_templates:
+      - "lockplane/lockplane:{{ .Version }}-amd64"
+      - "lockplane/lockplane:latest-amd64"
+    use: buildx
+    dockerfile: Dockerfile.goreleaser
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+  - image_templates:
+      - "lockplane/lockplane:{{ .Version }}-arm64"
+      - "lockplane/lockplane:latest-arm64"
+    use: buildx
+    goarch: arm64
+    dockerfile: Dockerfile.goreleaser
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+
+docker_manifests:
+  - name_template: lockplane/lockplane:{{ .Version }}
+    image_templates:
+      - lockplane/lockplane:{{ .Version }}-amd64
+      - lockplane/lockplane:{{ .Version }}-arm64
+  - name_template: lockplane/lockplane:latest
+    image_templates:
+      - lockplane/lockplane:latest-amd64
+      - lockplane/lockplane:latest-arm64
