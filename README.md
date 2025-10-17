@@ -2,6 +2,16 @@
 
 A Postgres-first control plane for safe, AI-friendly schema management.
 
+## Why Lockplane?
+
+**If you're building with AI agents**, you've probably noticed that traditional SQL migrations are a minefield. An AI can write `ALTER TABLE` statements all day, but can it guarantee those changes are safe? Can it roll back cleanly when things go wrong? Can it explain exactly what will happen before running anything? The honest answer is usually no. Lockplane makes schema changes deterministic and explainable—every migration runs in a transaction, gets validated on a shadow database first, and produces a clear audit trail. Your AI tools can finally manage databases without crossing their fingers.
+
+**If you're a developer who's lived through migration disasters**, you know the fear of running `db:migrate` on production. Was that column actually nullable? Will this index lock the table for 10 minutes? Did someone else already apply this? Lockplane's shadow database testing catches these issues before they touch your real data. Every plan shows you exactly what SQL will run, in what order, with what outcome. No surprises, no guessing, no praying.
+
+**If you want Firebase-level ease with Postgres-level power**, you're not alone. Firebase spoiled us with instant schema changes and zero migration headaches—until we hit the limits of a document model and needed real joins, constraints, and transactions. Lockplane brings that ease to Postgres: introspect your current schema as JSON, define your desired state, let the system figure out the migration. You keep full SQL power, you just don't have to manually write every ALTER statement.
+
+Lockplane runs on stock Postgres (14–16), works alongside your existing tools, and doesn't lock you into anything proprietary. It's not magic—it's just what schema management should have been all along.
+
 ## Quick Start
 
 ### Prerequisites
