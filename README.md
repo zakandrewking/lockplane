@@ -4,23 +4,13 @@ A Postgres-first control plane for safe, AI-friendly schema management.
 
 ## Why Lockplane?
 
-**For AI agent builders:**
-- AI can write SQL migrations but can't guarantee they're safe
-- Lockplane makes schema changes deterministic and testable
-- Every migration runs in a transaction and validates on shadow DB first
-- Clear audit trail for every change
+**Shadow DB validation catches problems before production.** Most tools roll back after failure. Lockplane tests migrations on a shadow database first, so bad plans never touch your real data.
 
-**For developers tired of migration anxiety:**
-- Shadow database catches issues before production
-- See exactly what SQL runs and in what order
-- Atomic operations that succeed or roll back completely
-- No surprises
+**Rollbacks are generated and validated, not manually written.** For every forward migration, Lockplane computes the reverse operation and validates it works. Rollback isn't a prayer, it's deterministic.
 
-**For teams wanting ease without limits:**
-- Define desired schema state, not manual ALTER statements
-- Keep Postgres power (joins, constraints, transactions)
-- No vendor lock-in, runs on stock Postgres 14-16
-- Works alongside existing tools
+**Long-running operations execute durably.** Building an index on 100M rows? Backfilling a column? Lockplane handles timeouts, retries, and progress tracking so operations complete even if connections drop.
+
+**Every change is explainable.** See exactly what SQL runs, why, and what the result will be. Built for humans reviewing changes and AI agents that need to explain their actions.
 
 ## Quick Start
 
