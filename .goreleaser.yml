@@ -99,7 +99,7 @@ changelog:
 
 release:
   github:
-    owner: lockplane
+    owner: zakandrewking
     name: lockplane
   draft: false
   prerelease: auto
