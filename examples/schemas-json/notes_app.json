@@ -1,0 +1,137 @@
+{
+  "$schema": "../../schema-json/schema.json",
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('users_id_seq'::regclass)",
+          "is_primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": true,
+          "default": "now()",
+          "is_primary_key": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "users_email_key",
+          "columns": ["email"],
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "notes",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('notes_id_seq'::regclass)",
+          "is_primary_key": true
+        },
+        {
+          "name": "user_id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "nullable": true,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": true,
+          "default": "now()",
+          "is_primary_key": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "nullable": true,
+          "default": "now()",
+          "is_primary_key": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_notes_user_id",
+          "columns": ["user_id"],
+          "unique": false
+        }
+      ]
+    },
+    {
+      "name": "tags",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('tags_id_seq'::regclass)",
+          "is_primary_key": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "tags_name_key",
+          "columns": ["name"],
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "note_tags",
+      "columns": [
+        {
+          "name": "note_id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        },
+        {
+          "name": "tag_id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_note_tags_tag_id",
+          "columns": ["tag_id"],
+          "unique": false
+        }
+      ]
+    }
+  ]
+}

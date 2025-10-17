@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lockplane.dev/schema.json",
+  "title": "Lockplane Database Schema",
+  "description": "Defines the structure of a database schema with tables, columns, and indexes",
+  "type": "object",
+  "required": ["tables"],
+  "properties": {
+    "tables": {
+      "type": "array",
+      "description": "List of database tables",
+      "items": {
+        "$ref": "#/definitions/Table"
+      }
+    }
+  },
+  "definitions": {
+    "Table": {
+      "type": "object",
+      "required": ["name", "columns"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "description": "Table name in snake_case"
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/Column"
+          },
+          "description": "List of table columns"
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Index"
+          },
+          "description": "List of table indexes"
+        }
+      }
+    },
+    "Column": {
+      "type": "object",
+      "required": ["name", "type", "nullable", "is_primary_key"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "description": "Column name in snake_case"
+        },
+        "type": {
+          "type": "string",
+          "description": "PostgreSQL column type (e.g., text, integer, timestamp)"
+        },
+        "nullable": {
+          "type": "boolean",
+          "description": "Whether the column allows NULL values"
+        },
+        "default": {
+          "type": "string",
+          "description": "Default value expression"
+        },
+        "is_primary_key": {
+          "type": "boolean",
+          "description": "Whether this column is part of the primary key"
+        }
+      }
+    },
+    "Index": {
+      "type": "object",
+      "required": ["name", "columns", "unique"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "description": "Index name in snake_case"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of column names in the index"
+        },
+        "unique": {
+          "type": "boolean",
+          "description": "Whether this is a unique index"
+        }
+      }
+    }
+  }
+}

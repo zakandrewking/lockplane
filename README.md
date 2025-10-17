@@ -8,7 +8,7 @@ A Postgres-first control plane for safe, AI-friendly schema management.
 
 **Every change is explainable.** See exactly what SQL runs, in what order, with clear descriptions. *(Implemented)*
 
-**Rollbacks will be generated and validated, not manually written.** For every forward migration, Lockplane will compute the reverse operation and validate it works. *(Planned)*
+**Rollbacks are generated and validated, not manually written.** For every forward migration, Lockplane computes the reverse operation and validates it works. *(Implemented)*
 
 **Long-running operations will execute durably.** Building an index on 100M rows? Backfilling a column? Lockplane will handle timeouts, retries, and progress tracking so operations complete even if connections drop. *(Planned)*
 
@@ -74,10 +74,7 @@ docker compose up -d
 lockplane introspect
 ```
 
-The introspector will connect to Postgres and output the current schema as CUE. To output JSON instead, use:
-```bash
-lockplane introspect --format json
-```
+The introspector will connect to Postgres and output the current schema as JSON.
 
 ### Example: Create a test schema
 
@@ -93,65 +90,104 @@ CREATE TABLE users (
 
 Then run the introspector again to see the schema:
 ```bash
-lockplane introspect
+lockplane introspect > current.json
+cat current.json
 ```
 
-## Schema Definition with CUE
+## Schema Definition with JSON
 
-Define your desired database schema using CUE for type safety, validation, and IDE support.
+Define your desired database schema using JSON with JSON Schema validation for type safety and validation.
 
 **Create a schema:**
 
-```cue
-// schema/myapp.cue
-package myapp
-
-import "github.com/lockplane/lockplane/schema"
-
-schema.#Schema & {
-	tables: [users, posts]
-}
-
-users: schema.#Table & {
-	name: "users"
-	columns: [
-		schema.#ID,           // Reusable patterns
-		schema.#Email,
-		schema.#CreatedAt,
-	]
-}
-
-posts: schema.#Table & {
-	name: "posts"
-	columns: [
-		schema.#ID,
-		{name: "user_id", type: "integer", nullable: false},
-		{name: "title", type: "text", nullable: false},
-		schema.#CreatedAt,
-	]
-	indexes: [
-		{name: "idx_posts_user_id", columns: ["user_id"], unique: false},
-	]
+```json
+{
+  "$schema": "./schema-json/schema.json",
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('users_id_seq'::regclass)",
+          "is_primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": true,
+          "default": "now()",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "posts",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('posts_id_seq'::regclass)",
+          "is_primary_key": true
+        },
+        {
+          "name": "user_id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": true,
+          "default": "now()",
+          "is_primary_key": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_posts_user_id",
+          "columns": ["user_id"],
+          "unique": false
+        }
+      ]
+    }
+  ]
 }
 ```
 
 **Validate:**
 
-```bash
-# Validate (IDE does this automatically)
-cue vet schema/myapp.cue
+Most editors with JSON Schema support will automatically validate your schema files. You can also validate manually:
 
-# Export to JSON (optional, for legacy tools)
-go run cmd/cue-export/main.go -cue schema/myapp.cue -json desired_schema.json
+```bash
+# Validate by running a diff or plan command
+lockplane diff current.json desired.json
 ```
 
-**Why CUE?**
-- **IDE integration** - Autocomplete, inline errors, type checking
-- **Reusable components** - Define column patterns once
-- **Built-in validation** - Snake_case names, valid types, constraints
-- **Type safety** - Catch errors before runtime
+**Why JSON + JSON Schema?**
+- **Universal format** - Works with all tools and languages
+- **IDE integration** - Autocomplete and validation in VS Code, IntelliJ, etc.
+- **Straightforward** - No new syntax to learn
+- **JSON Schema validation** - Enforces structure and constraints
+- **Ecosystem** - Massive tooling support
 
-See [schema/README.md](./schema/README.md) for full CUE documentation and [examples/schemas/](./examples/schemas/) for examples.
+See [examples/schemas-json/](./examples/schemas-json/) for examples.
 
 ## Automatic Plan Generation
 
@@ -160,76 +196,113 @@ Lockplane can automatically generate migration plans by comparing two schemas.
 ### Complete Workflow
 
 ```bash
-# 1. Define your desired schema in CUE
-# schema/myapp.cue
+# 1. Introspect current database state
+lockplane introspect > current.json
 
-# 2. Introspect current database state
-lockplane introspect > current.cue
+# 2. Define your desired schema
+# Edit desired.json with your target schema
 
 # 3. Generate a migration plan
-lockplane plan --from current.cue --to schema/myapp.cue > migration.cue
+lockplane plan --from current.json --to desired.json > migration.json
 
 # 4. Review the generated plan
-cat migration.cue
+cat migration.json
 ```
 
 ### Example
 
 Given two schemas:
 
-**Before** (`current.cue`):
-```cue
-schema.#Schema & {
-	tables: [{
-		name: "users"
-		columns: [
-			{name: "id", type: "integer", nullable: false, is_primary_key: true},
-			{name: "email", type: "text", nullable: false},
-		]
-	}]
+**Before** (`current.json`):
+```json
+{
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        }
+      ]
+    }
+  ]
 }
 ```
 
-**After** (`desired.cue`):
-```cue
-schema.#Schema & {
-	tables: [
-		{
-			name: "users"
-			columns: [
-				{name: "id", type: "integer", nullable: false, is_primary_key: true},
-				{name: "email", type: "text", nullable: false},
-				{name: "age", type: "integer", nullable: true},
-			]
-		},
-		{
-			name: "posts"
-			columns: [
-				{name: "id", type: "integer", nullable: false, is_primary_key: true},
-				{name: "title", type: "text", nullable: false},
-			]
-		},
-	]
+**After** (`desired.json`):
+```json
+{
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        },
+        {
+          "name": "age",
+          "type": "integer",
+          "nullable": true,
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "posts",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        }
+      ]
+    }
+  ]
 }
 ```
 
 **Generated plan**:
 ```bash
-lockplane plan --from current.cue --to desired.cue
+lockplane plan --from current.json --to desired.json
 ```
 
-```cue
-schema.#Plan & {
-	steps: [
-		{
-			description: "Create table posts"
-			sql:         "CREATE TABLE posts (...)"
-		},
-		{
-			description: "Add column age to table users"
-			sql:         "ALTER TABLE users ADD COLUMN age integer"
-		},
-	]
+```json
+{
+  "steps": [
+    {
+      "description": "Create table posts",
+      "sql": "CREATE TABLE posts (id integer NOT NULL, title text NOT NULL)"
+    },
+    {
+      "description": "Add column age to table users",
+      "sql": "ALTER TABLE users ADD COLUMN age integer"
+    }
+  ]
 }
 ```
 
@@ -246,17 +319,13 @@ The plan generator handles:
 
 ```bash
 # Compare two schemas (see diff)
-lockplane diff before.cue after.cue
+lockplane diff before.json after.json
 
 # Generate migration plan
-lockplane plan --from before.cue --to after.cue
+lockplane plan --from before.json --to after.json
 
 # Generate rollback plan
-lockplane rollback --plan forward.cue --from before.cue
-
-# Output formats (--format flag)
---format cue   # CUE output (default)
---format json  # JSON output
+lockplane rollback --plan forward.json --from before.json
 ```
 
 ## Automatic Rollback Generation
@@ -269,50 +338,50 @@ Given a forward migration plan and the original schema state, Lockplane generate
 
 ```bash
 # 1. Generate forward migration
-lockplane plan --from current.cue --to desired.cue > forward.cue
+lockplane plan --from current.json --to desired.json > forward.json
 
 # 2. Generate rollback migration
-lockplane rollback --plan forward.cue --from current.cue > rollback.cue
+lockplane rollback --plan forward.json --from current.json > rollback.json
 ```
 
 ### Example
 
 **Forward migration** (before → after):
-```cue
-schema.#Plan & {
-  steps: [
+```json
+{
+  "steps": [
     {
-      description: "Create table posts"
-      sql:         "CREATE TABLE posts (...)"
+      "description": "Create table posts",
+      "sql": "CREATE TABLE posts (id integer NOT NULL, title text NOT NULL)"
     },
     {
-      description: "Add column age to table users"
-      sql:         "ALTER TABLE users ADD COLUMN age integer"
+      "description": "Add column age to table users",
+      "sql": "ALTER TABLE users ADD COLUMN age integer"
     },
     {
-      description: "Create index idx_users_email"
-      sql:         "CREATE UNIQUE INDEX idx_users_email ON users (email)"
-    },
+      "description": "Create index idx_users_email",
+      "sql": "CREATE UNIQUE INDEX idx_users_email ON users (email)"
+    }
   ]
 }
 ```
 
 **Generated rollback** (after → before):
-```cue
-schema.#Plan & {
-  steps: [
+```json
+{
+  "steps": [
     {
-      description: "Rollback: Drop index idx_users_email"
-      sql:         "DROP INDEX idx_users_email"
+      "description": "Rollback: Drop index idx_users_email",
+      "sql": "DROP INDEX idx_users_email"
     },
     {
-      description: "Rollback: Drop column age from table users"
-      sql:         "ALTER TABLE users DROP COLUMN age"
+      "description": "Rollback: Drop column age from table users",
+      "sql": "ALTER TABLE users DROP COLUMN age"
     },
     {
-      description: "Rollback: Drop table posts"
-      sql:         "DROP TABLE posts CASCADE"
-    },
+      "description": "Rollback: Drop table posts",
+      "sql": "DROP TABLE posts CASCADE"
+    }
   ]
 }
 ```
@@ -343,31 +412,25 @@ Lockplane includes a transactional migration executor that safely applies schema
 
 ### Plan Format
 
-Migration plans are CUE files with a series of SQL steps:
+Migration plans are JSON files with a series of SQL steps:
 
-```cue
-// plan.cue
-package myplan
-
-import "github.com/lockplane/lockplane/schema"
-
-schema.#Plan & {
-	steps: [
-		{
-			description: "Create posts table"
-			sql:         "CREATE TABLE posts (id SERIAL PRIMARY KEY, title TEXT NOT NULL)"
-		},
-		{
-			description: "Add index on title"
-			sql:         "CREATE INDEX idx_posts_title ON posts(title)"
-		},
-	]
+```json
+{
+  "$schema": "./schema-json/plan.json",
+  "steps": [
+    {
+      "description": "Create posts table",
+      "sql": "CREATE TABLE posts (id SERIAL PRIMARY KEY, title TEXT NOT NULL)"
+    },
+    {
+      "description": "Add index on title",
+      "sql": "CREATE INDEX idx_posts_title ON posts(title)"
+    }
+  ]
 }
 ```
 
-See example plans in `testdata/plans/`:
-- `create_table.cue` - Create a new table
-- `add_column.cue` - Add columns with constraints
+See example plans in `examples/schemas-json/` and `testdata/plans-json/`.
 
 ### Using the Executor
 
@@ -379,8 +442,8 @@ The executor provides:
 Example usage in Go:
 
 ```go
-// Load migration plan from CUE
-plan, _ := LoadCUEPlan("testdata/plans/create_table.cue")
+// Load migration plan from JSON
+plan, _ := LoadJSONPlan("testdata/plans-json/create_table.json")
 
 // Apply with shadow DB validation
 shadowDB, _ := sql.Open("postgres", shadowConnStr)
@@ -411,14 +474,14 @@ go test -v -run TestApplyPlan
 Currently implementing M1 (DSL & Planner). See `0001-design.md` for full design.
 
 **Completed (M1 - DSL & Planner):**
-- ✅ Schema introspector with CUE output (JSON also available)
-- ✅ CUE DSL for defining desired schemas with validation
+- ✅ Schema introspector with JSON output
+- ✅ JSON Schema for defining desired schemas with validation
 - ✅ Diff engine to compare schemas
 - ✅ **Automatic plan generator** - generates SQL migrations from schema diffs
 - ✅ **Automatic rollback generator** - generates reverse migrations automatically
 - ✅ Shadow DB setup for dry-run validation
-- ✅ Transactional migration executor with CUE plan format
-- ✅ Golden test suite with CUE fixtures
+- ✅ Transactional migration executor with JSON plan format
+- ✅ Golden test suite with JSON fixtures
 - ✅ CLI commands: `introspect`, `diff`, `plan`, `rollback`
 
 **Planned:**

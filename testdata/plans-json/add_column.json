@@ -1,0 +1,9 @@
+{
+  "$schema": "../../schema-json/plan.json",
+  "steps": [
+    {
+      "description": "Add column age to table users",
+      "sql": "ALTER TABLE users ADD COLUMN age integer"
+    }
+  ]
+}

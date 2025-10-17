@@ -1,4 +1,5 @@
 {
+  "$schema": "../../schema-json/plan.json",
   "steps": [
     {
       "description": "Create posts table",
