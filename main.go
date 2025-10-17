@@ -77,7 +77,9 @@ func main() {
 
 func runIntrospect(args []string) {
 	fs := flag.NewFlagSet("introspect", flag.ExitOnError)
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
 
@@ -107,7 +109,9 @@ func runIntrospect(args []string) {
 
 func runDiff(args []string) {
 	fs := flag.NewFlagSet("diff", flag.ExitOnError)
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	if fs.NArg() != 2 {
 		log.Fatalf("Usage: lockplane diff <before.json> <after.json>")
@@ -143,7 +147,9 @@ func runPlan(args []string) {
 	fs := flag.NewFlagSet("plan", flag.ExitOnError)
 	fromSchema := fs.String("from", "", "Source schema file (before)")
 	toSchema := fs.String("to", "", "Target schema file (after)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	// Generate diff first
 	var diff *SchemaDiff
@@ -184,7 +190,9 @@ func runRollback(args []string) {
 	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
 	planPath := fs.String("plan", "", "Forward migration plan file")
 	fromSchema := fs.String("from", "", "Source schema file (before state)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	if *planPath == "" || *fromSchema == "" {
 		log.Fatalf("Usage: lockplane rollback --plan <forward.json> --from <before.json>")
