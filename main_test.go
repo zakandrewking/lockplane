@@ -3,12 +3,18 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	_ "github.com/lib/pq"
 )
 
-func TestIntrospectSchema(t *testing.T) {
+// goldenTest runs a test case using fixture files
+func goldenTest(t *testing.T, fixtureName string) {
+	t.Helper()
+
 	// Connect to test database
 	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
 	db, err := sql.Open("postgres", connStr)
@@ -22,267 +28,197 @@ func TestIntrospectSchema(t *testing.T) {
 		t.Skipf("Database not available (this is okay in CI): %v", err)
 	}
 
-	// Clean up any existing test tables
-	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_table CASCADE")
-
-	// Create a test table with various column types
-	_, err = db.ExecContext(ctx, `
-		CREATE TABLE test_table (
-			id SERIAL PRIMARY KEY,
-			name TEXT NOT NULL,
-			email TEXT UNIQUE,
-			age INTEGER,
-			active BOOLEAN DEFAULT true,
-			created_at TIMESTAMP DEFAULT NOW()
-		)
-	`)
+	// Read SQL fixture
+	fixtureDir := filepath.Join("testdata", "fixtures", fixtureName)
+	sqlPath := filepath.Join(fixtureDir, "schema.sql")
+	sqlBytes, err := os.ReadFile(sqlPath)
 	if err != nil {
-		t.Fatalf("Failed to create test table: %v", err)
+		t.Fatalf("Failed to read SQL fixture: %v", err)
 	}
+
+	// Read expected output
+	expectedPath := filepath.Join(fixtureDir, "expected.json")
+	expectedBytes, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("Failed to read expected output: %v", err)
+	}
+
+	var expected Schema
+	if err := json.Unmarshal(expectedBytes, &expected); err != nil {
+		t.Fatalf("Failed to parse expected output: %v", err)
+	}
+
+	// Clean up tables first (extract table names from expected output)
+	for _, table := range expected.Tables {
+		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table.Name+" CASCADE")
+	}
+
+	// Execute SQL to create schema
+	_, err = db.ExecContext(ctx, string(sqlBytes))
+	if err != nil {
+		t.Fatalf("Failed to execute SQL fixture: %v", err)
+	}
+
+	// Clean up after test
 	defer func() {
-		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_table CASCADE")
+		for _, table := range expected.Tables {
+			_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table.Name+" CASCADE")
+		}
 	}()
 
-	// Create an additional index
-	_, err = db.ExecContext(ctx, `
-		CREATE INDEX idx_test_name ON test_table(name)
-	`)
-	if err != nil {
-		t.Fatalf("Failed to create index: %v", err)
-	}
-
 	// Run introspection
-	schema, err := introspectSchema(ctx, db)
+	actual, err := introspectSchema(ctx, db)
 	if err != nil {
 		t.Fatalf("Failed to introspect schema: %v", err)
 	}
 
-	// Verify results
-	if schema == nil {
-		t.Fatal("Expected schema to be non-nil")
+	// Compare results
+	compareSchemas(t, &expected, actual)
+}
+
+// compareSchemas compares two Schema objects
+func compareSchemas(t *testing.T, expected, actual *Schema) {
+	t.Helper()
+
+	if len(expected.Tables) != len(actual.Tables) {
+		t.Errorf("Expected %d tables, got %d", len(expected.Tables), len(actual.Tables))
 	}
 
-	// Find test_table
-	var testTable *Table
-	for i := range schema.Tables {
-		if schema.Tables[i].Name == "test_table" {
-			testTable = &schema.Tables[i]
-			break
-		}
+	// Build a map of expected tables for easier lookup
+	expectedTables := make(map[string]*Table)
+	for i := range expected.Tables {
+		expectedTables[expected.Tables[i].Name] = &expected.Tables[i]
 	}
 
-	if testTable == nil {
-		t.Fatal("Expected to find test_table in schema")
-	}
-
-	// Verify table name
-	if testTable.Name != "test_table" {
-		t.Errorf("Expected table name 'test_table', got '%s'", testTable.Name)
-	}
-
-	// Verify columns
-	expectedColumns := map[string]struct {
-		Type         string
-		Nullable     bool
-		IsPrimaryKey bool
-	}{
-		"id":         {"integer", false, true},
-		"name":       {"text", false, false},
-		"email":      {"text", true, false},
-		"age":        {"integer", true, false},
-		"active":     {"boolean", true, false},
-		"created_at": {"timestamp without time zone", true, false},
-	}
-
-	if len(testTable.Columns) != len(expectedColumns) {
-		t.Errorf("Expected %d columns, got %d", len(expectedColumns), len(testTable.Columns))
-	}
-
-	for _, col := range testTable.Columns {
-		expected, ok := expectedColumns[col.Name]
+	// Compare each actual table with expected
+	for i := range actual.Tables {
+		actualTable := &actual.Tables[i]
+		expectedTable, ok := expectedTables[actualTable.Name]
 		if !ok {
-			t.Errorf("Unexpected column: %s", col.Name)
+			t.Errorf("Unexpected table: %s", actualTable.Name)
 			continue
 		}
 
-		if col.Type != expected.Type {
-			t.Errorf("Column %s: expected type '%s', got '%s'", col.Name, expected.Type, col.Type)
-		}
-
-		if col.Nullable != expected.Nullable {
-			t.Errorf("Column %s: expected nullable=%v, got %v", col.Name, expected.Nullable, col.Nullable)
-		}
-
-		if col.IsPrimaryKey != expected.IsPrimaryKey {
-			t.Errorf("Column %s: expected is_primary_key=%v, got %v", col.Name, expected.IsPrimaryKey, col.IsPrimaryKey)
-		}
-
-		// Verify defaults exist for certain columns
-		if col.Name == "id" && col.Default == nil {
-			t.Errorf("Column %s: expected default to be set", col.Name)
-		}
-		if col.Name == "active" && col.Default == nil {
-			t.Errorf("Column %s: expected default to be set", col.Name)
-		}
-		if col.Name == "created_at" && col.Default == nil {
-			t.Errorf("Column %s: expected default to be set", col.Name)
-		}
+		compareTable(t, expectedTable, actualTable)
 	}
 
-	// Verify indexes (at least primary key and unique constraint should exist)
-	if len(testTable.Indexes) < 2 {
-		t.Errorf("Expected at least 2 indexes (primary key + unique/index), got %d", len(testTable.Indexes))
-	}
-
-	// Check for specific indexes
-	foundPrimaryKey := false
-	foundUniqueEmail := false
-	foundNameIndex := false
-
-	for _, idx := range testTable.Indexes {
-		if idx.Name == "test_table_pkey" {
-			foundPrimaryKey = true
-			if !idx.Unique {
-				t.Error("Primary key index should be marked as unique")
+	// Check for missing tables
+	for _, expectedTable := range expected.Tables {
+		found := false
+		for i := range actual.Tables {
+			if actual.Tables[i].Name == expectedTable.Name {
+				found = true
+				break
 			}
 		}
-		if idx.Name == "test_table_email_key" {
-			foundUniqueEmail = true
-			if !idx.Unique {
-				t.Error("Unique constraint index should be marked as unique")
-			}
+		if !found {
+			t.Errorf("Missing expected table: %s", expectedTable.Name)
 		}
-		if idx.Name == "idx_test_name" {
-			foundNameIndex = true
-			if idx.Unique {
-				t.Error("Regular index should not be marked as unique")
-			}
-		}
-	}
-
-	if !foundPrimaryKey {
-		t.Error("Expected to find primary key index")
-	}
-	if !foundUniqueEmail {
-		t.Error("Expected to find unique constraint index for email")
-	}
-	if !foundNameIndex {
-		t.Error("Expected to find regular index on name")
 	}
 }
 
-func TestGetColumns(t *testing.T) {
-	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+// compareTable compares two Table objects
+func compareTable(t *testing.T, expected, actual *Table) {
+	t.Helper()
 
-	ctx := context.Background()
-	if err := db.PingContext(ctx); err != nil {
-		t.Skipf("Database not available (this is okay in CI): %v", err)
+	if expected.Name != actual.Name {
+		t.Errorf("Table name mismatch: expected %s, got %s", expected.Name, actual.Name)
 	}
 
-	// Clean up and create test table
-	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS col_test CASCADE")
-	_, err = db.ExecContext(ctx, `
-		CREATE TABLE col_test (
-			id SERIAL PRIMARY KEY,
-			required_field TEXT NOT NULL,
-			optional_field TEXT
-		)
-	`)
-	if err != nil {
-		t.Fatalf("Failed to create test table: %v", err)
-	}
-	defer func() {
-		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS col_test CASCADE")
-	}()
-
-	// Get columns
-	columns, err := getColumns(ctx, db, "col_test")
-	if err != nil {
-		t.Fatalf("Failed to get columns: %v", err)
+	// Compare columns
+	if len(expected.Columns) != len(actual.Columns) {
+		t.Errorf("Table %s: expected %d columns, got %d", expected.Name, len(expected.Columns), len(actual.Columns))
 	}
 
-	if len(columns) != 3 {
-		t.Fatalf("Expected 3 columns, got %d", len(columns))
+	expectedCols := make(map[string]*Column)
+	for i := range expected.Columns {
+		expectedCols[expected.Columns[i].Name] = &expected.Columns[i]
 	}
 
-	// Verify column order (should match ordinal_position)
-	if columns[0].Name != "id" {
-		t.Errorf("Expected first column to be 'id', got '%s'", columns[0].Name)
+	for i := range actual.Columns {
+		actualCol := &actual.Columns[i]
+		expectedCol, ok := expectedCols[actualCol.Name]
+		if !ok {
+			t.Errorf("Table %s: unexpected column %s", expected.Name, actualCol.Name)
+			continue
+		}
+
+		compareColumn(t, expected.Name, expectedCol, actualCol)
 	}
-	if columns[1].Name != "required_field" {
-		t.Errorf("Expected second column to be 'required_field', got '%s'", columns[1].Name)
+
+	// Compare indexes
+	if len(expected.Indexes) != len(actual.Indexes) {
+		t.Errorf("Table %s: expected %d indexes, got %d", expected.Name, len(expected.Indexes), len(actual.Indexes))
 	}
-	if columns[2].Name != "optional_field" {
-		t.Errorf("Expected third column to be 'optional_field', got '%s'", columns[2].Name)
+
+	expectedIdxs := make(map[string]*Index)
+	for i := range expected.Indexes {
+		expectedIdxs[expected.Indexes[i].Name] = &expected.Indexes[i]
+	}
+
+	for i := range actual.Indexes {
+		actualIdx := &actual.Indexes[i]
+		expectedIdx, ok := expectedIdxs[actualIdx.Name]
+		if !ok {
+			t.Errorf("Table %s: unexpected index %s", expected.Name, actualIdx.Name)
+			continue
+		}
+
+		compareIndex(t, expected.Name, expectedIdx, actualIdx)
 	}
 }
 
-func TestGetIndexes(t *testing.T) {
-	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+// compareColumn compares two Column objects
+func compareColumn(t *testing.T, tableName string, expected, actual *Column) {
+	t.Helper()
 
-	ctx := context.Background()
-	if err := db.PingContext(ctx); err != nil {
-		t.Skipf("Database not available (this is okay in CI): %v", err)
+	if expected.Name != actual.Name {
+		t.Errorf("Table %s: column name mismatch: expected %s, got %s", tableName, expected.Name, actual.Name)
 	}
 
-	// Clean up and create test table
-	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS idx_test CASCADE")
-	_, err = db.ExecContext(ctx, `
-		CREATE TABLE idx_test (
-			id SERIAL PRIMARY KEY,
-			email TEXT UNIQUE,
-			name TEXT
-		)
-	`)
-	if err != nil {
-		t.Fatalf("Failed to create test table: %v", err)
+	if expected.Type != actual.Type {
+		t.Errorf("Table %s, column %s: expected type %s, got %s", tableName, expected.Name, expected.Type, actual.Type)
 	}
 
-	_, err = db.ExecContext(ctx, `CREATE INDEX idx_name ON idx_test(name)`)
-	if err != nil {
-		t.Fatalf("Failed to create index: %v", err)
+	if expected.Nullable != actual.Nullable {
+		t.Errorf("Table %s, column %s: expected nullable=%v, got %v", tableName, expected.Name, expected.Nullable, actual.Nullable)
 	}
 
-	defer func() {
-		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS idx_test CASCADE")
-	}()
-
-	// Get indexes
-	indexes, err := getIndexes(ctx, db, "idx_test")
-	if err != nil {
-		t.Fatalf("Failed to get indexes: %v", err)
+	if expected.IsPrimaryKey != actual.IsPrimaryKey {
+		t.Errorf("Table %s, column %s: expected is_primary_key=%v, got %v", tableName, expected.Name, expected.IsPrimaryKey, actual.IsPrimaryKey)
 	}
 
-	if len(indexes) < 2 {
-		t.Fatalf("Expected at least 2 indexes, got %d", len(indexes))
+	// Check default value presence (not exact match, as functions may vary)
+	if (expected.Default == nil) != (actual.Default == nil) {
+		t.Errorf("Table %s, column %s: default value presence mismatch (expected has default: %v, actual has default: %v)",
+			tableName, expected.Name, expected.Default != nil, actual.Default != nil)
+	}
+}
+
+// compareIndex compares two Index objects
+func compareIndex(t *testing.T, tableName string, expected, actual *Index) {
+	t.Helper()
+
+	if expected.Name != actual.Name {
+		t.Errorf("Table %s: index name mismatch: expected %s, got %s", tableName, expected.Name, actual.Name)
 	}
 
-	// Verify we can distinguish unique from non-unique indexes
-	foundUnique := false
-	foundNonUnique := false
-
-	for _, idx := range indexes {
-		if idx.Unique {
-			foundUnique = true
-		} else {
-			foundNonUnique = true
-		}
+	if expected.Unique != actual.Unique {
+		t.Errorf("Table %s, index %s: expected unique=%v, got %v", tableName, expected.Name, expected.Unique, actual.Unique)
 	}
 
-	if !foundUnique {
-		t.Error("Expected to find at least one unique index")
-	}
-	if !foundNonUnique {
-		t.Error("Expected to find at least one non-unique index")
-	}
+	// Note: We're not comparing columns yet since the introspector doesn't parse them
+}
+
+// Test cases using golden files
+func TestBasicSchema(t *testing.T) {
+	goldenTest(t, "basic")
+}
+
+func TestComprehensiveSchema(t *testing.T) {
+	goldenTest(t, "comprehensive")
+}
+
+func TestIndexesSchema(t *testing.T) {
+	goldenTest(t, "indexes")
 }
