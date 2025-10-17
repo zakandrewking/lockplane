@@ -19,10 +19,10 @@ type TableDiff struct {
 
 // ColumnDiff represents changes to a single column
 type ColumnDiff struct {
-	ColumnName string      `json:"column_name"`
-	Old        Column      `json:"old"`
-	New        Column      `json:"new"`
-	Changes    []string    `json:"changes"` // e.g. ["type", "nullable", "default"]
+	ColumnName string   `json:"column_name"`
+	Old        Column   `json:"old"`
+	New        Column   `json:"new"`
+	Changes    []string `json:"changes"` // e.g. ["type", "nullable", "default"]
 }
 
 // DiffSchemas compares two schemas and returns their differences

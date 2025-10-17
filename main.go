@@ -364,7 +364,6 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-
 func printHelp() {
 	fmt.Print(`Lockplane - Postgres-first control plane for safe schema management
 
@@ -484,4 +483,3 @@ func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan) error {
 
 	return nil
 }
-
