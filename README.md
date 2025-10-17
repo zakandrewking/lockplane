@@ -4,13 +4,13 @@ A Postgres-first control plane for safe, AI-friendly schema management.
 
 ## Why Lockplane?
 
-**Shadow DB validation catches problems before production.** Most tools roll back after failure. Lockplane tests migrations on a shadow database first, so bad plans never touch your real data.
+**Shadow DB validation catches problems before production.** Most tools roll back after failure. Lockplane tests migrations on a shadow database first, so bad plans never touch your real data. *(Implemented)*
 
-**Rollbacks are generated and validated, not manually written.** For every forward migration, Lockplane computes the reverse operation and validates it works. Rollback isn't a prayer, it's deterministic.
+**Every change is explainable.** See exactly what SQL runs, in what order, with clear descriptions. Built for humans reviewing changes and AI agents that need to explain their actions. *(Implemented)*
 
-**Long-running operations execute durably.** Building an index on 100M rows? Backfilling a column? Lockplane handles timeouts, retries, and progress tracking so operations complete even if connections drop.
+**Rollbacks will be generated and validated, not manually written.** For every forward migration, Lockplane will compute the reverse operation and validate it works. Rollback won't be a prayer, it will be deterministic. *(Planned)*
 
-**Every change is explainable.** See exactly what SQL runs, why, and what the result will be. Built for humans reviewing changes and AI agents that need to explain their actions.
+**Long-running operations will execute durably.** Building an index on 100M rows? Backfilling a column? Lockplane will handle timeouts, retries, and progress tracking so operations complete even if connections drop. *(Planned)*
 
 ## Quick Start
 
@@ -119,7 +119,7 @@ go test -v -run TestApplyPlan
 
 Currently implementing M1 (DSL & Planner). See `0001-design.md` for full design.
 
-**Completed:**
+**Completed (M1 Foundation):**
 - ✅ Schema introspector with JSON output
 - ✅ Shadow DB setup for dry-run validation
 - ✅ Transactional migration executor
@@ -129,3 +129,20 @@ Currently implementing M1 (DSL & Planner). See `0001-design.md` for full design.
 - DSL format for defining desired schema
 - Diff engine to compare DSL vs live schema
 - Plan generator to auto-create migration plans
+
+**Planned:**
+- Automatic rollback plan generation
+- Durable execution for long-running operations
+- MCP server interface for AI agents
+- Catalog hash computation and ledger
+- pgroll integration for zero-downtime migrations
+
+## Current Limitations
+
+**Manual plan creation:** You write migration plans as JSON with SQL steps. The DSL and plan generator are coming soon.
+
+**No automatic rollbacks:** Transactions roll back on failure, but reverse migrations aren't generated yet.
+
+**Introspector gaps:** Currently captures tables, columns, and indexes. Foreign keys, check constraints, and full index column parsing are not yet implemented.
+
+**Development-only migrations:** All DDL runs in a transaction. Zero-downtime migrations with pgroll are planned for production use.
