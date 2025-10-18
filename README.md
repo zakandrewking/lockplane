@@ -108,7 +108,7 @@ Define your desired database schema using JSON with JSON Schema validation for t
 
 ```json
 {
-  "$schema": "./schema-json/schema.json",
+  "$schema": "https://raw.githubusercontent.com/lockplane/lockplane/main/schema-json/schema.json",
   "tables": [
     {
       "name": "users",
@@ -193,7 +193,7 @@ lockplane diff current.json desired.json
 - **JSON Schema validation** - Enforces structure and constraints
 - **Ecosystem** - Massive tooling support
 
-See [examples/schemas-json/](./examples/schemas-json/) for examples.
+See [examples/schemas-json/](./examples/schemas-json/) for examples. Replace `main` in the `$schema` URL with a specific tag (for example `v0.1.0`) to pin validation to an exact release.
 
 ## Automatic Plan Generation
 
@@ -422,7 +422,7 @@ Migration plans are JSON files with a series of SQL steps:
 
 ```json
 {
-  "$schema": "./schema-json/plan.json",
+  "$schema": "https://raw.githubusercontent.com/lockplane/lockplane/main/schema-json/plan.json",
   "steps": [
     {
       "description": "Create posts table",
@@ -437,6 +437,7 @@ Migration plans are JSON files with a series of SQL steps:
 ```
 
 See example plans in `examples/schemas-json/` and `testdata/plans-json/`.
+For reproducible validation, swap `main` in the `$schema` URL with a tagged release such as `v0.1.0`.
 
 ### Using the Executor
 

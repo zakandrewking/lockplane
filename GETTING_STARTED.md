@@ -96,7 +96,7 @@ volumes:
 **Your new migrations/001_initial.json:**
 ```json
 {
-  "$schema": "../schema-json/plan.json",
+  "$schema": "https://raw.githubusercontent.com/lockplane/lockplane/main/schema-json/plan.json",
   "steps": [
     {
       "description": "Create users table",
@@ -118,6 +118,7 @@ volumes:
 - Migration is a structured JSON plan validated by the bundled JSON Schema
 - Each step has a description explaining what it does
 - Editors can auto-complete and lint the plan because it is plain JSON
+- Replace `main` in the `$schema` URL with a release tag (for example `v0.1.0`) when you need a pinned schema version
 
 ## The Lockplane Workflow
 
@@ -235,7 +236,7 @@ Claude knows:
 
 ```json
 {
-  "$schema": "../schema-json/plan.json",
+  "$schema": "https://raw.githubusercontent.com/lockplane/lockplane/main/schema-json/plan.json",
   "steps": [
     {
       "description": "Create tags table",
