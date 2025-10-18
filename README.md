@@ -58,6 +58,15 @@ lockplane help
 
 ## Quick Start
 
+### The Lockplane Workflow
+
+Lockplane follows a simple, declarative workflow:
+
+1. **Define your desired schema** - Single source of truth in JSON
+2. **Generate migration plan** - Lockplane calculates forward/reverse SQL
+3. **Validate safety** - Ensures operations are safe and reversible
+4. **Apply to database** - Execute with shadow DB validation
+
 ### Prerequisites
 - Lockplane CLI (see Installation above)
 - Docker & Docker Compose (for local Postgres)
@@ -68,37 +77,80 @@ lockplane help
 ```bash
 lockplane init docker-compose
 ```
-This command finds the nearest `docker-compose.yml`, clones your primary Postgres service, and adds a `shadow` service listening on the next free port (defaults to `5433`).
+This finds your `docker-compose.yml`, clones your primary Postgres service, and adds a `shadow` service on port `5433`.
 
 2. Start Postgres:
 ```bash
 docker compose up -d
 ```
 
-3. Run the introspector:
-```bash
-lockplane introspect
-```
+### Example: Your First Migration
 
-The introspector will connect to Postgres and output the current schema as JSON.
-
-### Example: Create a test schema
-
-```bash
-docker compose exec pg psql -U lockplane -d lockplane -c "
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-"
-```
-
-Then run the introspector again to see the schema:
+1. **Introspect current state** (empty database):
 ```bash
 lockplane introspect > current.json
 cat current.json
+# Shows: {"tables": []}
 ```
+
+2. **Define your desired schema** (`desired.json`):
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/schema.json",
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+3. **Generate and validate migration plan**:
+```bash
+lockplane plan --from current.json --to desired.json --validate
+```
+
+Output:
+```
+=== Validation Results ===
+
+✓ Validation 1: PASS
+  - Table creation is always safe
+  - Reversible: DROP TABLE users
+
+✓ All operations are reversible
+✓ All validations passed
+
+{
+  "steps": [
+    {
+      "description": "Create table users",
+      "sql": "CREATE TABLE users (id integer NOT NULL, email text NOT NULL)"
+    }
+  ]
+}
+```
+
+4. **Apply the migration** (coming soon):
+```bash
+lockplane apply --plan migration.json
+```
+
+That's it! Your schema is now your single source of truth. Change it, generate a new plan, validate, and apply.
 
 ## Schema Definition with JSON
 
@@ -195,9 +247,27 @@ lockplane diff current.json desired.json
 
 See [examples/schemas-json/](./examples/schemas-json/) for examples. Replace `main` in the `$schema` URL with a specific tag (for example `v0.1.0`) to pin validation to an exact release.
 
-## Automatic Plan Generation
+## How It Works
 
-Lockplane can automatically generate migration plans by comparing two schemas.
+### Single Source of Truth
+
+Your desired schema is the single source of truth. Lockplane generates everything else on demand:
+
+```bash
+# Your desired schema
+cat schema.json
+
+# Current database state
+lockplane introspect > current.json
+
+# Forward migration (current → desired)
+lockplane plan --from current.json --to schema.json --validate > forward.json
+
+# Reverse migration (desired → current)
+lockplane plan --from schema.json --to current.json --validate > reverse.json
+```
+
+**No migration files to maintain.** Just update your schema and regenerate plans as needed.
 
 ### Complete Workflow
 
@@ -205,14 +275,17 @@ Lockplane can automatically generate migration plans by comparing two schemas.
 # 1. Introspect current database state
 lockplane introspect > current.json
 
-# 2. Define your desired schema
-# Edit desired.json with your target schema
+# 2. Update your desired schema
+vim schema.json  # Your single source of truth
 
-# 3. Generate a migration plan
-lockplane plan --from current.json --to desired.json > migration.json
+# 3. Generate and validate migration plan
+lockplane plan --from current.json --to schema.json --validate > migration.json
 
 # 4. Review the generated plan
 cat migration.json
+
+# 5. Apply the migration (validates on shadow DB first)
+lockplane apply --plan migration.json
 ```
 
 ### Example
@@ -312,11 +385,46 @@ lockplane plan --from current.json --to desired.json
 }
 ```
 
+### Migration Validation
+
+Lockplane validates that migrations are safe and reversible **before** they run:
+
+```bash
+# Validate a migration plan
+lockplane plan --from current.json --to desired.json --validate
+```
+
+**Example: Safe migration** (nullable column):
+```
+✓ Validation 1: PASS
+  - Column 'age' is nullable - safe to add
+  - Reversible: DROP COLUMN users.age
+
+✓ All operations are reversible
+✓ All validations passed
+```
+
+**Example: Unsafe migration** (NOT NULL without DEFAULT):
+```
+✗ Validation 1: FAIL
+  Error: Cannot add NOT NULL column 'email' without a DEFAULT value
+  - NOT NULL columns require a DEFAULT value when added to tables with existing data
+  - Reversible: DROP COLUMN users.email
+
+❌ Validation FAILED: Some operations are not safe
+```
+
+**What validation checks:**
+- ✅ **Safety**: Can this operation be executed without breaking existing data?
+- ✅ **Reversibility**: Can we generate a safe rollback?
+- ✅ **NOT NULL constraints**: Requires DEFAULT values for existing rows
+- 🔄 **More checks coming**: Type compatibility, data preservation, etc.
+
 ### Supported Operations
 
 The plan generator handles:
 - ✅ **Add/remove tables**
-- ✅ **Add/remove columns**
+- ✅ **Add/remove columns** (with validation)
 - ✅ **Modify column types, nullability, defaults**
 - ✅ **Add/remove indexes**
 - ✅ **Safe operation ordering** (adds before drops, tables before indexes)
@@ -327,8 +435,8 @@ The plan generator handles:
 # Compare two schemas (see diff)
 lockplane diff before.json after.json
 
-# Generate migration plan
-lockplane plan --from before.json --to after.json
+# Generate migration plan (with validation)
+lockplane plan --from before.json --to after.json --validate
 
 # Generate rollback plan
 lockplane rollback --plan forward.json --from before.json

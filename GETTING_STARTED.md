@@ -56,6 +56,8 @@ psql -U myuser -d notesapp < migrations/001_initial.sql
 
 ## Adding Lockplane to Your Setup
 
+**The key insight: Your schema is the source of truth. Migration plans are generated on demand.**
+
 Start by letting Lockplane configure your Compose stack:
 
 ```bash
@@ -93,34 +95,44 @@ volumes:
 
 **Key difference:** You now have two databases. Main for real data, shadow for testing.
 
-**Your new migrations/001_initial.json:**
+**Your schema file - the single source of truth** (`schema.json`):
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/lockplane/lockplane/main/schema-json/plan.json",
-  "steps": [
+  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/schema.json",
+  "tables": [
     {
-      "description": "Create users table",
-      "sql": "CREATE TABLE users (id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT NOW())"
+      "name": "users",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false, "is_primary_key": true},
+        {"name": "email", "type": "text", "nullable": false, "is_primary_key": false},
+        {"name": "created_at", "type": "timestamp without time zone", "nullable": true, "default": "now()"}
+      ],
+      "indexes": [
+        {"name": "users_email_key", "columns": ["email"], "unique": true}
+      ]
     },
     {
-      "description": "Create notes table",
-      "sql": "CREATE TABLE notes (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title TEXT NOT NULL, content TEXT, created_at TIMESTAMP DEFAULT NOW())"
-    },
-    {
-      "description": "Add index on notes user_id",
-      "sql": "CREATE INDEX idx_notes_user_id ON notes(user_id)"
+      "name": "notes",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false, "is_primary_key": true},
+        {"name": "user_id", "type": "integer", "nullable": false, "is_primary_key": false},
+        {"name": "title", "type": "text", "nullable": false, "is_primary_key": false},
+        {"name": "content", "type": "text", "nullable": true, "is_primary_key": false},
+        {"name": "created_at", "type": "timestamp without time zone", "nullable": true, "default": "now()"}
+      ],
+      "indexes": [
+        {"name": "idx_notes_user_id", "columns": ["user_id"], "unique": false}
+      ]
     }
   ]
 }
 ```
 
-**Key differences:**
-- Migration is a structured JSON plan validated by the bundled JSON Schema
-- Each step has a description explaining what it does
-- Editors can auto-complete and lint the plan because it is plain JSON
-- Replace `main` in the `$schema` URL with a release tag (for example `v0.1.0`) when you need a pinned schema version
+**Key insight:** This describes WHAT you want, not HOW to get there. Lockplane generates the migration plans.
 
 ## The Lockplane Workflow
+
+**The flow: Schema → Plan → Validate → Apply**
 
 **1. Start fresh:**
 
@@ -130,10 +142,11 @@ docker compose up -d
 
 Both databases are empty.
 
-**2. See what you have:**
+**2. See current state:**
 
 ```bash
-lockplane introspect
+lockplane introspect > current.json
+cat current.json
 ```
 
 Output:
@@ -145,12 +158,57 @@ Output:
 
 Nothing yet. This is your baseline.
 
-**3. Apply your migration:**
+**3. Generate migration plan from your schema:**
+
+```bash
+# Compare current state to desired schema
+lockplane plan --from current.json --to schema.json --validate > migration.json
+```
+
+Output shows validation:
+```
+✓ Validation 1: PASS
+  - Table creation is always safe
+  - Reversible: DROP TABLE users
+
+✓ Validation 2: PASS
+  - Table creation is always safe
+  - Reversible: DROP TABLE notes
+
+✓ All operations are reversible
+✓ All validations passed
+```
+
+The generated `migration.json`:
+```json
+{
+  "steps": [
+    {
+      "description": "Create table users",
+      "sql": "CREATE TABLE users (id integer NOT NULL, email text NOT NULL, ...)"
+    },
+    {
+      "description": "Create table notes",
+      "sql": "CREATE TABLE notes (id integer NOT NULL, user_id integer NOT NULL, ...)"
+    },
+    {
+      "description": "Create index users_email_key",
+      "sql": "CREATE UNIQUE INDEX users_email_key ON users (email)"
+    },
+    {
+      "description": "Create index idx_notes_user_id",
+      "sql": "CREATE INDEX idx_notes_user_id ON notes (user_id)"
+    }
+  ]
+}
+```
+
+**4. Apply the migration:**
 
 In your Go code:
 ```go
 // Load the plan from JSON
-plan, err := LoadJSONPlan("migrations/001_initial.json")
+plan, err := LoadJSONPlan("migration.json")
 
 // Connect to both databases
 mainDB := connect("localhost:5432/notesapp")
@@ -161,7 +219,7 @@ result, err := applyPlan(ctx, mainDB, plan, shadowDB)
 ```
 
 **What happens:**
-1. Shadow DB gets the migration first
+1. Shadow DB gets the migration first (validates it works)
 2. If shadow succeeds, main DB gets the same migration
 3. If shadow fails, main DB is untouched
 4. Everything runs in a transaction (all or nothing)
@@ -218,7 +276,7 @@ A week later, you need tags.
 **1. See current state:**
 
 ```bash
-lockplane introspect > current_schema.json
+lockplane introspect > current.json
 ```
 
 Claude can now see exactly what exists.
@@ -227,24 +285,65 @@ Claude can now see exactly what exists.
 
 "Add a tags table and a many-to-many relationship with notes."
 
-Claude knows:
-- What tables already exist
-- What columns are already there
-- What would conflict
+**3. Claude updates your schema** (`schema.json`):
 
-**3. Claude creates migrations/002_add_tags.json:**
+Claude adds two new tables to your schema:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/lockplane/lockplane/main/schema-json/plan.json",
-  "steps": [
+  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/schema.json",
+  "tables": [
     {
-      "description": "Create tags table",
-      "sql": "CREATE TABLE tags (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE)"
+      "name": "users",
+      "columns": [...]
     },
     {
-      "description": "Create note_tags junction table",
-      "sql": "CREATE TABLE note_tags (note_id INTEGER REFERENCES notes(id), tag_id INTEGER REFERENCES tags(id), PRIMARY KEY (note_id, tag_id))"
+      "name": "notes",
+      "columns": [...]
+    },
+    {
+      "name": "tags",
+      "columns": [
+        {"name": "id", "type": "integer", "nullable": false, "is_primary_key": true},
+        {"name": "name", "type": "text", "nullable": false, "is_primary_key": false}
+      ],
+      "indexes": [
+        {"name": "tags_name_key", "columns": ["name"], "unique": true}
+      ]
+    },
+    {
+      "name": "note_tags",
+      "columns": [
+        {"name": "note_id", "type": "integer", "nullable": false, "is_primary_key": true},
+        {"name": "tag_id", "type": "integer", "nullable": false, "is_primary_key": true}
+      ]
+    }
+  ]
+}
+```
+
+**4. Generate the migration plan:**
+
+```bash
+lockplane plan --from current.json --to schema.json --validate > add_tags.json
+```
+
+Lockplane generates:
+
+```json
+{
+  "steps": [
+    {
+      "description": "Create table tags",
+      "sql": "CREATE TABLE tags (id integer NOT NULL, name text NOT NULL)"
+    },
+    {
+      "description": "Create table note_tags",
+      "sql": "CREATE TABLE note_tags (note_id integer NOT NULL, tag_id integer NOT NULL, PRIMARY KEY (note_id, tag_id))"
+    },
+    {
+      "description": "Create index tags_name_key",
+      "sql": "CREATE UNIQUE INDEX tags_name_key ON tags (name)"
     }
   ]
 }
@@ -262,33 +361,41 @@ Same workflow. Shadow DB catches errors. Main DB stays safe.
 project/
 ├── frontend/        # React, Vue, etc
 ├── backend/         # API server
-├── migrations/      # Lockplane migration plans
+├── schema.json      # Single source of truth
 ├── docker-compose.yml
-└── main.go         # Lockplane introspector
+└── main.go         # Lockplane integration
 ```
 
 **Frontend needs to know the schema:**
 
+Your `schema.json` file is both:
+1. Your desired database schema
+2. The source for frontend type generation
+
 ```bash
-# Generate current schema for the frontend (JSON format)
-lockplane introspect > frontend/schema.json
+# Your schema is already in JSON - use it directly!
+cp schema.json frontend/schema.json
+
+# Or introspect current state if you need it
+lockplane introspect > frontend/current-schema.json
 ```
 
 Your frontend can now:
-- Generate TypeScript types from the schema
+- Generate TypeScript types from `schema.json`
 - Know what fields exist on each table
 - Validate data before sending to API
 
 **When schema changes:**
 
-1. Create migration plan (JSON plan file)
-2. Test with shadow DB
-3. Apply to main DB
-4. Regenerate schema file
-5. Update frontend types
-6. Deploy together
+1. Update `schema.json` (your source of truth)
+2. Generate migration plan: `lockplane plan --from current.json --to schema.json --validate`
+3. Test with shadow DB
+4. Apply to main DB
+5. Frontend already has the new schema (it's the same `schema.json`)
+6. Regenerate TypeScript types
+7. Deploy together
 
-No surprises. Frontend and backend stay in sync.
+**Key insight:** Your schema file serves both database migrations AND frontend types. One source of truth for everything.
 
 ## Deployment
 
@@ -297,7 +404,8 @@ No surprises. Frontend and backend stay in sync.
 You're already doing this:
 - Main DB for real data
 - Shadow DB for testing
-- Migration plans in git
+- `schema.json` in git (your source of truth)
+- Migration plans generated on demand
 
 ### Staging
 
@@ -410,43 +518,57 @@ Long-running migrations (adding indexes, changing column types) should:
 
 **Before Lockplane:**
 
-1. Claude writes SQL
-2. You run it
+1. Claude writes SQL migration files
+2. You run them manually
 3. Hope for the best
 4. Database state is a mystery
-5. Rollback is manual and scary
+5. No idea if you can roll back
+6. Rollback is manual and scary
 
 **With Lockplane:**
 
-1. Claude introspects (sees exact current state)
-2. Claude writes a migration plan in JSON
-3. JSON Schema validation ensures the structure is correct
-4. Shadow DB tests it first
-5. Transaction ensures atomicity
-6. You always know what's in the database
-7. Rollback plans are automatically generated
+1. Introspect current state → Claude sees exactly what exists
+2. Update `schema.json` → Your desired state (source of truth)
+3. Generate plan → Lockplane calculates SQL operations
+4. Validate → Ensures safety and reversibility
+5. Test on shadow DB → Catches errors before production
+6. Apply with confidence → Transactional, validated, safe
+7. Rollback available → Automatically generated from schema
+
+**The key insight: Schema → Plan → Validate → Apply**
+
+Your schema file is the single source of truth. Everything else is generated on demand.
 
 **The big wins:**
 
-- **For Claude:** No more guessing what's in the database
-- **For you:** Clear plans you can review before execution, with type safety
-- **For your team:** Migration history is readable JSON with validation
-- **For production:** Shadow testing catches issues early
+- **For Claude:** `lockplane introspect` shows exact current state - no guessing
+- **For you:** Validate migrations before they run - catch errors early
+- **For your team:** Schema is readable JSON - everyone understands it
+- **For production:** Shadow DB testing - safe migrations every time
+- **For rollbacks:** Automatically generated - always know you can undo
 
 ## Common Workflows
 
 **Starting a new feature:**
 
 ```bash
-# See current state
-lockplane introspect > schema_before.json
+# 1. See current state
+lockplane introspect > current.json
 
-# Build feature (Claude writes migrations)
-# ...
+# 2. Tell Claude what you need
+# "Add user profiles with avatar URLs"
 
-# See what changed
-lockplane introspect > schema_after.json
-lockplane diff schema_before.json schema_after.json
+# 3. Claude updates schema.json
+# (adds columns to users table)
+
+# 4. Generate and validate migration
+lockplane plan --from current.json --to schema.json --validate > add_profiles.json
+
+# 5. Review the plan
+cat add_profiles.json
+
+# 6. Apply it
+# (use your apply function)
 ```
 
 **Reviewing a pull request:**
