@@ -1,3 +1,6 @@
+> **⚠️ Experimental Project**
+> This is an experimental project for AI coding experiments and should not be expected to work yet.
+
 # Lockplane
 
 A Postgres-first control plane for safe, AI-friendly schema management.
