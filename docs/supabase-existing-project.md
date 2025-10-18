@@ -1,0 +1,92 @@
+# Using Lockplane with an Existing Supabase Project
+
+Add declarative schema control, safety checks, and reversible migrations to your existing Supabase project.
+
+## Prerequisites
+
+- Existing Supabase project + service role key
+- Supabase CLI (`npm install -g supabase`)
+- Lockplane CLI installed locally
+- psql (for sanity checks)
+
+## Setup
+
+### 1. Connect to Supabase
+
+In the Supabase dashboard, go to *Project Settings → Database* and copy the connection string.
+
+```bash
+export DATABASE_URL='postgres://postgres:<password>@<host>:5432/postgres'
+export SHADOW_DATABASE_URL='postgres://postgres:<password>@<host>:6543/postgres'
+```
+
+Since Supabase blocks direct database creation, point the shadow URL at a separate Supabase project or a local Postgres container. For local testing: `docker compose up supabase-shadow` using the sample `docker-compose.yml` in this repo.
+
+### 2. Capture Current State
+
+Introspect your existing database to create a baseline:
+
+```bash
+lockplane introspect > current.json
+```
+
+Commit `current.json` to track your starting point.
+
+### 3. Author Your Changes
+
+Edit `desired.json` to define your target schema. Start by copying `current.json` and making changes, or use `examples/schemas-json` as a reference.
+
+Validate your changes:
+```bash
+lockplane validate schema desired.json
+```
+
+### 4. Plan and Review
+
+Generate a migration plan:
+
+```bash
+lockplane plan --from current.json --to desired.json --validate > migration.json
+```
+
+The validation report highlights risky operations (e.g., adding NOT NULL columns without defaults). Fix `desired.json` or add backfill steps before proceeding.
+
+### 5. Test on Shadow Database
+
+Dry-run the migration on your shadow database:
+
+```bash
+lockplane apply --plan migration.json
+```
+
+Lockplane applies to the shadow database first for safety.
+
+### 6. Deploy to Production
+
+**Option A: Direct apply**
+```bash
+lockplane apply --plan migration.json --target production
+```
+
+**Option B: Via Supabase CLI**
+
+Convert the generated SQL into Supabase migrations. Each `PlanStep` contains SQL—copy it into `supabase/migrations/<timestamp>_lockplane.sql`.
+
+```bash
+supabase db push
+```
+
+This keeps Supabase migration history aligned with Lockplane's declarative schema.
+
+## Team Workflow
+
+- Store `desired.json`, `migration.json`, and `rollback.json` in `supabase/lockplane/`
+- Reference them in pull requests
+- Automate validation with GitHub Actions using your service-role key as a secret
+- When Supabase adds new extensions or triggers, introspect again to sync before making changes
+
+## Troubleshooting
+
+- **SSL errors:** add `?sslmode=require` to `DATABASE_URL`
+- **Function/trigger differences:** Supabase migrations create additional objects. Ignore them in Lockplane by scoping JSON to the tables you manage, or extend the schema definition
+- **Shadow environment mismatches:** reset between runs with `supabase db reset` or `docker compose down -v` for local mirrors
