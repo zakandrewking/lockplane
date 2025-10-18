@@ -22,15 +22,15 @@ A Postgres-first control plane for safe, AI-friendly schema management.
 
 ### Binary Releases (Recommended)
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/lockplane/lockplane/releases):
+Download the latest release for your platform from [GitHub Releases](https://github.com/zakandrewking/lockplane/releases):
 
 **Linux / macOS:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/lockplane/lockplane/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/zakandrewking/lockplane/main/install.sh | bash
 ```
 
 **Manual Installation:**
-1. Download the appropriate binary for your OS from [releases](https://github.com/lockplane/lockplane/releases/latest)
+1. Download the appropriate binary for your OS from [releases](https://github.com/zakandrewking/lockplane/releases/latest)
 2. Extract the archive: `tar -xzf lockplane_*.tar.gz`
 3. Move to your PATH: `sudo mv lockplane /usr/local/bin/`
 4. Verify: `lockplane version`
@@ -42,7 +42,7 @@ brew install lockplane/tap/lockplane
 
 **From Source:**
 ```bash
-git clone https://github.com/lockplane/lockplane.git
+git clone https://github.com/zakandrewking/lockplane.git
 cd lockplane
 go install .
 ```
@@ -108,7 +108,7 @@ Define your desired database schema using JSON with JSON Schema validation for t
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/lockplane/lockplane/main/schema-json/schema.json",
+  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/schema.json",
   "tables": [
     {
       "name": "users",
@@ -422,7 +422,7 @@ Migration plans are JSON files with a series of SQL steps:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/lockplane/lockplane/main/schema-json/plan.json",
+  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/plan.json",
   "steps": [
     {
       "description": "Create posts table",
