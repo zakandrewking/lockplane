@@ -149,6 +149,7 @@ func runPlan(args []string) {
 	fs := flag.NewFlagSet("plan", flag.ExitOnError)
 	fromSchema := fs.String("from", "", "Source schema file (before)")
 	toSchema := fs.String("to", "", "Target schema file (after)")
+	validate := fs.Bool("validate", false, "Validate migration safety and reversibility")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
@@ -170,7 +171,55 @@ func runPlan(args []string) {
 
 		diff = DiffSchemas(before, after)
 	} else {
-		log.Fatalf("Usage: lockplane plan --from <before.json> --to <after.json>")
+		log.Fatalf("Usage: lockplane plan --from <before.json> --to <after.json> [--validate]")
+	}
+
+	// Validate the diff if requested
+	if *validate {
+		validationResults := ValidateSchemaDiff(diff)
+
+		if len(validationResults) > 0 {
+			fmt.Fprintf(os.Stderr, "\n=== Validation Results ===\n\n")
+
+			for i, result := range validationResults {
+				if result.Valid {
+					fmt.Fprintf(os.Stderr, "✓ Validation %d: PASS\n", i+1)
+				} else {
+					fmt.Fprintf(os.Stderr, "✗ Validation %d: FAIL\n", i+1)
+				}
+
+				if !result.Reversible {
+					fmt.Fprintf(os.Stderr, "  ⚠ NOT REVERSIBLE\n")
+				}
+
+				for _, err := range result.Errors {
+					fmt.Fprintf(os.Stderr, "  Error: %s\n", err)
+				}
+
+				for _, warning := range result.Warnings {
+					fmt.Fprintf(os.Stderr, "  Warning: %s\n", warning)
+				}
+
+				for _, reason := range result.Reasons {
+					fmt.Fprintf(os.Stderr, "  - %s\n", reason)
+				}
+
+				fmt.Fprintf(os.Stderr, "\n")
+			}
+
+			if !AllValid(validationResults) {
+				fmt.Fprintf(os.Stderr, "❌ Validation FAILED: Some operations are not safe\n\n")
+				os.Exit(1)
+			}
+
+			if AllReversible(validationResults) {
+				fmt.Fprintf(os.Stderr, "✓ All operations are reversible\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "⚠ Warning: Some operations are not reversible\n")
+			}
+
+			fmt.Fprintf(os.Stderr, "✓ All validations passed\n\n")
+		}
 	}
 
 	// Generate plan
