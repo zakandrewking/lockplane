@@ -205,26 +205,26 @@ The generated `migration.json`:
 
 **4. Apply the migration:**
 
-In your Go code:
-```go
-// Load the plan from JSON
-plan, err := LoadJSONPlan("migration.json")
+For now, you can extract and run the SQL manually:
 
-// Connect to both databases
-mainDB := connect("localhost:5432/notesapp")
-shadowDB := connect("localhost:5433/notesapp_shadow")
+```bash
+# Extract SQL from the plan
+cat migration.json | jq -r '.steps[].sql' > migration.sql
 
-// Apply with shadow DB validation
-result, err := applyPlan(ctx, mainDB, plan, shadowDB)
+# Test on shadow DB first
+psql -U lockplane -h localhost -p 5433 -d notesapp_shadow < migration.sql
+
+# If successful, apply to main DB
+psql -U lockplane -h localhost -d notesapp < migration.sql
 ```
 
-**What happens:**
-1. Shadow DB gets the migration first (validates it works)
-2. If shadow succeeds, main DB gets the same migration
-3. If shadow fails, main DB is untouched
-4. Everything runs in a transaction (all or nothing)
+**Coming soon:** `lockplane apply` command with automatic shadow DB validation:
+```bash
+# This will test on shadow DB first, then apply to main DB
+lockplane apply --plan migration.json
+```
 
-**4. Verify it worked:**
+**5. Verify it worked:**
 
 ```bash
 lockplane introspect
@@ -435,9 +435,16 @@ services:
 
 1. Git push to staging branch
 2. CI runs: `go test` (verifies migrations work)
-3. Apply migrations to staging DB (with shadow validation)
-4. Deploy new app code
-5. Verify with smoke tests
+3. Generate migration plan: `lockplane plan --from current.json --to schema.json --validate`
+4. Apply migrations to staging DB (test on shadow first, then main)
+   ```bash
+   # Test on shadow
+   cat migration.json | jq -r '.steps[].sql' | psql -h localhost -p 5433 -U lockplane -d notesapp_staging_shadow
+   # Apply to main
+   cat migration.json | jq -r '.steps[].sql' | psql -h localhost -U lockplane -d notesapp_staging
+   ```
+5. Deploy new app code
+6. Verify with smoke tests
 
 ### Production
 
@@ -467,8 +474,11 @@ services:
 # 1. Backup database
 pg_dump notesapp > backup_$(date +%Y%m%d).sql
 
-# 2. Apply migrations (no shadow DB)
-# (Use your apply function with LoadJSONPlan)
+# 2. Apply migrations (extract SQL from plan)
+cat migration.json | jq -r '.steps[].sql' | psql -U lockplane -d notesapp
+
+# Alternative: Coming soon - CLI apply command
+# lockplane apply --plan migration.json --skip-shadow
 
 # 3. Deploy new app code
 docker compose up -d app
@@ -568,7 +578,11 @@ lockplane plan --from current.json --to schema.json --validate > add_profiles.js
 cat add_profiles.json
 
 # 6. Apply it
-# (use your apply function)
+# Test on shadow DB first
+cat add_profiles.json | jq -r '.steps[].sql' | psql -h localhost -p 5433 -U lockplane -d notesapp_shadow
+
+# If successful, apply to main DB
+cat add_profiles.json | jq -r '.steps[].sql' | psql -h localhost -U lockplane -d notesapp
 ```
 
 **Reviewing a pull request:**

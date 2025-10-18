@@ -284,8 +284,12 @@ lockplane plan --from current.json --to schema.json --validate > migration.json
 # 4. Review the generated plan
 cat migration.json
 
-# 5. Apply the migration (validates on shadow DB first)
-lockplane apply --plan migration.json
+# 5. Apply the migration
+# For now, extract and run SQL manually (test on shadow DB first):
+cat migration.json | jq -r '.steps[].sql' | psql -h localhost -p 5433 -U lockplane -d yourdb_shadow
+cat migration.json | jq -r '.steps[].sql' | psql -h localhost -U lockplane -d yourdb
+
+# Coming soon: lockplane apply --plan migration.json
 ```
 
 ### Example
