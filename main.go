@@ -69,6 +69,8 @@ func main() {
 		runPlan(os.Args[2:])
 	case "rollback":
 		runRollback(os.Args[2:])
+	case "init":
+		runInit(os.Args[2:])
 	default:
 		// If not a recognized command, assume it's a flag for introspect
 		runIntrospect(os.Args[1:])
