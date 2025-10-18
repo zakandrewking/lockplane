@@ -591,19 +591,61 @@ go test -v -run TestApplyPlan
 
 Currently implementing M1 (DSL & Planner). See `0001-design.md` for full design.
 
-**Completed (M1 - DSL & Planner):**
-- ✅ Schema introspector with JSON output
-- ✅ JSON Schema for defining desired schemas with validation
-- ✅ Diff engine to compare schemas
-- ✅ **Automatic plan generator** - generates SQL migrations from schema diffs
-- ✅ **Automatic rollback generator** - generates reverse migrations automatically
-- ✅ Shadow DB setup for dry-run validation
-- ✅ Transactional migration executor with JSON plan format
-- ✅ Golden test suite with JSON fixtures
-- ✅ CLI commands: `introspect`, `diff`, `plan`, `rollback`
+### Core Features
 
-**Planned:**
-- Durable execution for long-running operations
-- MCP server interface for AI agents
-- Catalog hash computation and ledger
-- pgroll integration for zero-downtime migrations
+**Schema Management**
+- ✅ Schema introspection (reads Postgres catalog) - _3 tests_
+- ✅ JSON Schema definition with validation - _2 tests_
+- ✅ Diff engine (compares schemas) - _7 tests_
+- ✅ Foreign key support - _2 tests_
+
+**Migration Planning**
+- ✅ Automatic plan generator (generates SQL from diffs) - _11 tests_
+- ✅ Automatic rollback generator (reverse migrations) - _10 tests_
+- ✅ Migration validation (safety checks) - _12 tests_
+  - ✅ NOT NULL without DEFAULT detection
+  - ✅ Foreign key validation
+  - ✅ Reversibility verification
+  - ⚠️ Column type changes (partial validation)
+  - ❌ Data preservation checks (planned)
+  - ❌ Index operation validation (planned)
+
+**Migration Execution**
+- ✅ Transactional executor - _4 tests_
+- ✅ Shadow DB validation (dry-run testing) - _tested_
+- ✅ Error tracking with step-level failures
+- ❌ Durable execution (timeouts, retries, progress tracking)
+- ❌ Advisory locks during apply
+- ❌ Two-phase confirmation for destructive operations
+
+**CLI Commands**
+- ✅ `introspect` - Export current schema to JSON
+- ✅ `diff` - Compare two schema files
+- ✅ `plan` - Generate migration plan with validation
+- ✅ `rollback` - Generate reverse migration
+- ✅ `apply` - Execute migration plan
+- ✅ `validate` - Validate schema or plan files
+- ✅ `init` - Setup Docker Compose with shadow DB - _3 tests_
+- ✅ `version` - Show version info
+
+**Supported Operations**
+- ✅ Create/drop tables
+- ✅ Add/drop columns (with validation)
+- ✅ Modify column types, nullability, defaults
+- ✅ Add/drop indexes (unique and non-unique)
+- ✅ Add/drop foreign keys
+- ❌ Sequences and serial columns (partial)
+- ❌ Check constraints
+- ❌ Triggers and functions
+- ❌ Row-level security (RLS) policies
+- ❌ Partitioned tables
+
+**Infrastructure & Integration**
+- ✅ Docker Compose setup (main + shadow DB)
+- ❌ MCP server interface for AI agents
+- ❌ Catalog hash computation and ledger
+- ❌ pgroll integration for zero-downtime migrations
+- ❌ Prisma schema converter
+- ❌ Alembic migration converter
+
+**Test Coverage:** 53 tests across all core features
