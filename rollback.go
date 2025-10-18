@@ -54,6 +54,10 @@ func generateReverseOperation(step PlanStep, beforeSchema *Schema) ([]PlanStep, 
 		return generateReverseCreateIndex(step)
 	} else if containsSQL(step.SQL, "DROP INDEX") {
 		return generateReverseDropIndex(step, beforeSchema)
+	} else if containsSQL(step.SQL, "ADD CONSTRAINT") && containsSQL(step.SQL, "FOREIGN KEY") {
+		return generateReverseAddForeignKey(step)
+	} else if containsSQL(step.SQL, "DROP CONSTRAINT") {
+		return generateReverseDropForeignKey(step, beforeSchema)
 	}
 
 	return nil, fmt.Errorf("unsupported operation for rollback: %s", step.SQL)
@@ -279,4 +283,53 @@ func findIndex(schema *Schema, indexName string) (string, *Index, error) {
 		}
 	}
 	return "", nil, fmt.Errorf("index %s not found", indexName)
+}
+
+// Helper function to find a foreign key in a schema
+func findForeignKey(schema *Schema, fkName string) (string, *ForeignKey, error) {
+	for _, table := range schema.Tables {
+		for i := range table.ForeignKeys {
+			if table.ForeignKeys[i].Name == fkName {
+				return table.Name, &table.ForeignKeys[i], nil
+			}
+		}
+	}
+	return "", nil, fmt.Errorf("foreign key %s not found", fkName)
+}
+
+// generateReverseAddForeignKey creates a DROP CONSTRAINT statement
+func generateReverseAddForeignKey(step PlanStep) ([]PlanStep, error) {
+	// Extract table name and constraint name from "ALTER TABLE tablename ADD CONSTRAINT constraintname ..."
+	tableName, constraintName, err := extractTableAndConstraintFromAddConstraint(step.SQL)
+	if err != nil {
+		return nil, err
+	}
+
+	sql := fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s", tableName, constraintName)
+	desc := fmt.Sprintf("Rollback: Drop foreign key %s from table %s", constraintName, tableName)
+
+	return []PlanStep{{Description: desc, SQL: sql}}, nil
+}
+
+// generateReverseDropForeignKey recreates the foreign key constraint
+func generateReverseDropForeignKey(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+	// Extract table name and constraint name from "ALTER TABLE tablename DROP CONSTRAINT constraintname"
+	tableName, constraintName, err := extractTableAndConstraintFromDropConstraint(step.SQL)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the foreign key in the before schema
+	foundTableName, fk, err := findForeignKey(beforeSchema, constraintName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify table name matches
+	if foundTableName != tableName {
+		return nil, fmt.Errorf("foreign key %s found in table %s, expected %s", constraintName, foundTableName, tableName)
+	}
+
+	sql, desc := generateAddForeignKey(tableName, *fk)
+	return []PlanStep{{Description: fmt.Sprintf("Rollback: %s", desc), SQL: sql}}, nil
 }

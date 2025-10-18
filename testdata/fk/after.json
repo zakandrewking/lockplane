@@ -1,0 +1,53 @@
+{
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "posts",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        },
+        {
+          "name": "user_id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false,
+          "is_primary_key": false
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_posts_user_id",
+          "columns": ["user_id"],
+          "referenced_table": "users",
+          "referenced_columns": ["id"],
+          "on_delete": "CASCADE"
+        }
+      ]
+    }
+  ]
+}

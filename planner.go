@@ -15,10 +15,12 @@ func GeneratePlan(diff *SchemaDiff) (*Plan, error) {
 	// 1. Add new tables
 	// 2. Add new columns to existing tables
 	// 3. Modify columns (type changes, nullability, defaults)
-	// 4. Add indexes
-	// 5. Remove indexes (from removed tables or columns)
-	// 6. Remove columns
-	// 7. Remove tables
+	// 4. Add foreign keys (after referenced tables/columns exist)
+	// 5. Add indexes
+	// 6. Remove indexes (from removed tables or columns)
+	// 7. Remove foreign keys (before referenced tables/columns are dropped)
+	// 8. Remove columns
+	// 9. Remove tables
 
 	// Step 1: Add new tables
 	for _, table := range diff.AddedTables {
@@ -27,6 +29,15 @@ func GeneratePlan(diff *SchemaDiff) (*Plan, error) {
 			Description: desc,
 			SQL:         sql,
 		})
+
+		// Add foreign keys for new tables (after table is created)
+		for _, fk := range table.ForeignKeys {
+			sql, desc := generateAddForeignKey(table.Name, fk)
+			plan.Steps = append(plan.Steps, PlanStep{
+				Description: desc,
+				SQL:         sql,
+			})
+		}
 	}
 
 	// Step 2-4: Process table modifications
@@ -46,6 +57,15 @@ func GeneratePlan(diff *SchemaDiff) (*Plan, error) {
 			plan.Steps = append(plan.Steps, steps...)
 		}
 
+		// Add new foreign keys
+		for _, fk := range tableDiff.AddedForeignKeys {
+			sql, desc := generateAddForeignKey(tableDiff.TableName, fk)
+			plan.Steps = append(plan.Steps, PlanStep{
+				Description: desc,
+				SQL:         sql,
+			})
+		}
+
 		// Add new indexes
 		for _, idx := range tableDiff.AddedIndexes {
 			sql, desc := generateAddIndex(tableDiff.TableName, idx)
@@ -58,6 +78,15 @@ func GeneratePlan(diff *SchemaDiff) (*Plan, error) {
 		// Remove old indexes
 		for _, idx := range tableDiff.RemovedIndexes {
 			sql, desc := generateDropIndex(tableDiff.TableName, idx)
+			plan.Steps = append(plan.Steps, PlanStep{
+				Description: desc,
+				SQL:         sql,
+			})
+		}
+
+		// Remove old foreign keys
+		for _, fk := range tableDiff.RemovedForeignKeys {
+			sql, desc := generateDropForeignKey(tableDiff.TableName, fk)
 			plan.Steps = append(plan.Steps, PlanStep{
 				Description: desc,
 				SQL:         sql,
@@ -204,6 +233,34 @@ func generateAddIndex(tableName string, idx Index) (string, string) {
 func generateDropIndex(tableName string, idx Index) (string, string) {
 	sql := fmt.Sprintf("DROP INDEX %s", idx.Name)
 	description := fmt.Sprintf("Drop index %s from table %s", idx.Name, tableName)
+	return sql, description
+}
+
+// generateAddForeignKey creates SQL to add a foreign key constraint
+func generateAddForeignKey(tableName string, fk ForeignKey) (string, string) {
+	// Format column lists
+	columns := strings.Join(fk.Columns, ", ")
+	refColumns := strings.Join(fk.ReferencedColumns, ", ")
+
+	sql := fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)",
+		tableName, fk.Name, columns, fk.ReferencedTable, refColumns)
+
+	// Add ON DELETE and ON UPDATE actions if specified
+	if fk.OnDelete != nil {
+		sql += fmt.Sprintf(" ON DELETE %s", *fk.OnDelete)
+	}
+	if fk.OnUpdate != nil {
+		sql += fmt.Sprintf(" ON UPDATE %s", *fk.OnUpdate)
+	}
+
+	description := fmt.Sprintf("Add foreign key %s to table %s", fk.Name, tableName)
+	return sql, description
+}
+
+// generateDropForeignKey creates SQL to drop a foreign key constraint
+func generateDropForeignKey(tableName string, fk ForeignKey) (string, string) {
+	sql := fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s", tableName, fk.Name)
+	description := fmt.Sprintf("Drop foreign key %s from table %s", fk.Name, tableName)
 	return sql, description
 }
 

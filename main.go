@@ -24,9 +24,10 @@ type Schema struct {
 }
 
 type Table struct {
-	Name    string   `json:"name"`
-	Columns []Column `json:"columns"`
-	Indexes []Index  `json:"indexes"`
+	Name        string       `json:"name"`
+	Columns     []Column     `json:"columns"`
+	Indexes     []Index      `json:"indexes"`
+	ForeignKeys []ForeignKey `json:"foreign_keys,omitempty"`
 }
 
 type Column struct {
@@ -41,6 +42,15 @@ type Index struct {
 	Name    string   `json:"name"`
 	Columns []string `json:"columns"`
 	Unique  bool     `json:"unique"`
+}
+
+type ForeignKey struct {
+	Name               string   `json:"name"`
+	Columns            []string `json:"columns"`
+	ReferencedTable    string   `json:"referenced_table"`
+	ReferencedColumns  []string `json:"referenced_columns"`
+	OnDelete           *string  `json:"on_delete,omitempty"`
+	OnUpdate           *string  `json:"on_update,omitempty"`
 }
 
 func main() {
@@ -69,6 +79,8 @@ func main() {
 		runPlan(os.Args[2:])
 	case "rollback":
 		runRollback(os.Args[2:])
+	case "apply":
+		runApply(os.Args[2:])
 	case "init":
 		runInit(os.Args[2:])
 	default:
@@ -156,6 +168,7 @@ func runPlan(args []string) {
 
 	// Generate diff first
 	var diff *SchemaDiff
+	var after *Schema
 
 	if *fromSchema != "" && *toSchema != "" {
 		// Generate diff from two schemas
@@ -164,7 +177,7 @@ func runPlan(args []string) {
 			log.Fatalf("Failed to load from schema: %v", err)
 		}
 
-		after, err := LoadJSONSchema(*toSchema)
+		after, err = LoadJSONSchema(*toSchema)
 		if err != nil {
 			log.Fatalf("Failed to load to schema: %v", err)
 		}
@@ -176,7 +189,7 @@ func runPlan(args []string) {
 
 	// Validate the diff if requested
 	if *validate {
-		validationResults := ValidateSchemaDiff(diff)
+		validationResults := ValidateSchemaDiffWithSchema(diff, after)
 
 		if len(validationResults) > 0 {
 			fmt.Fprintf(os.Stderr, "\n=== Validation Results ===\n\n")
@@ -276,6 +289,82 @@ func runRollback(args []string) {
 	fmt.Println(string(jsonBytes))
 }
 
+func runApply(args []string) {
+	fs := flag.NewFlagSet("apply", flag.ExitOnError)
+	planPath := fs.String("plan", "", "Migration plan file to apply")
+	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
+	if err := fs.Parse(args); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	if *planPath == "" {
+		log.Fatalf("Usage: lockplane apply --plan <migration.json> [--skip-shadow]")
+	}
+
+	// Load the migration plan
+	plan, err := LoadJSONPlan(*planPath)
+	if err != nil {
+		log.Fatalf("Failed to load migration plan: %v", err)
+	}
+
+	// Connect to main database
+	mainConnStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	mainDB, err := sql.Open("postgres", mainConnStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to main database: %v", err)
+	}
+	defer mainDB.Close()
+
+	ctx := context.Background()
+	if err := mainDB.PingContext(ctx); err != nil {
+		log.Fatalf("Failed to ping main database: %v", err)
+	}
+
+	// Connect to shadow database if not skipped
+	var shadowDB *sql.DB
+	if !*skipShadow {
+		shadowConnStr := getEnv("SHADOW_DATABASE_URL", "postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable")
+		shadowDB, err = sql.Open("postgres", shadowConnStr)
+		if err != nil {
+			log.Fatalf("Failed to connect to shadow database: %v", err)
+		}
+		defer shadowDB.Close()
+
+		if err := shadowDB.PingContext(ctx); err != nil {
+			log.Fatalf("Failed to ping shadow database: %v", err)
+		}
+
+		fmt.Fprintf(os.Stderr, "🔍 Testing migration on shadow database...\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "⚠️  Skipping shadow DB validation (--skip-shadow)\n")
+	}
+
+	// Apply the plan
+	result, err := applyPlan(ctx, mainDB, plan, shadowDB)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\n❌ Migration failed: %v\n\n", err)
+		if len(result.Errors) > 0 {
+			fmt.Fprintf(os.Stderr, "Errors:\n")
+			for _, e := range result.Errors {
+				fmt.Fprintf(os.Stderr, "  - %s\n", e)
+			}
+		}
+		os.Exit(1)
+	}
+
+	// Success!
+	fmt.Fprintf(os.Stderr, "\n✅ Migration applied successfully!\n")
+	fmt.Fprintf(os.Stderr, "   Steps applied: %d\n", result.StepsApplied)
+
+	// Output result as JSON
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to marshal result to JSON: %v", err)
+	}
+
+	fmt.Println(string(jsonBytes))
+}
+
 func introspectSchema(ctx context.Context, db *sql.DB) (*Schema, error) {
 	schema := &Schema{}
 
@@ -318,6 +407,13 @@ func introspectSchema(ctx context.Context, db *sql.DB) (*Schema, error) {
 			return nil, fmt.Errorf("failed to get indexes for table %s: %w", tableName, err)
 		}
 		table.Indexes = indexes
+
+		// Get foreign keys
+		foreignKeys, err := getForeignKeys(ctx, db, tableName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get foreign keys for table %s: %w", tableName, err)
+		}
+		table.ForeignKeys = foreignKeys
 
 		schema.Tables = append(schema.Tables, table)
 	}
@@ -416,6 +512,82 @@ func getIndexes(ctx context.Context, db *sql.DB, tableName string) ([]Index, err
 	return indexes, nil
 }
 
+func getForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]ForeignKey, error) {
+	query := `
+		SELECT
+			tc.constraint_name,
+			kcu.column_name,
+			ccu.table_name AS foreign_table_name,
+			ccu.column_name AS foreign_column_name,
+			rc.update_rule,
+			rc.delete_rule
+		FROM information_schema.table_constraints AS tc
+		JOIN information_schema.key_column_usage AS kcu
+			ON tc.constraint_name = kcu.constraint_name
+			AND tc.table_schema = kcu.table_schema
+		JOIN information_schema.constraint_column_usage AS ccu
+			ON ccu.constraint_name = tc.constraint_name
+			AND ccu.table_schema = tc.table_schema
+		JOIN information_schema.referential_constraints AS rc
+			ON rc.constraint_name = tc.constraint_name
+			AND rc.constraint_schema = tc.table_schema
+		WHERE tc.constraint_type = 'FOREIGN KEY'
+			AND tc.table_schema = 'public'
+			AND tc.table_name = $1
+		ORDER BY tc.constraint_name, kcu.ordinal_position
+	`
+
+	rows, err := db.QueryContext(ctx, query, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Group by constraint name to handle multi-column foreign keys
+	fkMap := make(map[string]*ForeignKey)
+	var fkNames []string
+
+	for rows.Next() {
+		var constraintName, columnName, foreignTableName, foreignColumnName string
+		var updateRule, deleteRule string
+
+		if err := rows.Scan(&constraintName, &columnName, &foreignTableName, &foreignColumnName, &updateRule, &deleteRule); err != nil {
+			return nil, err
+		}
+
+		if _, exists := fkMap[constraintName]; !exists {
+			fk := &ForeignKey{
+				Name:              constraintName,
+				Columns:           []string{},
+				ReferencedTable:   foreignTableName,
+				ReferencedColumns: []string{},
+			}
+
+			// Convert SQL standard actions to our format
+			if updateRule != "NO ACTION" {
+				fk.OnUpdate = &updateRule
+			}
+			if deleteRule != "NO ACTION" {
+				fk.OnDelete = &deleteRule
+			}
+
+			fkMap[constraintName] = fk
+			fkNames = append(fkNames, constraintName)
+		}
+
+		fkMap[constraintName].Columns = append(fkMap[constraintName].Columns, columnName)
+		fkMap[constraintName].ReferencedColumns = append(fkMap[constraintName].ReferencedColumns, foreignColumnName)
+	}
+
+	// Convert map to slice in consistent order
+	var foreignKeys []ForeignKey
+	for _, name := range fkNames {
+		foreignKeys = append(foreignKeys, *fkMap[name])
+	}
+
+	return foreignKeys, nil
+}
+
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -432,7 +604,8 @@ USAGE:
 COMMANDS:
   introspect       Introspect database and output current schema as JSON
   diff             Compare two schemas and show differences
-  plan             Generate migration plan from schema diff
+  plan             Generate migration plan from schema diff (with --validate flag)
+  apply            Apply migration plan to database (validates on shadow DB first)
   rollback         Generate rollback plan from forward migration
   version          Show version information
   help             Show this help message
@@ -444,15 +617,21 @@ EXAMPLES:
   # Compare schemas
   lockplane diff before.json after.json
 
-  # Generate migration plan
-  lockplane plan --from current.json --to desired.json > migration.json
+  # Generate and validate migration plan
+  lockplane plan --from current.json --to desired.json --validate > migration.json
+
+  # Apply migration (tests on shadow DB first, then applies to main DB)
+  lockplane apply --plan migration.json
 
   # Generate rollback plan
   lockplane rollback --plan migration.json --from current.json > rollback.json
 
 ENVIRONMENT:
-  DATABASE_URL            Postgres connection string
+  DATABASE_URL            Postgres connection string for main database
                           (default: postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable)
+
+  SHADOW_DATABASE_URL     Postgres connection string for shadow database
+                          (default: postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable)
 
 For more information: https://github.com/lockplane/lockplane
 `)

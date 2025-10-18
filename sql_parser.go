@@ -119,6 +119,28 @@ func extractIndexNameFromDrop(sql string) (string, error) {
 	return matches[1], nil
 }
 
+// extractTableAndConstraintFromAddConstraint extracts table and constraint name from ADD CONSTRAINT
+func extractTableAndConstraintFromAddConstraint(sql string) (string, string, error) {
+	// Pattern: ALTER TABLE <table> ADD CONSTRAINT <constraint> ...
+	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+ADD\s+CONSTRAINT\s+(\w+)`)
+	matches := re.FindStringSubmatch(sql)
+	if len(matches) < 3 {
+		return "", "", fmt.Errorf("could not extract table and constraint from: %s", sql)
+	}
+	return matches[1], matches[2], nil
+}
+
+// extractTableAndConstraintFromDropConstraint extracts table and constraint name from DROP CONSTRAINT
+func extractTableAndConstraintFromDropConstraint(sql string) (string, string, error) {
+	// Pattern: ALTER TABLE <table> DROP CONSTRAINT <constraint>
+	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+DROP\s+CONSTRAINT\s+(\w+)`)
+	matches := re.FindStringSubmatch(sql)
+	if len(matches) < 3 {
+		return "", "", fmt.Errorf("could not extract table and constraint from: %s", sql)
+	}
+	return matches[1], matches[2], nil
+}
+
 // containsSQL is a helper to check if SQL contains a substring (case-insensitive)
 func containsSQL(sql, substr string) bool {
 	return strings.Contains(strings.ToUpper(sql), strings.ToUpper(substr))

@@ -38,6 +38,13 @@
             "$ref": "#/definitions/Index"
           },
           "description": "List of table indexes"
+        },
+        "foreign_keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ForeignKey"
+          },
+          "description": "List of foreign key constraints"
         }
       }
     },
@@ -87,6 +94,47 @@
         "unique": {
           "type": "boolean",
           "description": "Whether this is a unique index"
+        }
+      }
+    },
+    "ForeignKey": {
+      "type": "object",
+      "required": ["name", "columns", "referenced_table", "referenced_columns"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "description": "Foreign key constraint name in snake_case"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Local column names that reference the foreign table"
+        },
+        "referenced_table": {
+          "type": "string",
+          "description": "Name of the referenced table (can include schema, e.g., 'auth.users')"
+        },
+        "referenced_columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Column names in the referenced table"
+        },
+        "on_delete": {
+          "type": "string",
+          "enum": ["NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"],
+          "description": "Action to take when referenced row is deleted"
+        },
+        "on_update": {
+          "type": "string",
+          "enum": ["NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"],
+          "description": "Action to take when referenced row is updated"
         }
       }
     }

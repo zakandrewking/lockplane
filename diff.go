@@ -9,12 +9,14 @@ type SchemaDiff struct {
 
 // TableDiff represents changes to a single table
 type TableDiff struct {
-	TableName       string       `json:"table_name"`
-	AddedColumns    []Column     `json:"added_columns,omitempty"`
-	RemovedColumns  []Column     `json:"removed_columns,omitempty"`
-	ModifiedColumns []ColumnDiff `json:"modified_columns,omitempty"`
-	AddedIndexes    []Index      `json:"added_indexes,omitempty"`
-	RemovedIndexes  []Index      `json:"removed_indexes,omitempty"`
+	TableName          string       `json:"table_name"`
+	AddedColumns       []Column     `json:"added_columns,omitempty"`
+	RemovedColumns     []Column     `json:"removed_columns,omitempty"`
+	ModifiedColumns    []ColumnDiff `json:"modified_columns,omitempty"`
+	AddedIndexes       []Index      `json:"added_indexes,omitempty"`
+	RemovedIndexes     []Index      `json:"removed_indexes,omitempty"`
+	AddedForeignKeys   []ForeignKey `json:"added_foreign_keys,omitempty"`
+	RemovedForeignKeys []ForeignKey `json:"removed_foreign_keys,omitempty"`
 }
 
 // ColumnDiff represents changes to a single column
@@ -129,6 +131,31 @@ func diffTables(current, desired *Table) *TableDiff {
 		}
 	}
 
+	// Build maps for foreign keys
+	currentFKs := make(map[string]*ForeignKey)
+	for i := range current.ForeignKeys {
+		currentFKs[current.ForeignKeys[i].Name] = &current.ForeignKeys[i]
+	}
+
+	desiredFKs := make(map[string]*ForeignKey)
+	for i := range desired.ForeignKeys {
+		desiredFKs[desired.ForeignKeys[i].Name] = &desired.ForeignKeys[i]
+	}
+
+	// Find added foreign keys
+	for name, desiredFK := range desiredFKs {
+		if _, exists := currentFKs[name]; !exists {
+			diff.AddedForeignKeys = append(diff.AddedForeignKeys, *desiredFK)
+		}
+	}
+
+	// Find removed foreign keys
+	for name, currentFK := range currentFKs {
+		if _, exists := desiredFKs[name]; !exists {
+			diff.RemovedForeignKeys = append(diff.RemovedForeignKeys, *currentFK)
+		}
+	}
+
 	return diff
 }
 
@@ -178,7 +205,9 @@ func (d *TableDiff) IsEmpty() bool {
 		len(d.RemovedColumns) == 0 &&
 		len(d.ModifiedColumns) == 0 &&
 		len(d.AddedIndexes) == 0 &&
-		len(d.RemovedIndexes) == 0
+		len(d.RemovedIndexes) == 0 &&
+		len(d.AddedForeignKeys) == 0 &&
+		len(d.RemovedForeignKeys) == 0
 }
 
 // IsEmpty returns true if there are no differences

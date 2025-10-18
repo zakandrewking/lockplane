@@ -20,27 +20,15 @@ A Postgres-first control plane for safe, AI-friendly schema management.
 
 ## Installation
 
-### Binary Releases (Recommended)
+### Download Pre-built Binary (Recommended)
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/zakandrewking/lockplane/releases):
-
-**Linux / macOS:**
-```bash
-curl -sSL https://raw.githubusercontent.com/zakandrewking/lockplane/main/install.sh | bash
-```
-
-**Manual Installation:**
-1. Download the appropriate binary for your OS from [releases](https://github.com/zakandrewking/lockplane/releases/latest)
+1. Download the latest release for your platform from [GitHub Releases](https://github.com/zakandrewking/lockplane/releases/latest)
 2. Extract the archive: `tar -xzf lockplane_*.tar.gz`
 3. Move to your PATH: `sudo mv lockplane /usr/local/bin/`
 4. Verify: `lockplane version`
 
-**Homebrew (macOS/Linux):**
-```bash
-brew install lockplane/tap/lockplane
-```
+### Build from Source
 
-**From Source:**
 ```bash
 git clone https://github.com/zakandrewking/lockplane.git
 cd lockplane
@@ -145,10 +133,12 @@ Output:
 }
 ```
 
-4. **Apply the migration** (coming soon):
+4. **Apply the migration**:
 ```bash
 lockplane apply --plan migration.json
 ```
+
+This automatically tests on shadow DB first, then applies to main DB if successful.
 
 That's it! Your schema is now your single source of truth. Change it, generate a new plan, validate, and apply.
 
@@ -284,12 +274,8 @@ lockplane plan --from current.json --to schema.json --validate > migration.json
 # 4. Review the generated plan
 cat migration.json
 
-# 5. Apply the migration
-# For now, extract and run SQL manually (test on shadow DB first):
-cat migration.json | jq -r '.steps[].sql' | psql -h localhost -p 5433 -U lockplane -d yourdb_shadow
-cat migration.json | jq -r '.steps[].sql' | psql -h localhost -U lockplane -d yourdb
-
-# Coming soon: lockplane apply --plan migration.json
+# 5. Apply the migration (validates on shadow DB first)
+lockplane apply --plan migration.json
 ```
 
 ### Example

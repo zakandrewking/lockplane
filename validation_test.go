@@ -235,3 +235,192 @@ func TestAllReversible(t *testing.T) {
 		t.Error("Expected not all operations to be reversible")
 	}
 }
+
+func TestAddForeignKeyValidator_ValidReference(t *testing.T) {
+	targetSchema := &Schema{
+		Tables: []Table{
+			{
+				Name: "users",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+					{Name: "email", Type: "text", Nullable: false, IsPrimaryKey: false},
+				},
+			},
+			{
+				Name: "posts",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+					{Name: "user_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
+				},
+			},
+		},
+	}
+
+	validator := &AddForeignKeyValidator{
+		TableName: "posts",
+		ForeignKey: ForeignKey{
+			Name:               "fk_posts_user_id",
+			Columns:            []string{"user_id"},
+			ReferencedTable:    "users",
+			ReferencedColumns:  []string{"id"},
+		},
+		TargetSchema: targetSchema,
+	}
+
+	result := validator.Validate()
+
+	if !result.Valid {
+		t.Errorf("Expected valid FK to pass validation, got errors: %v", result.Errors)
+	}
+
+	if !result.Reversible {
+		t.Error("Expected ADD CONSTRAINT to be reversible")
+	}
+
+	if len(result.Errors) > 0 {
+		t.Errorf("Expected no errors, got: %v", result.Errors)
+	}
+}
+
+func TestAddForeignKeyValidator_NonExistentTable(t *testing.T) {
+	targetSchema := &Schema{
+		Tables: []Table{
+			{
+				Name: "posts",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+					{Name: "author_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
+				},
+			},
+		},
+	}
+
+	validator := &AddForeignKeyValidator{
+		TableName: "posts",
+		ForeignKey: ForeignKey{
+			Name:               "fk_posts_author_id",
+			Columns:            []string{"author_id"},
+			ReferencedTable:    "authors",
+			ReferencedColumns:  []string{"id"},
+		},
+		TargetSchema: targetSchema,
+	}
+
+	result := validator.Validate()
+
+	if result.Valid {
+		t.Error("Expected FK to non-existent table to fail validation")
+	}
+
+	if len(result.Errors) == 0 {
+		t.Error("Expected error for non-existent table reference")
+	}
+
+	// Should still be reversible (DROP CONSTRAINT works regardless)
+	if !result.Reversible {
+		t.Error("Expected ADD CONSTRAINT to be reversible even if invalid")
+	}
+}
+
+func TestAddForeignKeyValidator_NonExistentColumn(t *testing.T) {
+	targetSchema := &Schema{
+		Tables: []Table{
+			{
+				Name: "users",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+				},
+			},
+			{
+				Name: "posts",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+					{Name: "user_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
+				},
+			},
+		},
+	}
+
+	validator := &AddForeignKeyValidator{
+		TableName: "posts",
+		ForeignKey: ForeignKey{
+			Name:               "fk_posts_user_id",
+			Columns:            []string{"user_id"},
+			ReferencedTable:    "users",
+			ReferencedColumns:  []string{"uuid"}, // Column doesn't exist
+		},
+		TargetSchema: targetSchema,
+	}
+
+	result := validator.Validate()
+
+	if result.Valid {
+		t.Error("Expected FK to non-existent column to fail validation")
+	}
+
+	if len(result.Errors) == 0 {
+		t.Error("Expected error for non-existent column reference")
+	}
+}
+
+func TestValidateSchemaDiffWithSchema_ForeignKeys(t *testing.T) {
+	diff := &SchemaDiff{
+		AddedTables: []Table{
+			{
+				Name: "posts",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+					{Name: "user_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
+				},
+				ForeignKeys: []ForeignKey{
+					{
+						Name:              "fk_posts_user_id",
+						Columns:           []string{"user_id"},
+						ReferencedTable:   "users",
+						ReferencedColumns: []string{"id"},
+					},
+				},
+			},
+		},
+	}
+
+	targetSchema := &Schema{
+		Tables: []Table{
+			{
+				Name: "users",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+				},
+			},
+			{
+				Name: "posts",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+					{Name: "user_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
+				},
+				ForeignKeys: []ForeignKey{
+					{
+						Name:              "fk_posts_user_id",
+						Columns:           []string{"user_id"},
+						ReferencedTable:   "users",
+						ReferencedColumns: []string{"id"},
+					},
+				},
+			},
+		},
+	}
+
+	results := ValidateSchemaDiffWithSchema(diff, targetSchema)
+
+	if len(results) != 1 {
+		t.Errorf("Expected 1 validation result, got %d", len(results))
+	}
+
+	if !AllValid(results) {
+		t.Errorf("Expected all validations to pass, got errors: %v", results[0].Errors)
+	}
+
+	if !AllReversible(results) {
+		t.Error("Expected all operations to be reversible")
+	}
+}

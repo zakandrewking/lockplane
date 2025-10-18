@@ -68,13 +68,7 @@ Before creating a production release, test the release process:
    ls -lh dist/
    ```
 
-2. **Test installation script:**
-   ```bash
-   # Test locally (will use dev version)
-   bash install.sh
-   ```
-
-3. **Test binary:**
+2. **Test binary:**
    ```bash
    ./dist/lockplane_linux_amd64_v1/lockplane version
    ./dist/lockplane_linux_amd64_v1/lockplane help
@@ -144,10 +138,10 @@ After a successful release:
    - Post in discussions/community channels
    - Update documentation site (if exists)
 
-2. **Verify installation methods:**
+2. **Verify installation:**
    ```bash
-   # Test installation script
-   curl -sSL https://raw.githubusercontent.com/lockplane/lockplane/main/install.sh | bash
+   # Download and test the binary
+   # (Download from GitHub releases page)
 
    # Verify version
    lockplane version

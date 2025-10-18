@@ -1,0 +1,40 @@
+{
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        }
+      ]
+    },
+    {
+      "name": "posts",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": true
+        },
+        {
+          "name": "author_id",
+          "type": "integer",
+          "nullable": false,
+          "is_primary_key": false
+        }
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_posts_author_id",
+          "columns": ["author_id"],
+          "referenced_table": "authors",
+          "referenced_columns": ["id"]
+        }
+      ]
+    }
+  ]
+}
