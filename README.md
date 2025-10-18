@@ -64,12 +64,18 @@ lockplane help
 
 ### Setup
 
-1. Start Postgres:
+1. Prepare your Docker Compose file for Lockplane:
+```bash
+lockplane init docker-compose
+```
+This command finds the nearest `docker-compose.yml`, clones your primary Postgres service, and adds a `shadow` service listening on the next free port (defaults to `5433`).
+
+2. Start Postgres:
 ```bash
 docker compose up -d
 ```
 
-2. Run the introspector:
+3. Run the introspector:
 ```bash
 lockplane introspect
 ```
