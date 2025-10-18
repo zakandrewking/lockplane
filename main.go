@@ -45,18 +45,17 @@ type Index struct {
 }
 
 type ForeignKey struct {
-	Name               string   `json:"name"`
-	Columns            []string `json:"columns"`
-	ReferencedTable    string   `json:"referenced_table"`
-	ReferencedColumns  []string `json:"referenced_columns"`
-	OnDelete           *string  `json:"on_delete,omitempty"`
-	OnUpdate           *string  `json:"on_update,omitempty"`
+	Name              string   `json:"name"`
+	Columns           []string `json:"columns"`
+	ReferencedTable   string   `json:"referenced_table"`
+	ReferencedColumns []string `json:"referenced_columns"`
+	OnDelete          *string  `json:"on_delete,omitempty"`
+	OnUpdate          *string  `json:"on_update,omitempty"`
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		// Default to introspect command for backward compatibility
-		runIntrospect(os.Args[1:])
+		printHelp()
 		return
 	}
 
@@ -83,6 +82,8 @@ func main() {
 		runApply(os.Args[2:])
 	case "init":
 		runInit(os.Args[2:])
+	case "validate":
+		runValidate(os.Args[2:])
 	default:
 		// If not a recognized command, assume it's a flag for introspect
 		runIntrospect(os.Args[1:])
@@ -365,6 +366,49 @@ func runApply(args []string) {
 	fmt.Println(string(jsonBytes))
 }
 
+func runValidate(args []string) {
+	if len(args) == 0 {
+		log.Fatalf("Usage: lockplane validate <command> [options]")
+	}
+
+	switch args[0] {
+	case "schema":
+		runValidateSchema(args[1:])
+	default:
+		log.Fatalf("Unknown validate command %q", args[0])
+	}
+}
+
+func runValidateSchema(args []string) {
+	fs := flag.NewFlagSet("validate schema", flag.ExitOnError)
+	fileFlag := fs.String("file", "", "Path to schema JSON file")
+	fileShort := fs.String("f", "", "Path to schema JSON file (shorthand)")
+	if err := fs.Parse(args); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	if *fileFlag != "" && *fileShort != "" && *fileFlag != *fileShort {
+		log.Fatalf("Specify schema file only once (use either --file or -f)")
+	}
+
+	path := *fileFlag
+	if path == "" {
+		path = *fileShort
+	}
+	if path == "" && fs.NArg() > 0 {
+		path = fs.Arg(0)
+	}
+	if path == "" {
+		log.Fatalf("Usage: lockplane validate schema --file <schema.json>")
+	}
+
+	if err := ValidateJSONSchema(path); err != nil {
+		log.Fatalf("Schema validation failed: %v", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "✓ Schema JSON is valid: %s\n", path)
+}
+
 func introspectSchema(ctx context.Context, db *sql.DB) (*Schema, error) {
 	schema := &Schema{}
 
@@ -607,6 +651,7 @@ COMMANDS:
   plan             Generate migration plan from schema diff (with --validate flag)
   apply            Apply migration plan to database (validates on shadow DB first)
   rollback         Generate rollback plan from forward migration
+  validate         Validate schema JSON files
   version          Show version information
   help             Show this help message
 
@@ -625,6 +670,9 @@ EXAMPLES:
 
   # Generate rollback plan
   lockplane rollback --plan migration.json --from current.json > rollback.json
+
+  # Validate a schema file against the JSON Schema
+  lockplane validate schema desired.json
 
 ENVIRONMENT:
   DATABASE_URL            Postgres connection string for main database

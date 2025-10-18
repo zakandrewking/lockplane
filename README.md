@@ -14,7 +14,7 @@ A Postgres-first control plane for safe, AI-friendly schema management.
 
 ---
 
-**New to Lockplane?** See [GETTING_STARTED.md](./GETTING_STARTED.md) for a guide to building your first app with Claude Code and Lockplane.
+**New to Lockplane?** See [Getting Started](docs/getting_started.md) for a guide to building your first app with Claude Code and Lockplane.
 
 ---
 
@@ -38,6 +38,7 @@ go install .
 ### Verify Installation
 
 ```bash
+lockplane
 lockplane version
 lockplane help
 ```
@@ -224,6 +225,9 @@ Define your desired database schema using JSON with JSON Schema validation for t
 Most editors with JSON Schema support will automatically validate your schema files. You can also validate manually:
 
 ```bash
+# Validate schema JSON directly
+lockplane validate schema desired.json
+
 # Validate by running a diff or plan command
 lockplane diff current.json desired.json
 ```
@@ -258,6 +262,12 @@ lockplane plan --from schema.json --to current.json --validate > reverse.json
 ```
 
 **No migration files to maintain.** Just update your schema and regenerate plans as needed.
+
+## Integrations
+
+- [Lockplane with Prisma](docs/prisma.md)
+- [Lockplane with Supabase](docs/supabase.md)
+- [Lockplane with Alembic](docs/alembic.md)
 
 ### Complete Workflow
 
@@ -594,9 +604,3 @@ Currently implementing M1 (DSL & Planner). See `0001-design.md` for full design.
 - MCP server interface for AI agents
 - Catalog hash computation and ledger
 - pgroll integration for zero-downtime migrations
-
-## Current Limitations
-
-**Introspector gaps:** Currently captures tables, columns, and indexes. Foreign keys, check constraints, and full index column parsing are not yet implemented.
-
-**Development-only migrations:** All DDL runs in a transaction. Zero-downtime migrations with pgroll are planned for production use.
