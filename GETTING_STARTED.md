@@ -56,6 +56,14 @@ psql -U myuser -d notesapp < migrations/001_initial.sql
 
 ## Adding Lockplane to Your Setup
 
+Start by letting Lockplane configure your Compose stack:
+
+```bash
+lockplane init docker-compose
+```
+
+The command searches for an existing `docker-compose.yml`, duplicates your primary Postgres service, and creates a `shadow` database on the next available port (defaults to `5433`).
+
 **Your new docker-compose.yml:**
 ```yaml
 services:
