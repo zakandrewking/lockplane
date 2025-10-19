@@ -107,7 +107,7 @@ release:
   header: |
     ## Lockplane {{ .Tag }}
 
-    A Postgres-first control plane for safe, AI-friendly schema management.
+    Safe, AI-friendly schema management for PostgreSQL and SQLite.
 
     ### Installation
 
