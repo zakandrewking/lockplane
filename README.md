@@ -138,11 +138,24 @@ Output:
 ```
 
 4. **Apply the migration**:
+
+You have two options:
+
+**Option A: Two-step (traditional)**
 ```bash
+# Save the plan to a file first (from step 3)
+lockplane plan --from current.json --to desired.json --validate > migration.json
+# Then apply it
 lockplane apply --plan migration.json
 ```
 
-This automatically tests on shadow DB first, then applies to main DB if successful.
+**Option B: One-step (auto-approve)**
+```bash
+# Generate and apply in a single command
+lockplane apply --auto-approve --from current.json --to desired.json --validate
+```
+
+Both options automatically test on shadow DB first, then apply to main DB if successful.
 
 That's it! Your schema is now your single source of truth. Change it, generate a new plan, validate, and apply.
 
@@ -274,6 +287,7 @@ lockplane plan --from schema.json --to current.json --validate > reverse.json
 
 ### Complete Workflow
 
+**Two-step approach (traditional):**
 ```bash
 # 1. Introspect current database state
 lockplane introspect > current.json
@@ -289,6 +303,18 @@ cat migration.json
 
 # 5. Apply the migration (validates on shadow DB first)
 lockplane apply --plan migration.json
+```
+
+**One-step approach (auto-approve):**
+```bash
+# 1. Introspect current database state
+lockplane introspect > current.json
+
+# 2. Update your desired schema
+vim schema.json  # Your single source of truth
+
+# 3. Generate and apply in one command (validates on shadow DB first)
+lockplane apply --auto-approve --from current.json --to schema.json --validate
 ```
 
 ### Example
@@ -440,6 +466,12 @@ lockplane diff before.json after.json
 
 # Generate migration plan (with validation)
 lockplane plan --from before.json --to after.json --validate
+
+# Apply migration (two-step approach)
+lockplane apply --plan migration.json
+
+# Apply migration (one-step auto-approve approach)
+lockplane apply --auto-approve --from before.json --to after.json --validate
 
 # Generate rollback plan
 lockplane rollback --plan forward.json --from before.json

@@ -294,18 +294,105 @@ func runApply(args []string) {
 	fs := flag.NewFlagSet("apply", flag.ExitOnError)
 	planPath := fs.String("plan", "", "Migration plan file to apply")
 	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
+	autoApprove := fs.Bool("auto-approve", false, "Automatically generate and apply plan from --from and --to schemas")
+	fromSchema := fs.String("from", "", "Source schema file (before) - used with --auto-approve")
+	toSchema := fs.String("to", "", "Target schema file (after) - used with --auto-approve")
+	validate := fs.Bool("validate", false, "Validate migration safety and reversibility - used with --auto-approve")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
 
-	if *planPath == "" {
-		log.Fatalf("Usage: lockplane apply --plan <migration.json> [--skip-shadow]")
-	}
+	var plan *Plan
 
-	// Load the migration plan
-	plan, err := LoadJSONPlan(*planPath)
-	if err != nil {
-		log.Fatalf("Failed to load migration plan: %v", err)
+	// Auto-approve mode: generate plan in-memory from schemas
+	if *autoApprove {
+		if *fromSchema == "" || *toSchema == "" {
+			log.Fatalf("Usage: lockplane apply --auto-approve --from <before.json> --to <after.json> [--validate] [--skip-shadow]")
+		}
+
+		// Load schemas
+		before, err := LoadJSONSchema(*fromSchema)
+		if err != nil {
+			log.Fatalf("Failed to load from schema: %v", err)
+		}
+
+		after, err := LoadJSONSchema(*toSchema)
+		if err != nil {
+			log.Fatalf("Failed to load to schema: %v", err)
+		}
+
+		// Generate diff
+		diff := DiffSchemas(before, after)
+
+		// Validate the diff if requested
+		if *validate {
+			validationResults := ValidateSchemaDiffWithSchema(diff, after)
+
+			if len(validationResults) > 0 {
+				fmt.Fprintf(os.Stderr, "\n=== Validation Results ===\n\n")
+
+				for i, result := range validationResults {
+					if result.Valid {
+						fmt.Fprintf(os.Stderr, "✓ Validation %d: PASS\n", i+1)
+					} else {
+						fmt.Fprintf(os.Stderr, "✗ Validation %d: FAIL\n", i+1)
+					}
+
+					if !result.Reversible {
+						fmt.Fprintf(os.Stderr, "  ⚠ NOT REVERSIBLE\n")
+					}
+
+					for _, err := range result.Errors {
+						fmt.Fprintf(os.Stderr, "  Error: %s\n", err)
+					}
+
+					for _, warning := range result.Warnings {
+						fmt.Fprintf(os.Stderr, "  Warning: %s\n", warning)
+					}
+
+					for _, reason := range result.Reasons {
+						fmt.Fprintf(os.Stderr, "  - %s\n", reason)
+					}
+
+					fmt.Fprintf(os.Stderr, "\n")
+				}
+
+				if !AllValid(validationResults) {
+					fmt.Fprintf(os.Stderr, "❌ Validation FAILED: Some operations are not safe\n\n")
+					os.Exit(1)
+				}
+
+				if AllReversible(validationResults) {
+					fmt.Fprintf(os.Stderr, "✓ All operations are reversible\n")
+				} else {
+					fmt.Fprintf(os.Stderr, "⚠ Warning: Some operations are not reversible\n")
+				}
+
+				fmt.Fprintf(os.Stderr, "✓ All validations passed\n\n")
+			}
+		}
+
+		// Generate plan
+		generatedPlan, err := GeneratePlan(diff)
+		if err != nil {
+			log.Fatalf("Failed to generate plan: %v", err)
+		}
+		plan = generatedPlan
+
+		fmt.Fprintf(os.Stderr, "📋 Generated migration plan with %d steps\n", len(plan.Steps))
+
+	} else {
+		// Traditional mode: load plan from file
+		if *planPath == "" {
+			log.Fatalf("Usage: lockplane apply --plan <migration.json> [--skip-shadow]\n       lockplane apply --auto-approve --from <before.json> --to <after.json> [--validate] [--skip-shadow]")
+		}
+
+		// Load the migration plan
+		loadedPlan, err := LoadJSONPlan(*planPath)
+		if err != nil {
+			log.Fatalf("Failed to load migration plan: %v", err)
+		}
+		plan = loadedPlan
 	}
 
 	// Connect to main database
@@ -667,6 +754,9 @@ EXAMPLES:
 
   # Apply migration (tests on shadow DB first, then applies to main DB)
   lockplane apply --plan migration.json
+
+  # Auto-approve: generate plan and apply in one command
+  lockplane apply --auto-approve --from current.json --to desired.json --validate
 
   # Generate rollback plan
   lockplane rollback --plan migration.json --from current.json > rollback.json

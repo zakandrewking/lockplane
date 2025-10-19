@@ -205,12 +205,23 @@ The generated `migration.json`:
 
 **4. Apply the migration:**
 
+You have two options:
+
+**Option A: Two-step (save plan first, then apply)**
 ```bash
-# Automatically tests on shadow DB first, then applies to main DB
+# Generate and save plan (from step 3)
+lockplane plan --from current.json --to schema.json --validate > migration.json
+# Then apply it
 lockplane apply --plan migration.json
 ```
 
-**What happens:**
+**Option B: One-step (auto-approve)**
+```bash
+# Generate and apply in a single command
+lockplane apply --auto-approve --from current.json --to schema.json --validate
+```
+
+**What happens in both cases:**
 1. Shadow DB gets the migration first (validates it works)
 2. If shadow succeeds, main DB gets the same migration
 3. If shadow fails, main DB is untouched
@@ -218,7 +229,7 @@ lockplane apply --plan migration.json
 
 **Manual alternative** (if you prefer to see the SQL):
 ```bash
-# Extract and run SQL manually
+# Extract and run SQL manually (only works with two-step approach)
 cat migration.json | jq -r '.steps[].sql' > migration.sql
 psql -U lockplane -h localhost -p 5433 -d notesapp_shadow < migration.sql
 psql -U lockplane -h localhost -d notesapp < migration.sql
@@ -322,10 +333,20 @@ Claude adds two new tables to your schema:
 }
 ```
 
-**4. Generate the migration plan:**
+**4. Generate and apply the migration:**
 
+**Option A: Two-step (generate plan, then apply)**
 ```bash
 lockplane plan --from current.json --to schema.json --validate > add_tags.json
+# Review the plan
+cat add_tags.json
+# Apply it
+lockplane apply --plan add_tags.json
+```
+
+**Option B: One-step (auto-approve)**
+```bash
+lockplane apply --auto-approve --from current.json --to schema.json --validate
 ```
 
 Lockplane generates:
@@ -349,9 +370,9 @@ Lockplane generates:
 }
 ```
 
-**4. Test on shadow, then apply:**
+**What happens:**
 
-Same workflow. Shadow DB catches errors. Main DB stays safe.
+Both workflows test on shadow DB first, then apply to main DB. Shadow DB catches errors. Main DB stays safe.
 
 ## Working with a Frontend
 
@@ -555,6 +576,7 @@ Your schema file is the single source of truth. Everything else is generated on 
 
 **Starting a new feature:**
 
+**Two-step approach:**
 ```bash
 # 1. See current state
 lockplane introspect > current.json
@@ -573,6 +595,21 @@ cat add_profiles.json
 
 # 6. Apply it
 lockplane apply --plan add_profiles.json
+```
+
+**One-step auto-approve approach:**
+```bash
+# 1. See current state
+lockplane introspect > current.json
+
+# 2. Tell Claude what you need
+# "Add user profiles with avatar URLs"
+
+# 3. Claude updates schema.json
+# (adds columns to users table)
+
+# 4. Generate and apply in one command
+lockplane apply --auto-approve --from current.json --to schema.json --validate
 ```
 
 **Reviewing a pull request:**
