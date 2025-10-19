@@ -64,7 +64,7 @@ func (i *Introspector) GetTables(ctx context.Context, db *sql.DB) ([]string, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tableNames []string
 	for rows.Next() {
@@ -106,7 +106,7 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []database.Column
 	for rows.Next() {
@@ -150,7 +150,7 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var indexes []database.Index
 	for rows.Next() {
@@ -201,7 +201,7 @@ func (i *Introspector) GetForeignKeys(ctx context.Context, db *sql.DB, tableName
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Group by constraint name to handle multi-column foreign keys
 	fkMap := make(map[string]*database.ForeignKey)

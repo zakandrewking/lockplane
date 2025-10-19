@@ -672,6 +672,12 @@ Currently implementing M1 (DSL & Planner). See `0001-design.md` for full design.
 - ❌ Row-level security (RLS) policies
 - ❌ Partitioned tables
 
+**Database Support**
+- ✅ PostgreSQL (full support)
+- ✅ SQLite (introspection, diff, plan, apply)
+- ❌ MySQL/MariaDB
+- ❌ CockroachDB
+
 **Infrastructure & Integration**
 - ✅ Docker Compose setup (main + shadow DB)
 - ❌ MCP server interface for AI agents
@@ -679,5 +685,11 @@ Currently implementing M1 (DSL & Planner). See `0001-design.md` for full design.
 - ❌ pgroll integration for zero-downtime migrations
 - ❌ Prisma schema converter
 - ❌ Alembic migration converter
+
+**Authorization (Future)**
+- ❌ Lockplane Auth - Single authorization spec that compiles to:
+  - Postgres RLS (Row-Level Security) policies
+  - Firestore security rules
+  - Other database authorization systems
 
 **Test Coverage:** 53 tests across all core features

@@ -161,13 +161,3 @@ func (g *Generator) FormatColumnDefinition(col database.Column) string {
 func (g *Generator) ParameterPlaceholder(position int) string {
 	return "?"
 }
-
-// contains checks if a string is in a slice
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}

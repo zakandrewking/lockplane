@@ -65,7 +65,7 @@ func (i *Introspector) GetTables(ctx context.Context, db *sql.DB) ([]string, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tableNames []string
 	for rows.Next() {
@@ -88,7 +88,7 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []database.Column
 	for rows.Next() {
@@ -124,7 +124,7 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var indexes []database.Index
 	for rows.Next() {
@@ -154,7 +154,7 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 
 			// PRAGMA index_info returns: seqno, cid, name
 			if err := indexRows.Scan(&seqno, &cid, &name); err != nil {
-				indexRows.Close()
+				_ = indexRows.Close()
 				return nil, err
 			}
 
@@ -162,7 +162,7 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 				idx.Columns = append(idx.Columns, name.String)
 			}
 		}
-		indexRows.Close()
+		_ = indexRows.Close()
 
 		// Skip auto-created indexes (like for primary keys)
 		if origin != "c" && !strings.HasPrefix(idx.Name, "sqlite_autoindex") {
@@ -182,7 +182,7 @@ func (i *Introspector) GetForeignKeys(ctx context.Context, db *sql.DB, tableName
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Group by id (foreign key constraint ID)
 	fkMap := make(map[int]*database.ForeignKey)

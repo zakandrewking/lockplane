@@ -140,7 +140,7 @@ func runIntrospect(args []string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	if err := db.PingContext(ctx); err != nil {
@@ -447,7 +447,7 @@ func runApply(args []string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to main database: %v", err)
 	}
-	defer mainDB.Close()
+	defer func() { _ = mainDB.Close() }()
 
 	ctx := context.Background()
 	if err := mainDB.PingContext(ctx); err != nil {
@@ -470,7 +470,7 @@ func runApply(args []string) {
 		if err != nil {
 			log.Fatalf("Failed to connect to shadow database: %v", err)
 		}
-		defer shadowDB.Close()
+		defer func() { _ = shadowDB.Close() }()
 
 		if err := shadowDB.PingContext(ctx); err != nil {
 			log.Fatalf("Failed to ping shadow database: %v", err)

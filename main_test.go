@@ -21,7 +21,7 @@ func goldenTest(t *testing.T, fixtureName string) {
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	if err := db.PingContext(ctx); err != nil {
@@ -231,7 +231,7 @@ func TestApplyPlan_CreateTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	if err := db.PingContext(ctx); err != nil {
@@ -285,13 +285,13 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect to main database: %v", err)
 	}
-	defer mainDB.Close()
+	defer func() { _ = mainDB.Close() }()
 
 	shadowDB, err := sql.Open("postgres", shadowConnStr)
 	if err != nil {
 		t.Fatalf("Failed to connect to shadow database: %v", err)
 	}
-	defer shadowDB.Close()
+	defer func() { _ = shadowDB.Close() }()
 
 	ctx := context.Background()
 	if err := mainDB.PingContext(ctx); err != nil {
@@ -353,7 +353,7 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	if err := db.PingContext(ctx); err != nil {
@@ -388,7 +388,7 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	if err := db.PingContext(ctx); err != nil {
