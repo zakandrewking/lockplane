@@ -113,6 +113,8 @@ func main() {
 		runInit(os.Args[2:])
 	case "validate":
 		runValidate(os.Args[2:])
+	case "convert":
+		runConvert(os.Args[2:])
 	default:
 		// If not a recognized command, assume it's a flag for introspect
 		runIntrospect(os.Args[1:])
@@ -174,12 +176,12 @@ func runDiff(args []string) {
 	afterPath := fs.Arg(1)
 
 	// Load schemas
-	before, err := LoadJSONSchema(beforePath)
+	before, err := LoadSchema(beforePath)
 	if err != nil {
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
 
-	after, err := LoadJSONSchema(afterPath)
+	after, err := LoadSchema(afterPath)
 	if err != nil {
 		log.Fatalf("Failed to load after schema: %v", err)
 	}
@@ -211,12 +213,12 @@ func runPlan(args []string) {
 
 	if *fromSchema != "" && *toSchema != "" {
 		// Generate diff from two schemas
-		before, err := LoadJSONSchema(*fromSchema)
+		before, err := LoadSchema(*fromSchema)
 		if err != nil {
 			log.Fatalf("Failed to load from schema: %v", err)
 		}
 
-		after, err = LoadJSONSchema(*toSchema)
+		after, err = LoadSchema(*toSchema)
 		if err != nil {
 			log.Fatalf("Failed to load to schema: %v", err)
 		}
@@ -308,7 +310,7 @@ func runRollback(args []string) {
 	}
 
 	// Load the before schema
-	beforeSchema, err := LoadJSONSchema(*fromSchema)
+	beforeSchema, err := LoadSchema(*fromSchema)
 	if err != nil {
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
@@ -349,12 +351,12 @@ func runApply(args []string) {
 		}
 
 		// Load schemas
-		before, err := LoadJSONSchema(*fromSchema)
+		before, err := LoadSchema(*fromSchema)
 		if err != nil {
 			log.Fatalf("Failed to load from schema: %v", err)
 		}
 
-		after, err := LoadJSONSchema(*toSchema)
+		after, err := LoadSchema(*toSchema)
 		if err != nil {
 			log.Fatalf("Failed to load to schema: %v", err)
 		}
@@ -569,6 +571,7 @@ COMMANDS:
   plan             Generate migration plan from schema diff (with --validate flag)
   apply            Apply migration plan to database (validates on shadow DB first)
   rollback         Generate rollback plan from forward migration
+  convert          Convert schema between SQL DDL (.lp.sql) and JSON formats
   validate         Validate schema JSON files
   version          Show version information
   help             Show this help message
@@ -594,6 +597,12 @@ EXAMPLES:
 
   # Validate a schema file against the JSON Schema
   lockplane validate schema desired.json
+
+  # Convert SQL DDL to JSON
+  lockplane convert --input schema.lp.sql --output schema.json
+
+  # Convert JSON to SQL DDL
+  lockplane convert --input schema.json --output schema.lp.sql --to sql
 
 ENVIRONMENT:
   DATABASE_URL            Database connection string for main database
@@ -698,4 +707,102 @@ func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan) error {
 	}
 
 	return nil
+}
+
+func runConvert(args []string) {
+	fs := flag.NewFlagSet("convert", flag.ExitOnError)
+	input := fs.String("input", "", "Input schema file (.lp.sql or .json)")
+	output := fs.String("output", "", "Output file (defaults to stdout)")
+	_ = fs.String("from", "", "Input format: sql or json (auto-detected if not specified)")
+	toFormat := fs.String("to", "json", "Output format: json or sql")
+
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: lockplane convert --input <file> [--output <file>] [--from <format>] [--to <format>]\n\n")
+		fmt.Fprintf(os.Stderr, "Convert schema between SQL DDL and JSON formats.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fs.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  # Convert SQL to JSON\n")
+		fmt.Fprintf(os.Stderr, "  lockplane convert --input schema.lp.sql --output schema.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Convert JSON to SQL\n")
+		fmt.Fprintf(os.Stderr, "  lockplane convert --input schema.json --output schema.lp.sql --to sql\n\n")
+		fmt.Fprintf(os.Stderr, "  # Output to stdout\n")
+		fmt.Fprintf(os.Stderr, "  lockplane convert --input schema.lp.sql\n")
+	}
+
+	if err := fs.Parse(args); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	if *input == "" {
+		fs.Usage()
+		log.Fatal("--input is required")
+	}
+
+	// Load the schema
+	schema, err := LoadSchema(*input)
+	if err != nil {
+		log.Fatalf("Failed to load schema: %v", err)
+	}
+
+	// Convert to target format
+	var outputData []byte
+	switch *toFormat {
+	case "json":
+		outputData, err = json.MarshalIndent(schema, "", "  ")
+		if err != nil {
+			log.Fatalf("Failed to marshal JSON: %v", err)
+		}
+
+	case "sql":
+		// Generate SQL DDL from schema
+		driver := postgres.NewDriver() // Use PostgreSQL SQL generator
+		var sqlBuilder strings.Builder
+
+		for _, table := range schema.Tables {
+			sql, _ := driver.CreateTable(table)
+			sqlBuilder.WriteString(sql)
+			sqlBuilder.WriteString(";\n\n")
+
+			// Add indexes
+			for _, idx := range table.Indexes {
+				sql, _ := driver.AddIndex(table.Name, idx)
+				sqlBuilder.WriteString(sql)
+				sqlBuilder.WriteString(";\n")
+			}
+
+			if len(table.Indexes) > 0 {
+				sqlBuilder.WriteString("\n")
+			}
+
+			// Add foreign keys
+			for _, fk := range table.ForeignKeys {
+				sql, _ := driver.AddForeignKey(table.Name, fk)
+				if !strings.HasPrefix(sql, "--") { // Skip comment-only SQL
+					sqlBuilder.WriteString(sql)
+					sqlBuilder.WriteString(";\n")
+				}
+			}
+
+			if len(table.ForeignKeys) > 0 {
+				sqlBuilder.WriteString("\n")
+			}
+		}
+
+		outputData = []byte(sqlBuilder.String())
+
+	default:
+		log.Fatalf("Unsupported output format: %s (use 'json' or 'sql')", *toFormat)
+	}
+
+	// Write output
+	if *output == "" {
+		// Write to stdout
+		fmt.Print(string(outputData))
+	} else {
+		if err := os.WriteFile(*output, outputData, 0644); err != nil {
+			log.Fatalf("Failed to write output file: %v", err)
+		}
+		fmt.Printf("Converted %s to %s: %s\n", *input, *toFormat, *output)
+	}
 }

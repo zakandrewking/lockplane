@@ -4,9 +4,42 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/xeipuuv/gojsonschema"
 )
+
+// LoadSchema loads a schema from either JSON (.json) or SQL DDL (.lp.sql) file
+func LoadSchema(path string) (*Schema, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+
+	// Check for .lp.sql extension
+	if ext == ".sql" && strings.HasSuffix(strings.ToLower(path), ".lp.sql") {
+		return LoadSQLSchema(path)
+	}
+
+	// Otherwise assume JSON
+	return LoadJSONSchema(path)
+}
+
+// LoadSQLSchema loads a schema from a SQL DDL file
+func LoadSQLSchema(path string) (*Schema, error) {
+	// Read the SQL file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read SQL file: %w", err)
+	}
+
+	// Parse SQL DDL
+	schema, err := ParseSQLSchema(string(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SQL DDL: %w", err)
+	}
+
+	// Convert from database.Schema to main.Schema (they're type aliases, so just cast)
+	return (*Schema)(schema), nil
+}
 
 // LoadJSONSchema loads and validates a JSON schema file, returning a Schema
 func LoadJSONSchema(path string) (*Schema, error) {
