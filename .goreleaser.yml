@@ -49,7 +49,7 @@ archives:
     files:
       - README.md
       - LICENSE*
-      - GETTING_STARTED.md
+      - docs/getting_started.md
       - examples/**/*
   - id: zip
     formats:
@@ -65,7 +65,7 @@ archives:
     files:
       - README.md
       - LICENSE*
-      - GETTING_STARTED.md
+      - docs/getting_started.md
       - examples/**/*
 
 checksum:
