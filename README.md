@@ -175,12 +175,12 @@ Editors that support JSON Schema validation can point at `schema-json/schema.jso
 Prefer keeping related DDL in separate `.lp.sql` files? Point Lockplane at the directory:
 
 ```bash
-# Combine all .lp.sql files (recursively) into a single schema
+# Combine all .lp.sql files in a directory into a single schema (non-recursive)
 lockplane plan --from current.json --to schema/ --validate
 lockplane convert --input schema/ --output schema.json
 ```
 
-Files are read in lexicographic order, so you can prefix them with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to make the order explicit.
+Files are read in lexicographic order, so you can prefix them with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to make the order explicit. Only top-level files are considered—subdirectories and symlinks are skipped to avoid accidental recursion.
 
 ## How It Works
 

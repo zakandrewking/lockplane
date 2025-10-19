@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -52,23 +51,24 @@ func loadSQLSchemaFromBytes(data []byte) (*Schema, error) {
 }
 
 func loadSchemaFromDir(dir string) (*Schema, error) {
-	var sqlFiles []string
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		if strings.HasSuffix(strings.ToLower(d.Name()), ".lp.sql") {
-			sqlFiles = append(sqlFiles, path)
-		}
-		return nil
-	})
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema directory %s: %w", dir, err)
+	}
+
+	var sqlFiles []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+
+		if strings.HasSuffix(strings.ToLower(entry.Name()), ".lp.sql") {
+			sqlFiles = append(sqlFiles, filepath.Join(dir, entry.Name()))
+		}
 	}
 
 	if len(sqlFiles) == 0 {

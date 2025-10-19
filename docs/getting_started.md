@@ -128,7 +128,7 @@ lockplane plan --from current.json --to schema/ --validate > migration.json
 lockplane convert --input schema/ --output schema.json
 ```
 
-Lockplane walks directories recursively and processes every `.lp.sql` file, sorted lexicographically. Prefix file names with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to control order.
+Lockplane processes the `.lp.sql` files in that directory only (non-recursive), sorted lexicographically. Prefix file names with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to control order. Subdirectories and symlinks are ignored.
 
 **Key insight:** This describes WHAT you want, not HOW to get there. Lockplane generates the migration plans.
 

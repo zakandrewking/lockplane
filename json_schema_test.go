@@ -215,12 +215,7 @@ CREATE TABLE users (
 		t.Fatalf("Failed to write %s: %v", file1, err)
 	}
 
-	nestedDir := filepath.Join(tmpDir, "nested")
-	if err := os.MkdirAll(nestedDir, 0o700); err != nil {
-		t.Fatalf("Failed to create nested directory: %v", err)
-	}
-
-	file2 := filepath.Join(nestedDir, "010_alter_users.lp.sql")
+	file2 := filepath.Join(tmpDir, "010_alter_users.lp.sql")
 	content2 := `
 ALTER TABLE users ALTER COLUMN email SET NOT NULL;
 ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
