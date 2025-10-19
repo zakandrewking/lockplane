@@ -8,8 +8,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
+	"github.com/lockplane/lockplane/database"
+	"github.com/lockplane/lockplane/database/postgres"
+	"github.com/lockplane/lockplane/database/sqlite"
+	_ "modernc.org/sqlite"
 )
 
 // Version information (set by goreleaser during build)
@@ -19,38 +24,62 @@ var (
 	date    = "unknown"
 )
 
-type Schema struct {
-	Tables []Table `json:"tables"`
+// Type aliases for backward compatibility
+type Schema = database.Schema
+type Table = database.Table
+type Column = database.Column
+type Index = database.Index
+type ForeignKey = database.ForeignKey
+
+// detectDriver detects the database driver type from a connection string
+func detectDriver(connString string) string {
+	connString = strings.ToLower(connString)
+
+	if strings.HasPrefix(connString, "postgres://") || strings.HasPrefix(connString, "postgresql://") {
+		return "postgres"
+	}
+
+	if strings.HasPrefix(connString, "sqlite://") ||
+		strings.HasPrefix(connString, "file:") ||
+		strings.HasSuffix(connString, ".db") ||
+		strings.HasSuffix(connString, ".sqlite") ||
+		strings.HasSuffix(connString, ".sqlite3") ||
+		connString == ":memory:" {
+		return "sqlite"
+	}
+
+	// Default to postgres for backward compatibility
+	return "postgres"
 }
 
-type Table struct {
-	Name        string       `json:"name"`
-	Columns     []Column     `json:"columns"`
-	Indexes     []Index      `json:"indexes"`
-	ForeignKeys []ForeignKey `json:"foreign_keys,omitempty"`
+// newDriver creates a new database driver based on the driver name
+func newDriver(driverName string) (database.Driver, error) {
+	switch driverName {
+	case "postgres", "postgresql":
+		return postgres.NewDriver(), nil
+	case "sqlite", "sqlite3":
+		return sqlite.NewDriver(), nil
+	default:
+		return nil, fmt.Errorf("unsupported database driver: %s", driverName)
+	}
 }
 
-type Column struct {
-	Name         string  `json:"name"`
-	Type         string  `json:"type"`
-	Nullable     bool    `json:"nullable"`
-	Default      *string `json:"default,omitempty"`
-	IsPrimaryKey bool    `json:"is_primary_key"`
+// newDriverFromConnString creates a new database driver by detecting the type from connection string
+func newDriverFromConnString(connString string) (database.Driver, error) {
+	driverType := detectDriver(connString)
+	return newDriver(driverType)
 }
 
-type Index struct {
-	Name    string   `json:"name"`
-	Columns []string `json:"columns"`
-	Unique  bool     `json:"unique"`
-}
-
-type ForeignKey struct {
-	Name              string   `json:"name"`
-	Columns           []string `json:"columns"`
-	ReferencedTable   string   `json:"referenced_table"`
-	ReferencedColumns []string `json:"referenced_columns"`
-	OnDelete          *string  `json:"on_delete,omitempty"`
-	OnUpdate          *string  `json:"on_update,omitempty"`
+// getSQLDriverName returns the sql.Open driver name for a given database type
+func getSQLDriverName(driverType string) string {
+	switch driverType {
+	case "postgres", "postgresql":
+		return "postgres"
+	case "sqlite", "sqlite3":
+		return "sqlite"
+	default:
+		return driverType
+	}
 }
 
 func main() {
@@ -98,7 +127,16 @@ func runIntrospect(args []string) {
 
 	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
 
-	db, err := sql.Open("postgres", connStr)
+	// Detect database driver from connection string
+	driver, err := newDriverFromConnString(connStr)
+	if err != nil {
+		log.Fatalf("Failed to create database driver: %v", err)
+	}
+
+	// Get the SQL driver name
+	sqlDriverName := getSQLDriverName(driver.Name())
+
+	db, err := sql.Open(sqlDriverName, connStr)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -109,7 +147,7 @@ func runIntrospect(args []string) {
 		log.Fatalf("Failed to ping database: %v", err)
 	}
 
-	schema, err := introspectSchema(ctx, db)
+	schema, err := driver.IntrospectSchema(ctx, db)
 	if err != nil {
 		log.Fatalf("Failed to introspect schema: %v", err)
 	}
@@ -397,7 +435,15 @@ func runApply(args []string) {
 
 	// Connect to main database
 	mainConnStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
-	mainDB, err := sql.Open("postgres", mainConnStr)
+
+	// Detect database driver from connection string
+	mainDriver, err := newDriverFromConnString(mainConnStr)
+	if err != nil {
+		log.Fatalf("Failed to create database driver: %v", err)
+	}
+
+	mainDriverName := getSQLDriverName(mainDriver.Name())
+	mainDB, err := sql.Open(mainDriverName, mainConnStr)
 	if err != nil {
 		log.Fatalf("Failed to connect to main database: %v", err)
 	}
@@ -412,7 +458,15 @@ func runApply(args []string) {
 	var shadowDB *sql.DB
 	if !*skipShadow {
 		shadowConnStr := getEnv("SHADOW_DATABASE_URL", "postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable")
-		shadowDB, err = sql.Open("postgres", shadowConnStr)
+
+		// Detect shadow database driver
+		shadowDriver, err := newDriverFromConnString(shadowConnStr)
+		if err != nil {
+			log.Fatalf("Failed to create shadow database driver: %v", err)
+		}
+
+		shadowDriverName := getSQLDriverName(shadowDriver.Name())
+		shadowDB, err = sql.Open(shadowDriverName, shadowConnStr)
 		if err != nil {
 			log.Fatalf("Failed to connect to shadow database: %v", err)
 		}
@@ -496,229 +550,6 @@ func runValidateSchema(args []string) {
 	fmt.Fprintf(os.Stderr, "✓ Schema JSON is valid: %s\n", path)
 }
 
-func introspectSchema(ctx context.Context, db *sql.DB) (*Schema, error) {
-	schema := &Schema{}
-
-	// Get all tables in public schema
-	rows, err := db.QueryContext(ctx, `
-		SELECT table_name
-		FROM information_schema.tables
-		WHERE table_schema = 'public'
-		AND table_type = 'BASE TABLE'
-		ORDER BY table_name
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query tables: %w", err)
-	}
-	defer rows.Close()
-
-	var tableNames []string
-	for rows.Next() {
-		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
-			return nil, fmt.Errorf("failed to scan table name: %w", err)
-		}
-		tableNames = append(tableNames, tableName)
-	}
-
-	// For each table, get columns and indexes
-	for _, tableName := range tableNames {
-		table := Table{Name: tableName}
-
-		// Get columns
-		columns, err := getColumns(ctx, db, tableName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get columns for table %s: %w", tableName, err)
-		}
-		table.Columns = columns
-
-		// Get indexes
-		indexes, err := getIndexes(ctx, db, tableName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get indexes for table %s: %w", tableName, err)
-		}
-		table.Indexes = indexes
-
-		// Get foreign keys
-		foreignKeys, err := getForeignKeys(ctx, db, tableName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get foreign keys for table %s: %w", tableName, err)
-		}
-		table.ForeignKeys = foreignKeys
-
-		schema.Tables = append(schema.Tables, table)
-	}
-
-	return schema, nil
-}
-
-func getColumns(ctx context.Context, db *sql.DB, tableName string) ([]Column, error) {
-	query := `
-		SELECT
-			c.column_name,
-			c.data_type,
-			c.is_nullable,
-			c.column_default,
-			COALESCE(
-				(SELECT true
-				 FROM information_schema.table_constraints tc
-				 JOIN information_schema.key_column_usage kcu
-				   ON tc.constraint_name = kcu.constraint_name
-				 WHERE tc.table_name = c.table_name
-				   AND tc.constraint_type = 'PRIMARY KEY'
-				   AND kcu.column_name = c.column_name),
-				false
-			) as is_primary_key
-		FROM information_schema.columns c
-		WHERE c.table_schema = 'public'
-		  AND c.table_name = $1
-		ORDER BY c.ordinal_position
-	`
-
-	rows, err := db.QueryContext(ctx, query, tableName)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var columns []Column
-	for rows.Next() {
-		var col Column
-		var nullable string
-		var defaultVal sql.NullString
-
-		if err := rows.Scan(&col.Name, &col.Type, &nullable, &defaultVal, &col.IsPrimaryKey); err != nil {
-			return nil, err
-		}
-
-		col.Nullable = nullable == "YES"
-		if defaultVal.Valid {
-			col.Default = &defaultVal.String
-		}
-
-		columns = append(columns, col)
-	}
-
-	return columns, nil
-}
-
-func getIndexes(ctx context.Context, db *sql.DB, tableName string) ([]Index, error) {
-	query := `
-		SELECT
-			i.indexname,
-			i.indexdef,
-			ix.indisunique
-		FROM pg_indexes i
-		JOIN pg_class c ON c.relname = i.tablename
-		JOIN pg_index ix ON ix.indexrelid = (
-			SELECT oid FROM pg_class WHERE relname = i.indexname
-		)
-		WHERE i.schemaname = 'public'
-		  AND i.tablename = $1
-		ORDER BY i.indexname
-	`
-
-	rows, err := db.QueryContext(ctx, query, tableName)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var indexes []Index
-	for rows.Next() {
-		var idx Index
-		var indexDef string
-
-		if err := rows.Scan(&idx.Name, &indexDef, &idx.Unique); err != nil {
-			return nil, err
-		}
-
-		// TODO: Parse indexDef to extract column names properly
-		// For now, just storing the index name and unique flag
-		idx.Columns = []string{} // Simplified for MVP
-
-		indexes = append(indexes, idx)
-	}
-
-	return indexes, nil
-}
-
-func getForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]ForeignKey, error) {
-	query := `
-		SELECT
-			tc.constraint_name,
-			kcu.column_name,
-			ccu.table_name AS foreign_table_name,
-			ccu.column_name AS foreign_column_name,
-			rc.update_rule,
-			rc.delete_rule
-		FROM information_schema.table_constraints AS tc
-		JOIN information_schema.key_column_usage AS kcu
-			ON tc.constraint_name = kcu.constraint_name
-			AND tc.table_schema = kcu.table_schema
-		JOIN information_schema.constraint_column_usage AS ccu
-			ON ccu.constraint_name = tc.constraint_name
-			AND ccu.table_schema = tc.table_schema
-		JOIN information_schema.referential_constraints AS rc
-			ON rc.constraint_name = tc.constraint_name
-			AND rc.constraint_schema = tc.table_schema
-		WHERE tc.constraint_type = 'FOREIGN KEY'
-			AND tc.table_schema = 'public'
-			AND tc.table_name = $1
-		ORDER BY tc.constraint_name, kcu.ordinal_position
-	`
-
-	rows, err := db.QueryContext(ctx, query, tableName)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	// Group by constraint name to handle multi-column foreign keys
-	fkMap := make(map[string]*ForeignKey)
-	var fkNames []string
-
-	for rows.Next() {
-		var constraintName, columnName, foreignTableName, foreignColumnName string
-		var updateRule, deleteRule string
-
-		if err := rows.Scan(&constraintName, &columnName, &foreignTableName, &foreignColumnName, &updateRule, &deleteRule); err != nil {
-			return nil, err
-		}
-
-		if _, exists := fkMap[constraintName]; !exists {
-			fk := &ForeignKey{
-				Name:              constraintName,
-				Columns:           []string{},
-				ReferencedTable:   foreignTableName,
-				ReferencedColumns: []string{},
-			}
-
-			// Convert SQL standard actions to our format
-			if updateRule != "NO ACTION" {
-				fk.OnUpdate = &updateRule
-			}
-			if deleteRule != "NO ACTION" {
-				fk.OnDelete = &deleteRule
-			}
-
-			fkMap[constraintName] = fk
-			fkNames = append(fkNames, constraintName)
-		}
-
-		fkMap[constraintName].Columns = append(fkMap[constraintName].Columns, columnName)
-		fkMap[constraintName].ReferencedColumns = append(fkMap[constraintName].ReferencedColumns, foreignColumnName)
-	}
-
-	// Convert map to slice in consistent order
-	var foreignKeys []ForeignKey
-	for _, name := range fkNames {
-		foreignKeys = append(foreignKeys, *fkMap[name])
-	}
-
-	return foreignKeys, nil
-}
-
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -727,7 +558,7 @@ func getEnv(key, defaultValue string) string {
 }
 
 func printHelp() {
-	fmt.Print(`Lockplane - Postgres-first control plane for safe schema management
+	fmt.Print(`Lockplane - Safe, AI-friendly schema management for Postgres and SQLite
 
 USAGE:
   lockplane <command> [options]
@@ -765,11 +596,18 @@ EXAMPLES:
   lockplane validate schema desired.json
 
 ENVIRONMENT:
-  DATABASE_URL            Postgres connection string for main database
+  DATABASE_URL            Database connection string for main database
+                          Postgres: postgres://user:pass@localhost:5432/dbname?sslmode=disable
+                          SQLite: file:path/to/database.db or :memory:
                           (default: postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable)
 
-  SHADOW_DATABASE_URL     Postgres connection string for shadow database
+  SHADOW_DATABASE_URL     Database connection string for shadow database
+                          Same format as DATABASE_URL
                           (default: postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable)
+
+SUPPORTED DATABASES:
+  - PostgreSQL (full support)
+  - SQLite (with some limitations on ALTER operations)
 
 For more information: https://github.com/lockplane/lockplane
 `)

@@ -58,8 +58,8 @@ func (v *AddColumnValidator) Validate() ValidationResult {
 
 // AddForeignKeyValidator validates adding a new foreign key
 type AddForeignKeyValidator struct {
-	TableName   string
-	ForeignKey  ForeignKey
+	TableName    string
+	ForeignKey   ForeignKey
 	TargetSchema *Schema // The schema after the migration
 }
 

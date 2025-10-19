@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	_ "github.com/lib/pq"
+	"github.com/lockplane/lockplane/database/postgres"
 )
 
 // goldenTest runs a test case using fixture files
@@ -61,8 +62,9 @@ func goldenTest(t *testing.T, fixtureName string) {
 		}
 	}()
 
-	// Run introspection
-	actual, err := introspectSchema(ctx, db)
+	// Run introspection using postgres driver
+	driver := postgres.NewDriver()
+	actual, err := driver.IntrospectSchema(ctx, db)
 	if err != nil {
 		t.Fatalf("Failed to introspect schema: %v", err)
 	}
