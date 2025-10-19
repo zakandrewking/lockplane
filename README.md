@@ -1,5 +1,5 @@
-> **⚠️ Experimental Project**
-> This is an experimental project for AI coding experiments and should not be expected to work yet.
+> **⚠️ Experimental**
+> This is an experiment in vibe coding so don't expect anything reliable or production-ready.
 
 # Lockplane
 
