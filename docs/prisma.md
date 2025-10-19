@@ -26,17 +26,18 @@ Prisma and Lockplane both target PostgreSQL, so you can combine them to keep you
      ```
    - If you used `prisma migrate dev`, run it against the same database Prisma updated so the diff is accurate.
 
-4. **Define the desired schema JSON**
-   - Convert Prisma changes into Lockplane JSON (`desired.json`). Typically you can export from Prisma by introspecting the updated database:
+4. **Capture the desired schema (`.lp.sql` preferred)**
+   - Introspect the updated database to JSON, then convert it to SQL DDL:
      ```bash
      lockplane introspect --database-url "$DATABASE_URL" > desired.json
+     lockplane convert --input desired.json --output schema.lp.sql --to sql
      ```
-   - Commit `desired.json` as the declarative source of truth that mirrors your Prisma models.
+   - Commit `schema.lp.sql` as the declarative source of truth that mirrors your Prisma models. Keep `desired.json` only if other tooling still expects JSON.
 
 5. **Validate and plan**
    - Generate and validate the migration plan:
      ```bash
-     lockplane plan --from current.json --to desired.json --validate > migration.json
+     lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
      ```
    - Review the validation report for safety/reversibility notes.
 
@@ -49,9 +50,9 @@ Prisma and Lockplane both target PostgreSQL, so you can combine them to keep you
 
 ## Tips
 
-- Add `schema-json/schema.json` to VS Code settings so Prisma schema edits surface JSON schema warnings when you sync into Lockplane.
-- Run `lockplane validate schema desired.json` in CI right after `npx prisma format` to catch drift early.
-- If Prisma introduces functions or extensions, ensure they appear in `desired.json` before running Lockplane validation.
+- Add `schema-json/schema.json` to VS Code settings so Prisma schema edits surface JSON schema warnings when you sync into Lockplane (after converting to JSON with `lockplane convert`).
+- Run `lockplane validate schema schema.lp.sql` (Lockplane will auto-detect the format) in CI right after `npx prisma format` to catch drift early.
+- If Prisma introduces functions or extensions, ensure they appear in `schema.lp.sql` before running Lockplane validation.
 
 ## CI Example
 
@@ -69,7 +70,6 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: go install ./...
-      - run: lockplane validate schema desired.json
-      - run: lockplane plan --from current.json --to desired.json --validate
+      - run: lockplane validate schema schema.lp.sql
+      - run: lockplane plan --from current.json --to schema.lp.sql --validate
 ```
-

@@ -54,7 +54,7 @@ lockplane help
 
 Lockplane follows a simple, declarative workflow:
 
-1. **Define your desired schema** - Single source of truth in JSON
+1. **Define your desired schema** - Single source of truth in `.lp.sql` (preferred) or JSON
 2. **Generate migration plan** - Lockplane calculates forward/reverse SQL
 3. **Validate safety** - Ensures operations are safe and reversible
 4. **Apply to database** - Execute with shadow DB validation
@@ -85,35 +85,18 @@ cat current.json
 # Shows: {"tables": []}
 ```
 
-2. **Define your desired schema** (`desired.json`):
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/schema.json",
-  "tables": [
-    {
-      "name": "users",
-      "columns": [
-        {
-          "name": "id",
-          "type": "integer",
-          "nullable": false,
-          "is_primary_key": true
-        },
-        {
-          "name": "email",
-          "type": "text",
-          "nullable": false,
-          "is_primary_key": false
-        }
-      ]
-    }
-  ]
-}
+2. **Define your desired schema** (`schema.lp.sql`):
+```sql
+CREATE TABLE users (
+  id BIGINT PRIMARY KEY,
+  email TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
 
 3. **Generate and validate migration plan**:
 ```bash
-lockplane plan --from current.json --to desired.json --validate
+lockplane plan --from current.json --to schema.lp.sql --validate
 ```
 
 Output:
@@ -144,7 +127,7 @@ You have two options:
 **Option A: Two-step (traditional)**
 ```bash
 # Save the plan to a file first (from step 3)
-lockplane plan --from current.json --to desired.json --validate > migration.json
+lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 # Then apply it
 lockplane apply --plan migration.json
 ```
@@ -152,110 +135,40 @@ lockplane apply --plan migration.json
 **Option B: One-step (auto-approve)**
 ```bash
 # Generate and apply in a single command
-lockplane apply --auto-approve --from current.json --to desired.json --validate
+lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
 ```
 
 Both options automatically test on shadow DB first, then apply to main DB if successful.
 
 That's it! Your schema is now your single source of truth. Change it, generate a new plan, validate, and apply.
 
-## Schema Definition with JSON
+## Schema Definition Formats
 
-Define your desired database schema using JSON with JSON Schema validation for type safety and validation.
+Lockplane accepts both SQL DDL (`.lp.sql`) and JSON schema files. Authoring `.lp.sql` is the preferred workflow—it's easy to review, copy/paste into PRs, and matches the SQL your database understands. JSON remains fully supported for tooling and automation.
 
-**Create a schema:**
+### Preferred: `.lp.sql`
 
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/schema.json",
-  "tables": [
-    {
-      "name": "users",
-      "columns": [
-        {
-          "name": "id",
-          "type": "integer",
-          "nullable": false,
-          "default": "nextval('users_id_seq'::regclass)",
-          "is_primary_key": true
-        },
-        {
-          "name": "email",
-          "type": "text",
-          "nullable": false,
-          "is_primary_key": false
-        },
-        {
-          "name": "created_at",
-          "type": "timestamp without time zone",
-          "nullable": true,
-          "default": "now()",
-          "is_primary_key": false
-        }
-      ]
-    },
-    {
-      "name": "posts",
-      "columns": [
-        {
-          "name": "id",
-          "type": "integer",
-          "nullable": false,
-          "default": "nextval('posts_id_seq'::regclass)",
-          "is_primary_key": true
-        },
-        {
-          "name": "user_id",
-          "type": "integer",
-          "nullable": false,
-          "is_primary_key": false
-        },
-        {
-          "name": "title",
-          "type": "text",
-          "nullable": false,
-          "is_primary_key": false
-        },
-        {
-          "name": "created_at",
-          "type": "timestamp without time zone",
-          "nullable": true,
-          "default": "now()",
-          "is_primary_key": false
-        }
-      ],
-      "indexes": [
-        {
-          "name": "idx_posts_user_id",
-          "columns": ["user_id"],
-          "unique": false
-        }
-      ]
-    }
-  ]
-}
+```sql
+-- schema.lp.sql
+CREATE TABLE users (
+  id BIGINT PRIMARY KEY,
+  email TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX users_email_key ON users(email);
 ```
 
-**Validate:**
+### Alternate: JSON
 
-Most editors with JSON Schema support will automatically validate your schema files. You can also validate manually:
+If you need JSON (for example, to integrate with existing tooling), convert on demand:
 
 ```bash
-# Validate schema JSON directly
-lockplane validate schema desired.json
-
-# Validate by running a diff or plan command
-lockplane diff current.json desired.json
+lockplane convert --input schema.lp.sql --output schema.json
+lockplane convert --input schema.json --output schema.lp.sql --to sql
 ```
 
-**Why JSON + JSON Schema?**
-- **Universal format** - Works with all tools and languages
-- **IDE integration** - Autocomplete and validation in VS Code, IntelliJ, etc.
-- **Straightforward** - No new syntax to learn
-- **JSON Schema validation** - Enforces structure and constraints
-- **Ecosystem** - Massive tooling support
-
-See [examples/schemas-json/](./examples/schemas-json/) for examples. Replace `main` in the `$schema` URL with a specific tag (for example `v0.1.0`) to pin validation to an exact release.
+Editors that support JSON Schema validation can point at `schema-json/schema.json` for autocomplete when working in JSON. See [examples/schemas-json/](./examples/schemas-json/) for reference files.
 
 ## How It Works
 
@@ -265,16 +178,16 @@ Your desired schema is the single source of truth. Lockplane generates everythin
 
 ```bash
 # Your desired schema
-cat schema.json
+cat schema.lp.sql
 
 # Current database state
 lockplane introspect > current.json
 
 # Forward migration (current → desired)
-lockplane plan --from current.json --to schema.json --validate > forward.json
+lockplane plan --from current.json --to schema.lp.sql --validate > forward.json
 
 # Reverse migration (desired → current)
-lockplane plan --from schema.json --to current.json --validate > reverse.json
+lockplane plan --from schema.lp.sql --to current.json --validate > reverse.json
 ```
 
 **No migration files to maintain.** Just update your schema and regenerate plans as needed.
@@ -293,10 +206,10 @@ lockplane plan --from schema.json --to current.json --validate > reverse.json
 lockplane introspect > current.json
 
 # 2. Update your desired schema
-vim schema.json  # Your single source of truth
+vim schema.lp.sql  # Your single source of truth
 
 # 3. Generate and validate migration plan
-lockplane plan --from current.json --to schema.json --validate > migration.json
+lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 
 # 4. Review the generated plan
 cat migration.json
@@ -311,10 +224,10 @@ lockplane apply --plan migration.json
 lockplane introspect > current.json
 
 # 2. Update your desired schema
-vim schema.json  # Your single source of truth
+vim schema.lp.sql  # Your single source of truth
 
 # 3. Generate and apply in one command (validates on shadow DB first)
-lockplane apply --auto-approve --from current.json --to schema.json --validate
+lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
 ```
 
 ### Example
@@ -346,7 +259,7 @@ Given two schemas:
 }
 ```
 
-**After** (`desired.json`):
+**After** (`schema.lp.sql`, shown here in JSON form):
 ```json
 {
   "tables": [
@@ -396,7 +309,7 @@ Given two schemas:
 
 **Generated plan**:
 ```bash
-lockplane plan --from current.json --to desired.json
+lockplane plan --from current.json --to schema.lp.sql
 ```
 
 ```json
@@ -420,7 +333,7 @@ Lockplane validates that migrations are safe and reversible **before** they run:
 
 ```bash
 # Validate a migration plan
-lockplane plan --from current.json --to desired.json --validate
+lockplane plan --from current.json --to schema.lp.sql --validate
 ```
 
 **Example: Safe migration** (nullable column):
@@ -462,16 +375,16 @@ The plan generator handles:
 
 ```bash
 # Compare two schemas (see diff)
-lockplane diff before.json after.json
+lockplane diff before.json after.lp.sql
 
 # Generate migration plan (with validation)
-lockplane plan --from before.json --to after.json --validate
+lockplane plan --from before.json --to after.lp.sql --validate
 
 # Apply migration (two-step approach)
 lockplane apply --plan migration.json
 
 # Apply migration (one-step auto-approve approach)
-lockplane apply --auto-approve --from before.json --to after.json --validate
+lockplane apply --auto-approve --from before.json --to after.lp.sql --validate
 
 # Generate rollback plan
 lockplane rollback --plan forward.json --from before.json
@@ -487,7 +400,7 @@ Given a forward migration plan and the original schema state, Lockplane generate
 
 ```bash
 # 1. Generate forward migration
-lockplane plan --from current.json --to desired.json > forward.json
+lockplane plan --from current.json --to schema.lp.sql > forward.json
 
 # 2. Generate rollback migration
 lockplane rollback --plan forward.json --from current.json > rollback.json

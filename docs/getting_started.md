@@ -95,37 +95,30 @@ volumes:
 
 **Key difference:** You now have two databases. Main for real data, shadow for testing.
 
-**Your schema file - the single source of truth** (`schema.json`):
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/schema.json",
-  "tables": [
-    {
-      "name": "users",
-      "columns": [
-        {"name": "id", "type": "integer", "nullable": false, "is_primary_key": true},
-        {"name": "email", "type": "text", "nullable": false, "is_primary_key": false},
-        {"name": "created_at", "type": "timestamp without time zone", "nullable": true, "default": "now()"}
-      ],
-      "indexes": [
-        {"name": "users_email_key", "columns": ["email"], "unique": true}
-      ]
-    },
-    {
-      "name": "notes",
-      "columns": [
-        {"name": "id", "type": "integer", "nullable": false, "is_primary_key": true},
-        {"name": "user_id", "type": "integer", "nullable": false, "is_primary_key": false},
-        {"name": "title", "type": "text", "nullable": false, "is_primary_key": false},
-        {"name": "content", "type": "text", "nullable": true, "is_primary_key": false},
-        {"name": "created_at", "type": "timestamp without time zone", "nullable": true, "default": "now()"}
-      ],
-      "indexes": [
-        {"name": "idx_notes_user_id", "columns": ["user_id"], "unique": false}
-      ]
-    }
-  ]
-}
+**Your schema file - the single source of truth** (`schema.lp.sql`):
+```sql
+CREATE TABLE users (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE notes (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL,
+  content TEXT,
+  created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX users_email_key ON users(email);
+CREATE INDEX idx_notes_user_id ON notes(user_id);
+```
+
+Need JSON instead? Convert on demand:
+
+```bash
+lockplane convert --input schema.lp.sql --output schema.json
 ```
 
 **Key insight:** This describes WHAT you want, not HOW to get there. Lockplane generates the migration plans.
@@ -162,7 +155,7 @@ Nothing yet. This is your baseline.
 
 ```bash
 # Compare current state to desired schema
-lockplane plan --from current.json --to schema.json --validate > migration.json
+lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 ```
 
 Output shows validation:
@@ -210,7 +203,7 @@ You have two options:
 **Option A: Two-step (save plan first, then apply)**
 ```bash
 # Generate and save plan (from step 3)
-lockplane plan --from current.json --to schema.json --validate > migration.json
+lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 # Then apply it
 lockplane apply --plan migration.json
 ```
@@ -218,7 +211,7 @@ lockplane apply --plan migration.json
 **Option B: One-step (auto-approve)**
 ```bash
 # Generate and apply in a single command
-lockplane apply --auto-approve --from current.json --to schema.json --validate
+lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
 ```
 
 **What happens in both cases:**
@@ -296,48 +289,29 @@ Claude can now see exactly what exists.
 
 "Add a tags table and a many-to-many relationship with notes."
 
-**3. Claude updates your schema** (`schema.json`):
+**3. Claude updates your schema** (`schema.lp.sql`):
 
 Claude adds two new tables to your schema:
 
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/schema.json",
-  "tables": [
-    {
-      "name": "users",
-      "columns": [...]
-    },
-    {
-      "name": "notes",
-      "columns": [...]
-    },
-    {
-      "name": "tags",
-      "columns": [
-        {"name": "id", "type": "integer", "nullable": false, "is_primary_key": true},
-        {"name": "name", "type": "text", "nullable": false, "is_primary_key": false}
-      ],
-      "indexes": [
-        {"name": "tags_name_key", "columns": ["name"], "unique": true}
-      ]
-    },
-    {
-      "name": "note_tags",
-      "columns": [
-        {"name": "note_id", "type": "integer", "nullable": false, "is_primary_key": true},
-        {"name": "tag_id", "type": "integer", "nullable": false, "is_primary_key": true}
-      ]
-    }
-  ]
-}
+```sql
+-- schema.lp.sql
+CREATE TABLE tags (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE note_tags (
+  note_id BIGINT NOT NULL REFERENCES notes(id),
+  tag_id BIGINT NOT NULL REFERENCES tags(id),
+  PRIMARY KEY (note_id, tag_id)
+);
 ```
 
 **4. Generate and apply the migration:**
 
 **Option A: Two-step (generate plan, then apply)**
 ```bash
-lockplane plan --from current.json --to schema.json --validate > add_tags.json
+lockplane plan --from current.json --to schema.lp.sql --validate > add_tags.json
 # Review the plan
 cat add_tags.json
 # Apply it
@@ -346,7 +320,7 @@ lockplane apply --plan add_tags.json
 
 **Option B: One-step (auto-approve)**
 ```bash
-lockplane apply --auto-approve --from current.json --to schema.json --validate
+lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
 ```
 
 Lockplane generates:
@@ -382,37 +356,37 @@ Both workflows test on shadow DB first, then apply to main DB. Shadow DB catches
 project/
 ├── frontend/        # React, Vue, etc
 ├── backend/         # API server
-├── schema.json      # Single source of truth
+├── schema.lp.sql   # Single source of truth
 ├── docker-compose.yml
 └── main.go         # Lockplane integration
 ```
 
 **Frontend needs to know the schema:**
 
-Your `schema.json` file is both:
+Your `schema.lp.sql` file is both:
 1. Your desired database schema
-2. The source for frontend type generation
+2. The source for frontend type generation (convert to JSON when needed)
 
 ```bash
-# Your schema is already in JSON - use it directly!
-cp schema.json frontend/schema.json
+# Convert your schema to JSON for the frontend
+lockplane convert --input schema.lp.sql --output frontend/schema.json
 
 # Or introspect current state if you need it
 lockplane introspect > frontend/current-schema.json
 ```
 
 Your frontend can now:
-- Generate TypeScript types from `schema.json`
+- Generate TypeScript types from `frontend/schema.json`
 - Know what fields exist on each table
 - Validate data before sending to API
 
 **When schema changes:**
 
-1. Update `schema.json` (your source of truth)
-2. Generate migration plan: `lockplane plan --from current.json --to schema.json --validate`
+1. Update `schema.lp.sql` (your source of truth)
+2. Generate migration plan: `lockplane plan --from current.json --to schema.lp.sql --validate`
 3. Test with shadow DB
 4. Apply to main DB
-5. Frontend already has the new schema (it's the same `schema.json`)
+5. Frontend already has the new schema (regenerate from `schema.lp.sql`)
 6. Regenerate TypeScript types
 7. Deploy together
 
@@ -425,7 +399,7 @@ Your frontend can now:
 You're already doing this:
 - Main DB for real data
 - Shadow DB for testing
-- `schema.json` in git (your source of truth)
+- `schema.lp.sql` in git (your source of truth)
 - Migration plans generated on demand
 
 ### Staging
@@ -456,7 +430,7 @@ services:
 
 1. Git push to staging branch
 2. CI runs: `go test` (verifies migrations work)
-3. Generate migration plan: `lockplane plan --from current.json --to schema.json --validate`
+3. Generate migration plan: `lockplane plan --from current.json --to schema.lp.sql --validate`
 4. Apply migrations to staging DB:
    ```bash
    lockplane apply --plan migration.json
@@ -553,7 +527,7 @@ Long-running migrations (adding indexes, changing column types) should:
 **With Lockplane:**
 
 1. Introspect current state → Claude sees exactly what exists
-2. Update `schema.json` → Your desired state (source of truth)
+2. Update `schema.lp.sql` → Your desired state (source of truth)
 3. Generate plan → Lockplane calculates SQL operations
 4. Validate → Ensures safety and reversibility
 5. Test on shadow DB → Catches errors before production
@@ -568,7 +542,7 @@ Your schema file is the single source of truth. Everything else is generated on 
 
 - **For Claude:** `lockplane introspect` shows exact current state - no guessing
 - **For you:** Validate migrations before they run - catch errors early
-- **For your team:** Schema is readable JSON - everyone understands it
+- **For your team:** Schema is readable SQL (and convertible to JSON) - everyone understands it
 - **For production:** Shadow DB testing - safe migrations every time
 - **For rollbacks:** Automatically generated - always know you can undo
 
@@ -584,11 +558,11 @@ lockplane introspect > current.json
 # 2. Tell Claude what you need
 # "Add user profiles with avatar URLs"
 
-# 3. Claude updates schema.json
+# 3. Claude updates schema.lp.sql
 # (adds columns to users table)
 
 # 4. Generate and validate migration
-lockplane plan --from current.json --to schema.json --validate > add_profiles.json
+lockplane plan --from current.json --to schema.lp.sql --validate > add_profiles.json
 
 # 5. Review the plan
 cat add_profiles.json
@@ -605,11 +579,11 @@ lockplane introspect > current.json
 # 2. Tell Claude what you need
 # "Add user profiles with avatar URLs"
 
-# 3. Claude updates schema.json
+# 3. Claude updates schema.lp.sql
 # (adds columns to users table)
 
 # 4. Generate and apply in one command
-lockplane apply --auto-approve --from current.json --to schema.json --validate
+lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
 ```
 
 **Reviewing a pull request:**

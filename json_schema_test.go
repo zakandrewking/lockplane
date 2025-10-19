@@ -24,3 +24,194 @@ func TestValidateJSONSchema_Invalid(t *testing.T) {
 		t.Fatalf("Expected schema %s to be invalid", invalidPath)
 	}
 }
+
+func TestLoadSchemaFromLPSQL(t *testing.T) {
+	tmpDir := t.TempDir()
+	sqlPath := filepath.Join(tmpDir, "schema.lp.sql")
+
+	sqlDDL := `
+CREATE TABLE users (
+    id BIGINT PRIMARY KEY,
+    email TEXT NOT NULL,
+    team_id BIGINT,
+    CONSTRAINT users_email_key UNIQUE (email),
+    CONSTRAINT users_team_fk FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+`
+	if err := os.WriteFile(sqlPath, []byte(sqlDDL), 0o600); err != nil {
+		t.Fatalf("Failed to write SQL fixture: %v", err)
+	}
+
+	actual, err := LoadSchema(sqlPath)
+	if err != nil {
+		t.Fatalf("LoadSchema returned error: %v", err)
+	}
+
+	expected := &Schema{
+		Tables: []Table{
+			{
+				Name: "users",
+				Columns: []Column{
+					{
+						Name:         "id",
+						Type:         "pg_catalog.int8",
+						Nullable:     false,
+						IsPrimaryKey: true,
+					},
+					{
+						Name:         "email",
+						Type:         "text",
+						Nullable:     false,
+						IsPrimaryKey: false,
+					},
+					{
+						Name:         "team_id",
+						Type:         "pg_catalog.int8",
+						Nullable:     true,
+						IsPrimaryKey: false,
+					},
+				},
+				Indexes: []Index{
+					{
+						Name:    "users_email_key",
+						Columns: []string{"email"},
+						Unique:  true,
+					},
+				},
+				ForeignKeys: []ForeignKey{
+					{
+						Name:              "users_team_fk",
+						Columns:           []string{"team_id"},
+						ReferencedTable:   "teams",
+						ReferencedColumns: []string{"id"},
+					},
+				},
+			},
+		},
+	}
+
+	compareSchemas(t, expected, actual)
+
+	var usersTable *Table
+	for i := range actual.Tables {
+		if actual.Tables[i].Name == "users" {
+			usersTable = &actual.Tables[i]
+			break
+		}
+	}
+	if usersTable == nil {
+		t.Fatalf("expected users table in parsed schema")
+	}
+	if len(usersTable.ForeignKeys) != 1 {
+		t.Fatalf("expected 1 foreign key, got %d", len(usersTable.ForeignKeys))
+	}
+	fk := usersTable.ForeignKeys[0]
+	if fk.ReferencedTable != "teams" {
+		t.Fatalf("expected foreign key to reference teams, got %s", fk.ReferencedTable)
+	}
+	if len(fk.Columns) != 1 || fk.Columns[0] != "team_id" {
+		t.Fatalf("expected foreign key column team_id, got %v", fk.Columns)
+	}
+	if len(fk.ReferencedColumns) != 1 || fk.ReferencedColumns[0] != "id" {
+		t.Fatalf("expected referenced column id, got %v", fk.ReferencedColumns)
+	}
+}
+
+func TestLoadSchemaFromLPSQLWithAlterStatements(t *testing.T) {
+	tmpDir := t.TempDir()
+	sqlPath := filepath.Join(tmpDir, "schema.lp.sql")
+
+	sqlDDL := `
+CREATE TABLE users (
+    id BIGINT,
+    email TEXT
+);
+ALTER TABLE users ADD COLUMN bio TEXT;
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+ALTER TABLE users ALTER COLUMN bio TYPE VARCHAR(100);
+ALTER TABLE users ALTER COLUMN email SET DEFAULT 'n/a';
+ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+`
+	if err := os.WriteFile(sqlPath, []byte(sqlDDL), 0o600); err != nil {
+		t.Fatalf("Failed to write SQL fixture: %v", err)
+	}
+
+	actual, err := LoadSchema(sqlPath)
+	if err != nil {
+		t.Fatalf("LoadSchema returned error: %v", err)
+	}
+
+	expected := &Schema{
+		Tables: []Table{
+			{
+				Name: "users",
+				Columns: []Column{
+					{
+						Name:         "id",
+						Type:         "pg_catalog.int8",
+						Nullable:     true,
+						IsPrimaryKey: false,
+					},
+					{
+						Name:         "email",
+						Type:         "text",
+						Nullable:     false,
+						IsPrimaryKey: false,
+						Default:      strPtr("'n/a'"),
+					},
+					{
+						Name:         "bio",
+						Type:         "pg_catalog.varchar(100)",
+						Nullable:     true,
+						IsPrimaryKey: false,
+					},
+				},
+				Indexes: []Index{
+					{
+						Name:    "users_email_key",
+						Columns: []string{"email"},
+						Unique:  true,
+					},
+				},
+			},
+		},
+	}
+
+	compareSchemas(t, expected, actual)
+
+	var usersTable *Table
+	for i := range actual.Tables {
+		if actual.Tables[i].Name == "users" {
+			usersTable = &actual.Tables[i]
+			break
+		}
+	}
+	if usersTable == nil {
+		t.Fatalf("expected users table in parsed schema")
+	}
+
+	emailCol := findColumnByName(t, usersTable, "email")
+	if emailCol.Default == nil || *emailCol.Default != "'n/a'" {
+		t.Fatalf("expected email default 'n/a', got %v", emailCol.Default)
+	}
+
+	bioCol := findColumnByName(t, usersTable, "bio")
+	if bioCol.Type != "pg_catalog.varchar(100)" {
+		t.Fatalf("expected bio type pg_catalog.varchar(100), got %s", bioCol.Type)
+	}
+}
+
+func findColumnByName(t *testing.T, table *Table, name string) *Column {
+	t.Helper()
+	for i := range table.Columns {
+		if table.Columns[i].Name == name {
+			return &table.Columns[i]
+		}
+	}
+	t.Fatalf("column %s not found in table %s", name, table.Name)
+	return nil
+}
+
+func strPtr(s string) *string {
+	return &s
+}

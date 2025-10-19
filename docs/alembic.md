@@ -13,7 +13,7 @@ Alembic (SQLAlchemy's migration tool) excels at Python-based migrations. Lockpla
 
 1. **Track schema declaratively with Lockplane**
    - `current.json` represents the state currently deployed.
-   - `desired.json` describes the target state.
+   - `schema.lp.sql` (preferred) describes the target state. Convert from JSON if needed with `lockplane convert`.
 
 2. **Use Lockplane for safety analysis**
    - `lockplane plan` highlights unsafe operations and generates SQL/rollback steps.
@@ -37,14 +37,14 @@ lockplane introspect > current.json
 ```
 
 ### 3. Define desired schema
-Update `desired.json` to express the new state. Validate immediately:
+Update `schema.lp.sql` to express the new state. Validate immediately:
 ```bash
-lockplane validate schema desired.json
+lockplane validate schema schema.lp.sql
 ```
 
 ### 4. Generate a plan and review
 ```bash
-lockplane plan --from current.json --to desired.json --validate > migration.json
+lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 ```
 - Read the stderr validation summary for warnings.
 - `migration.json` contains ordered `steps` with SQL.
@@ -87,7 +87,7 @@ lockplane apply --plan migration.json --skip-shadow
 
 ### 7. Keep artifacts in sync
 - After Alembic upgrade succeeds, run `lockplane introspect > current.json` and commit alongside the Alembic revision to document the new state.
-- If Alembic includes custom Python logic (data migrations), add notes in `desired.json` comments (or README) to ensure future maintainers rerun those scripts.
+- If Alembic includes custom Python logic (data migrations), add notes alongside `schema.lp.sql` (or in README) to ensure future maintainers rerun those scripts.
 
 ## Automation Tips
 
@@ -95,7 +95,7 @@ lockplane apply --plan migration.json --skip-shadow
 - Use Makefile targets:
   ```makefile
   lockplane-plan:
-  	lockplane plan --from current.json --to desired.json --validate > migration.json
+	lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 
   alembic-upgrade:
   	alembic upgrade head
@@ -106,5 +106,4 @@ lockplane apply --plan migration.json --skip-shadow
 
 - **Autogenerate vs. Lockplane:** Alembic autogenerate may produce different SQL than Lockplane. Prefer Lockplane’s SQL for consistency; adjust Alembic autogen output or disable it for the revision.
 - **Transactional differences:** Lockplane assumes transactional DDL; if your Alembic revision requires non-transactional steps, split them into separate revisions and note it in the Lockplane plan.
-- **Data migrations:** Run Python data migrations within the Alembic revision; Lockplane focuses on structural changes. Document any required data steps in the PR description alongside `desired.json` updates.
-
+- **Data migrations:** Run Python data migrations within the Alembic revision; Lockplane focuses on structural changes. Document any required data steps in the PR description alongside `schema.lp.sql` updates.
