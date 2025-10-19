@@ -169,7 +169,7 @@ func runDiff(args []string) {
 	}
 
 	if fs.NArg() != 2 {
-		log.Fatalf("Usage: lockplane diff <before.json> <after.json>")
+		log.Fatalf("Usage: lockplane diff <before> <after>")
 	}
 
 	beforePath := fs.Arg(0)
@@ -200,8 +200,8 @@ func runDiff(args []string) {
 
 func runPlan(args []string) {
 	fs := flag.NewFlagSet("plan", flag.ExitOnError)
-	fromSchema := fs.String("from", "", "Source schema file (before)")
-	toSchema := fs.String("to", "", "Target schema file (after)")
+	fromSchema := fs.String("from", "", "Source schema path (file or directory)")
+	toSchema := fs.String("to", "", "Target schema path (file or directory)")
 	validate := fs.Bool("validate", false, "Validate migration safety and reversibility")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
@@ -294,7 +294,7 @@ func runPlan(args []string) {
 func runRollback(args []string) {
 	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
 	planPath := fs.String("plan", "", "Forward migration plan file")
-	fromSchema := fs.String("from", "", "Source schema file (before state)")
+	fromSchema := fs.String("from", "", "Source schema path (before state)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
@@ -335,8 +335,8 @@ func runApply(args []string) {
 	planPath := fs.String("plan", "", "Migration plan file to apply")
 	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
 	autoApprove := fs.Bool("auto-approve", false, "Automatically generate and apply plan from --from and --to schemas")
-	fromSchema := fs.String("from", "", "Source schema file (before) - used with --auto-approve")
-	toSchema := fs.String("to", "", "Target schema file (after) - used with --auto-approve")
+	fromSchema := fs.String("from", "", "Source schema path (before) - used with --auto-approve")
+	toSchema := fs.String("to", "", "Target schema path (after) - used with --auto-approve")
 	validate := fs.Bool("validate", false, "Validate migration safety and reversibility - used with --auto-approve")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
@@ -581,25 +581,28 @@ EXAMPLES:
   lockplane introspect > current.json
 
   # Compare schemas
-  lockplane diff before.json after.json
+  lockplane diff current.json schema/
 
   # Generate and validate migration plan
-  lockplane plan --from current.json --to desired.json --validate > migration.json
+  lockplane plan --from current.json --to schema/ --validate > migration.json
 
   # Apply migration (tests on shadow DB first, then applies to main DB)
   lockplane apply --plan migration.json
 
   # Auto-approve: generate plan and apply in one command
-  lockplane apply --auto-approve --from current.json --to desired.json --validate
+  lockplane apply --auto-approve --from current.json --to schema/ --validate
 
   # Generate rollback plan
   lockplane rollback --plan migration.json --from current.json > rollback.json
 
-  # Validate a schema file against the JSON Schema
-  lockplane validate schema desired.json
+  # Validate a schema path against the JSON Schema
+  lockplane validate schema schema/
 
   # Convert SQL DDL to JSON
   lockplane convert --input schema.lp.sql --output schema.json
+
+  # Convert a directory of SQL files to JSON
+  lockplane convert --input schema/ --output schema.json
 
   # Convert JSON to SQL DDL
   lockplane convert --input schema.json --output schema.lp.sql --to sql
@@ -711,7 +714,7 @@ func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan) error {
 
 func runConvert(args []string) {
 	fs := flag.NewFlagSet("convert", flag.ExitOnError)
-	input := fs.String("input", "", "Input schema file (.lp.sql or .json)")
+	input := fs.String("input", "", "Input schema (.lp.sql file, directory, or .json)")
 	output := fs.String("output", "", "Output file (defaults to stdout)")
 	_ = fs.String("from", "", "Input format: sql or json (auto-detected if not specified)")
 	toFormat := fs.String("to", "json", "Output format: json or sql")
@@ -724,6 +727,8 @@ func runConvert(args []string) {
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
 		fmt.Fprintf(os.Stderr, "  # Convert SQL to JSON\n")
 		fmt.Fprintf(os.Stderr, "  lockplane convert --input schema.lp.sql --output schema.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Convert a directory of .lp.sql files to JSON\n")
+		fmt.Fprintf(os.Stderr, "  lockplane convert --input schema/ --output schema.json\n\n")
 		fmt.Fprintf(os.Stderr, "  # Convert JSON to SQL\n")
 		fmt.Fprintf(os.Stderr, "  lockplane convert --input schema.json --output schema.lp.sql --to sql\n\n")
 		fmt.Fprintf(os.Stderr, "  # Output to stdout\n")

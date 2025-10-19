@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/xeipuuv/gojsonschema"
@@ -12,6 +14,10 @@ import (
 
 // LoadSchema loads a schema from either JSON (.json) or SQL DDL (.lp.sql) file
 func LoadSchema(path string) (*Schema, error) {
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return loadSchemaFromDir(path)
+	}
+
 	ext := strings.ToLower(filepath.Ext(path))
 
 	// Check for .lp.sql extension
@@ -31,6 +37,10 @@ func LoadSQLSchema(path string) (*Schema, error) {
 		return nil, fmt.Errorf("failed to read SQL file: %w", err)
 	}
 
+	return loadSQLSchemaFromBytes(data)
+}
+
+func loadSQLSchemaFromBytes(data []byte) (*Schema, error) {
 	// Parse SQL DDL
 	schema, err := ParseSQLSchema(string(data))
 	if err != nil {
@@ -39,6 +49,50 @@ func LoadSQLSchema(path string) (*Schema, error) {
 
 	// Convert from database.Schema to main.Schema (they're type aliases, so just cast)
 	return (*Schema)(schema), nil
+}
+
+func loadSchemaFromDir(dir string) (*Schema, error) {
+	var sqlFiles []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		if strings.HasSuffix(strings.ToLower(d.Name()), ".lp.sql") {
+			sqlFiles = append(sqlFiles, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to read schema directory %s: %w", dir, err)
+	}
+
+	if len(sqlFiles) == 0 {
+		return nil, fmt.Errorf("no .lp.sql files found in directory %s", dir)
+	}
+
+	sort.Strings(sqlFiles)
+
+	var builder strings.Builder
+	for _, file := range sqlFiles {
+		data, readErr := os.ReadFile(file)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read SQL file %s: %w", file, readErr)
+		}
+
+		builder.WriteString(fmt.Sprintf("-- File: %s\n", file))
+		builder.Write(data)
+		if len(data) == 0 || data[len(data)-1] != '\n' {
+			builder.WriteByte('\n')
+		}
+		builder.WriteByte('\n')
+	}
+
+	return loadSQLSchemaFromBytes([]byte(builder.String()))
 }
 
 // LoadJSONSchema loads and validates a JSON schema file, returning a Schema

@@ -32,7 +32,7 @@ Prisma and Lockplane both target PostgreSQL, so you can combine them to keep you
      lockplane introspect --database-url "$DATABASE_URL" > desired.json
      lockplane convert --input desired.json --output schema.lp.sql --to sql
      ```
-   - Commit `schema.lp.sql` as the declarative source of truth that mirrors your Prisma models. Keep `desired.json` only if other tooling still expects JSON.
+   - Commit `schema.lp.sql` (or a directory of `.lp.sql` files) as the declarative source of truth that mirrors your Prisma models. Keep `desired.json` only if other tooling still expects JSON.
 
 5. **Validate and plan**
    - Generate and validate the migration plan:

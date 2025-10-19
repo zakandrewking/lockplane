@@ -13,7 +13,7 @@ Alembic (SQLAlchemy's migration tool) excels at Python-based migrations. Lockpla
 
 1. **Track schema declaratively with Lockplane**
    - `current.json` represents the state currently deployed.
-   - `schema.lp.sql` (preferred) describes the target state. Convert from JSON if needed with `lockplane convert`.
+   - `schema.lp.sql` (preferred, or a directory of `.lp.sql` files) describes the target state. Convert from JSON if needed with `lockplane convert`.
 
 2. **Use Lockplane for safety analysis**
    - `lockplane plan` highlights unsafe operations and generates SQL/rollback steps.

@@ -201,6 +201,61 @@ ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
 	}
 }
 
+func TestLoadSchemaFromLPSQLDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	file1 := filepath.Join(tmpDir, "001_create_users.lp.sql")
+	content1 := `
+CREATE TABLE users (
+    id BIGINT,
+    email TEXT
+);
+`
+	if err := os.WriteFile(file1, []byte(content1), 0o600); err != nil {
+		t.Fatalf("Failed to write %s: %v", file1, err)
+	}
+
+	nestedDir := filepath.Join(tmpDir, "nested")
+	if err := os.MkdirAll(nestedDir, 0o700); err != nil {
+		t.Fatalf("Failed to create nested directory: %v", err)
+	}
+
+	file2 := filepath.Join(nestedDir, "010_alter_users.lp.sql")
+	content2 := `
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+`
+	if err := os.WriteFile(file2, []byte(content2), 0o600); err != nil {
+		t.Fatalf("Failed to write %s: %v", file2, err)
+	}
+
+	actual, err := LoadSchema(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadSchema returned error: %v", err)
+	}
+
+	if len(actual.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(actual.Tables))
+	}
+
+	usersTable := &actual.Tables[0]
+
+	emailCol := findColumnByName(t, usersTable, "email")
+	if emailCol.Nullable {
+		t.Fatalf("expected email to be NOT NULL after directory load")
+	}
+
+	if len(usersTable.Indexes) != 1 {
+		t.Fatalf("expected 1 index, got %d", len(usersTable.Indexes))
+	}
+	if usersTable.Indexes[0].Name != "users_email_key" {
+		t.Fatalf("expected index name users_email_key, got %s", usersTable.Indexes[0].Name)
+	}
+	if len(usersTable.Indexes[0].Columns) != 1 || usersTable.Indexes[0].Columns[0] != "email" {
+		t.Fatalf("expected users_email_key to cover email, got %v", usersTable.Indexes[0].Columns)
+	}
+}
+
 func findColumnByName(t *testing.T, table *Table, name string) *Column {
 	t.Helper()
 	for i := range table.Columns {

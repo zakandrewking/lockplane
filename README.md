@@ -170,6 +170,18 @@ lockplane convert --input schema.json --output schema.lp.sql --to sql
 
 Editors that support JSON Schema validation can point at `schema-json/schema.json` for autocomplete when working in JSON. See [examples/schemas-json/](./examples/schemas-json/) for reference files.
 
+### Organizing Multiple Files
+
+Prefer keeping related DDL in separate `.lp.sql` files? Point Lockplane at the directory:
+
+```bash
+# Combine all .lp.sql files (recursively) into a single schema
+lockplane plan --from current.json --to schema/ --validate
+lockplane convert --input schema/ --output schema.json
+```
+
+Files are read in lexicographic order, so you can prefix them with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to make the order explicit.
+
 ## How It Works
 
 ### Single Source of Truth

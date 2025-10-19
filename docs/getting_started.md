@@ -95,7 +95,7 @@ volumes:
 
 **Key difference:** You now have two databases. Main for real data, shadow for testing.
 
-**Your schema file - the single source of truth** (`schema.lp.sql`):
+**Your schema source of truth** (single file or directory of `.lp.sql` files):
 ```sql
 CREATE TABLE users (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -120,6 +120,15 @@ Need JSON instead? Convert on demand:
 ```bash
 lockplane convert --input schema.lp.sql --output schema.json
 ```
+
+Prefer splitting DDL across files? Place them in `schema/` (or any directory) and point Lockplane there:
+
+```bash
+lockplane plan --from current.json --to schema/ --validate > migration.json
+lockplane convert --input schema/ --output schema.json
+```
+
+Lockplane walks directories recursively and processes every `.lp.sql` file, sorted lexicographically. Prefix file names with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to control order.
 
 **Key insight:** This describes WHAT you want, not HOW to get there. Lockplane generates the migration plans.
 
@@ -356,20 +365,22 @@ Both workflows test on shadow DB first, then apply to main DB. Shadow DB catches
 project/
 ├── frontend/        # React, Vue, etc
 ├── backend/         # API server
-├── schema.lp.sql   # Single source of truth
+├── schema/          # .lp.sql files (source of truth)
+│   ├── 001_tables.lp.sql
+│   └── 010_indexes.lp.sql
 ├── docker-compose.yml
 └── main.go         # Lockplane integration
 ```
 
 **Frontend needs to know the schema:**
 
-Your `schema.lp.sql` file is both:
+Your `schema/` directory (or single `.lp.sql` file) is both:
 1. Your desired database schema
 2. The source for frontend type generation (convert to JSON when needed)
 
 ```bash
 # Convert your schema to JSON for the frontend
-lockplane convert --input schema.lp.sql --output frontend/schema.json
+lockplane convert --input schema/ --output frontend/schema.json
 
 # Or introspect current state if you need it
 lockplane introspect > frontend/current-schema.json
@@ -382,11 +393,11 @@ Your frontend can now:
 
 **When schema changes:**
 
-1. Update `schema.lp.sql` (your source of truth)
-2. Generate migration plan: `lockplane plan --from current.json --to schema.lp.sql --validate`
+1. Update files in `schema/` (your source of truth)
+2. Generate migration plan: `lockplane plan --from current.json --to schema/ --validate`
 3. Test with shadow DB
 4. Apply to main DB
-5. Frontend already has the new schema (regenerate from `schema.lp.sql`)
+5. Frontend already has the new schema (regenerate from `schema/`)
 6. Regenerate TypeScript types
 7. Deploy together
 
@@ -399,7 +410,7 @@ Your frontend can now:
 You're already doing this:
 - Main DB for real data
 - Shadow DB for testing
-- `schema.lp.sql` in git (your source of truth)
+- `schema/` (or a single `.lp.sql`) in git (your source of truth)
 - Migration plans generated on demand
 
 ### Staging
@@ -430,7 +441,7 @@ services:
 
 1. Git push to staging branch
 2. CI runs: `go test` (verifies migrations work)
-3. Generate migration plan: `lockplane plan --from current.json --to schema.lp.sql --validate`
+3. Generate migration plan: `lockplane plan --from current.json --to schema/ --validate`
 4. Apply migrations to staging DB:
    ```bash
    lockplane apply --plan migration.json
@@ -527,7 +538,7 @@ Long-running migrations (adding indexes, changing column types) should:
 **With Lockplane:**
 
 1. Introspect current state → Claude sees exactly what exists
-2. Update `schema.lp.sql` → Your desired state (source of truth)
+2. Update files in `schema/` → Your desired state (source of truth)
 3. Generate plan → Lockplane calculates SQL operations
 4. Validate → Ensures safety and reversibility
 5. Test on shadow DB → Catches errors before production
@@ -558,11 +569,11 @@ lockplane introspect > current.json
 # 2. Tell Claude what you need
 # "Add user profiles with avatar URLs"
 
-# 3. Claude updates schema.lp.sql
+# 3. Claude updates schema/
 # (adds columns to users table)
 
 # 4. Generate and validate migration
-lockplane plan --from current.json --to schema.lp.sql --validate > add_profiles.json
+lockplane plan --from current.json --to schema/ --validate > add_profiles.json
 
 # 5. Review the plan
 cat add_profiles.json
@@ -579,11 +590,11 @@ lockplane introspect > current.json
 # 2. Tell Claude what you need
 # "Add user profiles with avatar URLs"
 
-# 3. Claude updates schema.lp.sql
+# 3. Claude updates schema/
 # (adds columns to users table)
 
 # 4. Generate and apply in one command
-lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
+lockplane apply --auto-approve --from current.json --to schema/ --validate
 ```
 
 **Reviewing a pull request:**
