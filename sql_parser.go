@@ -350,7 +350,7 @@ func formatTypeName(typeName *pg_query.TypeName) string {
 	}
 
 	// Add array notation if needed
-	if typeName.ArrayBounds != nil && len(typeName.ArrayBounds) > 0 {
+	if len(typeName.ArrayBounds) > 0 {
 		typeStr += "[]"
 	}
 

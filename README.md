@@ -54,7 +54,7 @@ lockplane help
 
 Lockplane follows a simple, declarative workflow:
 
-1. **Define your desired schema** - Single source of truth in `.lp.sql` (preferred) or JSON
+1. **Define your desired schema** - Use SQL DDL (`.lp.sql`), JSON, or generate from your ORM
 2. **Generate migration plan** - Lockplane calculates forward/reverse SQL
 3. **Validate safety** - Ensures operations are safe and reversible
 4. **Apply to database** - Execute with shadow DB validation
@@ -206,9 +206,10 @@ lockplane plan --from schema.lp.sql --to current.json --validate > reverse.json
 
 ## Integrations
 
-- [Lockplane with Prisma](docs/prisma.md)
-- [Lockplane with Supabase](docs/supabase.md)
-- [Lockplane with Alembic](docs/alembic.md)
+- [Lockplane with SQLAlchemy](docs/sqlalchemy.md) - Python ORM integration
+- [Lockplane with Prisma](docs/prisma.md) - TypeScript/JavaScript ORM integration
+- [Lockplane with Supabase](docs/supabase.md) - Supabase project integration
+- [Lockplane with Alembic](docs/alembic.md) - Migrating from Alembic to Lockplane
 
 ### Complete Workflow
 

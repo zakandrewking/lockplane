@@ -664,6 +664,26 @@ go test
 ```
 (Let Claude figure out the migrations)
 
+## Using Lockplane with Your ORM
+
+If you're using an ORM like SQLAlchemy, Prisma, or another tool, you can integrate Lockplane into your workflow:
+
+**SQLAlchemy (Python):**
+- Generate desired schema from your models using `create_all()`
+- Use Lockplane to diff and migrate safely
+- See: [Lockplane with SQLAlchemy](sqlalchemy.md)
+
+**Prisma (TypeScript/JavaScript):**
+- Export schema using `prisma db pull` or from `schema.prisma`
+- Use Lockplane for production migrations
+- See: [Lockplane with Prisma](prisma.md)
+
+**Alembic (Python):**
+- Migrate from Alembic to Lockplane for shadow DB validation
+- See: [Lockplane with Alembic](alembic.md)
+
+These integrations let you keep your ORM as the source of truth while using Lockplane's safety features for production migrations.
+
 ## Getting Help
 
 - Full design: `0001-design.md`
