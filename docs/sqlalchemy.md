@@ -42,16 +42,7 @@ class Post(Base):
     user = relationship("User", back_populates="posts")
 ```
 
-## Step 1: Export Current Schema
-
-First, export your current database schema with Lockplane:
-
-```bash
-# Export current production schema
-lockplane introspect > current.json
-```
-
-## Step 2: Generate Desired Schema from SQLAlchemy
+## Step 1: Generate Desired Schema from SQLAlchemy
 
 Use a temporary in-memory SQLite database to extract the schema defined by your SQLAlchemy models:
 
@@ -130,15 +121,22 @@ print("Generated desired.lp.sql from SQLAlchemy models")
 Then use Lockplane to diff:
 
 ```bash
-lockplane diff current.json desired.lp.sql
+lockplane diff $DATABASE_URL desired.lp.sql
 ```
 
-## Step 3: Generate Migration Plan
+## Step 2: Generate Migration Plan
+
+Now you can generate a migration plan directly from your database:
 
 ```bash
-# Generate a safe migration plan with validation
-lockplane plan --from current.json --to desired.json --validate > migration.json
+# Generate a safe migration plan with validation (using database connection string)
+lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
+
+# Or if you generated SQL DDL:
+lockplane plan --from $DATABASE_URL --to desired.lp.sql --validate > migration.json
 ```
+
+> **💡 Tip:** Lockplane automatically introspects your database when you provide a connection string, so you don't need to run `lockplane introspect` first!
 
 Lockplane will:
 - Compute the difference between schemas
@@ -146,7 +144,7 @@ Lockplane will:
 - Validate the plan can execute without errors (using shadow DB)
 - Ensure all operations are reversible
 
-## Step 4: Review the Plan
+## Step 3: Review the Plan
 
 ```bash
 cat migration.json
@@ -169,7 +167,7 @@ Example output:
 }
 ```
 
-## Step 5: Apply Migration
+## Step 4: Apply Migration
 
 ```bash
 # Apply to production database
@@ -187,14 +185,11 @@ Lockplane will:
 For development environments, you can skip the intermediate plan file:
 
 ```bash
-# Generate current schema from production
-lockplane introspect > current.json
-
 # Generate desired schema from models
 python generate_schema.py
 
-# Apply in one command
-lockplane apply --auto-approve --from current.json --to desired.json --validate
+# Apply in one command (directly from database)
+lockplane apply --auto-approve --from $DATABASE_URL --to desired.json --validate
 ```
 
 ## Rollback Plan
@@ -202,8 +197,8 @@ lockplane apply --auto-approve --from current.json --to desired.json --validate
 Always generate a rollback before applying to production:
 
 ```bash
-# Generate rollback plan
-lockplane rollback --plan migration.json --from current.json > rollback.json
+# Generate rollback plan (using database connection string)
+lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
 
 # If something goes wrong, apply the rollback
 lockplane apply --plan rollback.json
@@ -241,21 +236,19 @@ jobs:
           tar -xzf lockplane_Linux_x86_64.tar.gz
           chmod +x lockplane
 
-      - name: Export current schema
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: ./lockplane introspect > current.json
-
       - name: Generate desired schema from SQLAlchemy models
         run: python generate_schema.py
 
       - name: Generate migration plan
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
-        run: ./lockplane plan --from current.json --to desired.json --validate > migration.json
+        run: ./lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
 
       - name: Generate rollback plan
-        run: ./lockplane rollback --plan migration.json --from current.json > rollback.json
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: ./lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
 
       - name: Upload rollback plan
         uses: actions/upload-artifact@v3
@@ -281,16 +274,16 @@ export DATABASE_URL="postgresql://localhost:5432/myapp"
 export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
 ```
 
-### 2. Version Control Your Schemas
+### 2. Version Control Your Schemas (Optional)
 
-Commit the generated schema files:
+You can optionally commit the generated schema files to create an audit trail:
 
 ```bash
-git add current.json desired.json
+git add desired.json
 git commit -m "chore: update schema for v2.1.0"
 ```
 
-This creates an audit trail of schema changes over time.
+However, with database connection strings, you can skip this and work directly with your live databases.
 
 ### 3. Generate Schemas in Development
 
@@ -303,39 +296,38 @@ In your local development workflow:
 # Regenerate desired schema
 python generate_schema.py
 
-# See what changed
-lockplane diff current.json desired.json
+# See what changed (directly from your database)
+lockplane diff $DATABASE_URL desired.json
 
 # Apply changes locally
-lockplane apply --auto-approve --from current.json --to desired.json
+lockplane apply --auto-approve --from $DATABASE_URL --to desired.json
 ```
 
 ### 4. Alembic Migration
 
-If you're currently using Alembic, you can migrate to Lockplane gradually:
+If you're currently using Alembic, you can migrate to Lockplane easily:
 
 ```bash
-# Generate current state from your Alembic-managed database
-lockplane introspect > alembic_current.json
-
 # Generate desired state from SQLAlchemy models
 python generate_schema.py
 
-# Use Lockplane for future migrations
-lockplane plan --from alembic_current.json --to desired.json --validate > migration.json
+# Use Lockplane for future migrations (directly from your database)
+lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
 ```
 
 See also: [Migrating from Alembic](alembic.md)
 
-### 5. Schema Snapshots
+### 5. Schema Snapshots (Optional)
 
-Save schema snapshots at each release:
+You can save schema snapshots at each release for audit purposes:
 
 ```bash
 lockplane introspect > schemas/v2.1.0.json
 git add schemas/v2.1.0.json
 git commit -m "chore: snapshot schema for v2.1.0"
 ```
+
+However, for most workflows, working directly with database connection strings is simpler.
 
 ## Comparison with Alembic
 
@@ -355,15 +347,16 @@ git commit -m "chore: snapshot schema for v2.1.0"
 myproject/
 ├── models.py              # SQLAlchemy models (source of truth)
 ├── generate_schema.py     # Script to export desired schema
-├── current.json           # Current production schema
 ├── desired.json           # Desired schema from models
-├── migration.json         # Generated migration plan
-├── rollback.json          # Generated rollback plan
-└── schemas/               # Schema version history
+├── migration.json         # Generated migration plan (optional)
+├── rollback.json          # Generated rollback plan (optional)
+└── schemas/               # Schema version history (optional)
     ├── v1.0.0.json
     ├── v2.0.0.json
     └── v2.1.0.json
 ```
+
+> **Note:** With database connection strings, you don't need to maintain `current.json` or schema version history - Lockplane introspects directly from your database when needed.
 
 ## Advanced: Handling Complex Migrations
 
@@ -376,8 +369,8 @@ lockplane apply --plan migration.json
 # 2. Run data migration
 python migrate_data.py
 
-# 3. Verify
-lockplane introspect > current.json
+# 3. Verify (introspect the database to check)
+lockplane introspect
 ```
 
 ## Troubleshooting
@@ -387,7 +380,7 @@ lockplane introspect > current.json
 Your migration might contain unsafe operations. Check the error message:
 
 ```bash
-lockplane plan --from current.json --to desired.json --validate
+lockplane plan --from $DATABASE_URL --to desired.json --validate
 ```
 
 Common issues:

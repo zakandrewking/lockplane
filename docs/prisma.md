@@ -19,29 +19,23 @@ Prisma and Lockplane both target PostgreSQL, so you can combine them to keep you
 2. **Use Prisma to generate SQL**
    - Run `npx prisma migrate diff --from-empty --to-schema-datamodel schema.prisma --script > prisma.sql` for a SQL draft, or use `prisma migrate dev` to update a dev database.
 
-3. **Introspect with Lockplane**
-   - Capture the current database state:
+3. **Capture the desired schema (`.lp.sql` preferred)**
+   - Introspect the Prisma-updated database to JSON, then convert it to SQL DDL:
      ```bash
-     lockplane introspect --database-url "$DATABASE_URL" > current.json
-     ```
-   - If you used `prisma migrate dev`, run it against the same database Prisma updated so the diff is accurate.
-
-4. **Capture the desired schema (`.lp.sql` preferred)**
-   - Introspect the updated database to JSON, then convert it to SQL DDL:
-     ```bash
-     lockplane introspect --database-url "$DATABASE_URL" > desired.json
+     lockplane introspect > desired.json
      lockplane convert --input desired.json --output schema.lp.sql --to sql
      ```
    - Commit `schema.lp.sql` (or a directory of `.lp.sql` files) as the declarative source of truth that mirrors your Prisma models. Keep `desired.json` only if other tooling still expects JSON.
 
-5. **Validate and plan**
-   - Generate and validate the migration plan:
+4. **Validate and plan**
+   - Generate and validate the migration plan (using your production database connection string):
      ```bash
-     lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
+     lockplane plan --from $DATABASE_URL --to schema.lp.sql --validate > migration.json
      ```
+   - Lockplane will automatically introspect your current database state when you provide a connection string.
    - Review the validation report for safety/reversibility notes.
 
-6. **Apply via Lockplane**
+5. **Apply via Lockplane**
    - After validation, apply with shadow testing:
      ```bash
      lockplane apply --plan migration.json
@@ -71,5 +65,8 @@ jobs:
       - run: npx prisma generate
       - run: go install ./...
       - run: lockplane validate schema schema.lp.sql
-      - run: lockplane plan --from current.json --to schema.lp.sql --validate
+      - run: lockplane plan --from $DATABASE_URL --to schema.lp.sql --validate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
 ```
