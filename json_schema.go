@@ -15,20 +15,20 @@ import (
 
 // isConnectionString checks if a string looks like a database connection string
 func isConnectionString(s string) bool {
-	s = strings.ToLower(s)
+	lower := strings.ToLower(s)
 
 	// Check for common connection string prefixes
-	if strings.HasPrefix(s, "postgres://") ||
-		strings.HasPrefix(s, "postgresql://") ||
-		strings.HasPrefix(s, "sqlite://") ||
-		strings.HasPrefix(s, "file:") {
+	if strings.HasPrefix(lower, "postgres://") ||
+		strings.HasPrefix(lower, "postgresql://") ||
+		strings.HasPrefix(lower, "sqlite://") ||
+		strings.HasPrefix(lower, "file:") {
 		return true
 	}
 
 	// Check if it looks like a SQLite file path that doesn't exist as a regular file
 	// If the file exists, we'll let LoadSchema handle it
-	if strings.HasSuffix(s, ".db") || strings.HasSuffix(s, ".sqlite") || strings.HasSuffix(s, ".sqlite3") {
-		// Check if the file exists - if it does, it's likely a file path, not a connection string
+	if strings.HasSuffix(lower, ".db") || strings.HasSuffix(lower, ".sqlite") || strings.HasSuffix(lower, ".sqlite3") {
+		// Check if the file exists using original path (not lowercased) - if it does, it's a file path
 		if _, err := os.Stat(s); err == nil {
 			return false
 		}
@@ -37,7 +37,7 @@ func isConnectionString(s string) bool {
 	}
 
 	// :memory: is a SQLite in-memory database
-	if s == ":memory:" {
+	if lower == ":memory:" {
 		return true
 	}
 
