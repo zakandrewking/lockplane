@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +12,78 @@ import (
 
 	"github.com/xeipuuv/gojsonschema"
 )
+
+// isConnectionString checks if a string looks like a database connection string
+func isConnectionString(s string) bool {
+	s = strings.ToLower(s)
+
+	// Check for common connection string prefixes
+	if strings.HasPrefix(s, "postgres://") ||
+		strings.HasPrefix(s, "postgresql://") ||
+		strings.HasPrefix(s, "sqlite://") ||
+		strings.HasPrefix(s, "file:") {
+		return true
+	}
+
+	// Check if it looks like a SQLite file path that doesn't exist as a regular file
+	// If the file exists, we'll let LoadSchema handle it
+	if strings.HasSuffix(s, ".db") || strings.HasSuffix(s, ".sqlite") || strings.HasSuffix(s, ".sqlite3") {
+		// Check if the file exists - if it does, it's likely a file path, not a connection string
+		if _, err := os.Stat(s); err == nil {
+			return false
+		}
+		// If it doesn't exist as a file, treat it as a potential connection string
+		return true
+	}
+
+	// :memory: is a SQLite in-memory database
+	if s == ":memory:" {
+		return true
+	}
+
+	return false
+}
+
+// loadSchemaFromConnectionString introspects a database and returns its schema
+func loadSchemaFromConnectionString(connStr string) (*Schema, error) {
+	// Detect database driver from connection string
+	driver, err := newDriverFromConnString(connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database driver: %w", err)
+	}
+
+	// Get the SQL driver name
+	sqlDriverName := getSQLDriverName(driver.Name())
+
+	db, err := sql.Open(sqlDriverName, connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	schema, err := driver.IntrospectSchema(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to introspect schema: %w", err)
+	}
+
+	return (*Schema)(schema), nil
+}
+
+// LoadSchemaOrIntrospect loads a schema from a file/directory or introspects from a database connection string
+func LoadSchemaOrIntrospect(pathOrConnStr string) (*Schema, error) {
+	// Check if it's a connection string
+	if isConnectionString(pathOrConnStr) {
+		return loadSchemaFromConnectionString(pathOrConnStr)
+	}
+
+	// Otherwise treat it as a file path
+	return LoadSchema(pathOrConnStr)
+}
 
 // LoadSchema loads a schema from either JSON (.json) or SQL DDL (.lp.sql) file
 func LoadSchema(path string) (*Schema, error) {

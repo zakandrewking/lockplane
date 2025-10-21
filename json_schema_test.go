@@ -265,3 +265,118 @@ func findColumnByName(t *testing.T, table *Table, name string) *Column {
 func strPtr(s string) *string {
 	return &s
 }
+
+func TestIsConnectionString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		// Postgres connection strings
+		{
+			name:     "postgres URL",
+			input:    "postgres://user:pass@localhost:5432/dbname",
+			expected: true,
+		},
+		{
+			name:     "postgresql URL",
+			input:    "postgresql://user:pass@localhost:5432/dbname?sslmode=disable",
+			expected: true,
+		},
+		{
+			name:     "postgres URL uppercase",
+			input:    "POSTGRES://USER:PASS@LOCALHOST:5432/DBNAME",
+			expected: true,
+		},
+		// SQLite connection strings
+		{
+			name:     "sqlite URL",
+			input:    "sqlite://path/to/database.db",
+			expected: true,
+		},
+		{
+			name:     "file URL",
+			input:    "file:path/to/database.db",
+			expected: true,
+		},
+		{
+			name:     "in-memory sqlite",
+			input:    ":memory:",
+			expected: true,
+		},
+		// File paths that should NOT be connection strings
+		{
+			name:     "JSON file",
+			input:    "schema.json",
+			expected: false,
+		},
+		{
+			name:     "SQL file",
+			input:    "schema.lp.sql",
+			expected: false,
+		},
+		{
+			name:     "directory path",
+			input:    "schema/",
+			expected: false,
+		},
+		{
+			name:     "absolute JSON path",
+			input:    "/path/to/schema.json",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isConnectionString(tt.input)
+			if result != tt.expected {
+				t.Errorf("isConnectionString(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsConnectionString_ExistingDBFile(t *testing.T) {
+	// Create a temporary SQLite file
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	if err := os.WriteFile(dbPath, []byte{}, 0o600); err != nil {
+		t.Fatalf("Failed to create test.db: %v", err)
+	}
+
+	// An existing .db file should NOT be treated as a connection string
+	result := isConnectionString(dbPath)
+	if result {
+		t.Errorf("isConnectionString(%q) = true, want false (existing file should be treated as file path)", dbPath)
+	}
+}
+
+func TestLoadSchemaOrIntrospect_FilePath(t *testing.T) {
+	// Test that LoadSchemaOrIntrospect works with file paths (backward compatibility)
+	tmpDir := t.TempDir()
+	schemaPath := filepath.Join(tmpDir, "schema.lp.sql")
+
+	sqlDDL := `
+CREATE TABLE test_table (
+    id BIGINT PRIMARY KEY,
+    name TEXT NOT NULL
+);
+`
+	if err := os.WriteFile(schemaPath, []byte(sqlDDL), 0o600); err != nil {
+		t.Fatalf("Failed to write SQL fixture: %v", err)
+	}
+
+	schema, err := LoadSchemaOrIntrospect(schemaPath)
+	if err != nil {
+		t.Fatalf("LoadSchemaOrIntrospect returned error: %v", err)
+	}
+
+	if len(schema.Tables) != 1 {
+		t.Fatalf("Expected 1 table, got %d", len(schema.Tables))
+	}
+
+	if schema.Tables[0].Name != "test_table" {
+		t.Errorf("Expected table name 'test_table', got %q", schema.Tables[0].Name)
+	}
+}

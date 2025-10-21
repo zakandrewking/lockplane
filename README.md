@@ -204,6 +204,49 @@ lockplane plan --from schema.lp.sql --to current.json --validate > reverse.json
 
 **No migration files to maintain.** Just update your schema and regenerate plans as needed.
 
+### Using Database Connection Strings
+
+Instead of introspecting to a file, you can use database connection strings directly with `plan`, `apply`, and `rollback` commands. Lockplane will automatically introspect the database when it detects a connection string.
+
+**Supported connection string formats:**
+- PostgreSQL: `postgres://user:pass@host:port/dbname` or `postgresql://...`
+- SQLite: `sqlite://path/to/db.db`, `file:path/to/db.db`, or `:memory:`
+
+**Examples:**
+
+```bash
+# Compare two live databases
+lockplane plan \
+  --from postgres://user:pass@localhost:5432/production \
+  --to postgres://user:pass@localhost:5433/staging \
+  --validate > migration.json
+
+# Compare live database to schema file
+lockplane plan \
+  --from $DATABASE_URL \
+  --to schema.lp.sql \
+  --validate > migration.json
+
+# Auto-approve with database connection string
+lockplane apply \
+  --auto-approve \
+  --from $DATABASE_URL \
+  --to schema/ \
+  --validate
+
+# Generate rollback using live database state
+lockplane rollback \
+  --plan migration.json \
+  --from $DATABASE_URL > rollback.json
+```
+
+This is especially useful for:
+- **CI/CD pipelines**: Compare production state directly without intermediate files
+- **Multi-environment workflows**: Diff staging vs production databases
+- **Quick checks**: Skip the introspect step when working with live databases
+
+**Note:** When using connection strings, Lockplane uses the same credentials and permissions as your application. Make sure the database user has appropriate read permissions for introspection.
+
 ## Integrations
 
 - [Lockplane with SQLAlchemy](docs/sqlalchemy.md) - Python ORM integration
