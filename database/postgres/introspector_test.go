@@ -27,7 +27,7 @@ func getTestDB(t *testing.T) *sql.DB {
 
 	// Check if database is actually reachable
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Skipf("Skipping test: database not available: %v", err)
 	}
 
@@ -36,7 +36,7 @@ func getTestDB(t *testing.T) *sql.DB {
 
 func TestIntrospector_GetTables(t *testing.T) {
 	db := getTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	introspector := NewIntrospector()
@@ -50,7 +50,7 @@ func TestIntrospector_GetTables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test table: %v", err)
 	}
-	defer db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_tables")
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_tables") }()
 
 	// Get tables
 	tables, err := introspector.GetTables(ctx, db)
@@ -74,7 +74,7 @@ func TestIntrospector_GetTables(t *testing.T) {
 
 func TestIntrospector_GetColumns(t *testing.T) {
 	db := getTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	introspector := NewIntrospector()
@@ -91,7 +91,7 @@ func TestIntrospector_GetColumns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test table: %v", err)
 	}
-	defer db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_columns")
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_columns") }()
 
 	// Get columns
 	columns, err := introspector.GetColumns(ctx, db, "test_introspect_columns")
@@ -151,7 +151,7 @@ func TestIntrospector_GetColumns(t *testing.T) {
 
 func TestIntrospector_GetIndexes(t *testing.T) {
 	db := getTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	introspector := NewIntrospector()
@@ -167,7 +167,7 @@ func TestIntrospector_GetIndexes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test table: %v", err)
 	}
-	defer db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_indexes")
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_indexes") }()
 
 	// Create a unique index
 	_, err = db.ExecContext(ctx, "CREATE UNIQUE INDEX test_idx_email ON test_introspect_indexes (email)")
@@ -199,7 +199,7 @@ func TestIntrospector_GetIndexes(t *testing.T) {
 
 func TestIntrospector_GetForeignKeys(t *testing.T) {
 	db := getTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	introspector := NewIntrospector()
@@ -213,7 +213,7 @@ func TestIntrospector_GetForeignKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create parent table: %v", err)
 	}
-	defer db.ExecContext(ctx, "DROP TABLE IF EXISTS test_fk_posts, test_fk_users CASCADE")
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_fk_posts, test_fk_users CASCADE") }()
 
 	// Create child table with foreign key
 	_, err = db.ExecContext(ctx, `
@@ -263,7 +263,7 @@ func TestIntrospector_GetForeignKeys(t *testing.T) {
 
 func TestIntrospector_IntrospectSchema(t *testing.T) {
 	db := getTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	introspector := NewIntrospector()
@@ -278,7 +278,7 @@ func TestIntrospector_IntrospectSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test table: %v", err)
 	}
-	defer db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_schema")
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_schema") }()
 
 	// Introspect full schema
 	schema, err := introspector.IntrospectSchema(ctx, db)
