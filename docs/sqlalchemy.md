@@ -6,6 +6,22 @@ This guide shows you how to use Lockplane with SQLAlchemy, a popular Python ORM.
 
 With SQLAlchemy, your ORM models are the source of truth. Lockplane helps you safely migrate your database to match your models without manually writing migration scripts.
 
+## Prerequisites
+
+Before you begin, set up your database connection strings:
+
+```bash
+# Production database (where migrations will be applied)
+export DATABASE_URL="postgresql://user:password@localhost:5432/myapp"
+
+# Shadow database (for testing migrations safely before applying to production)
+export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow"
+```
+
+**Important:** The `apply` command uses these environment variables to know where to execute migrations. Commands like `plan`, `diff`, and `introspect` can accept connection strings as arguments, but `apply` always reads from `DATABASE_URL` and `SHADOW_DATABASE_URL`.
+
+Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, or `.env` file) to make them persistent.
+
 ## Workflow
 
 Instead of maintaining separate schema files, use SQLAlchemy's `create_all()` to generate your desired schema on demand:
@@ -285,12 +301,18 @@ jobs:
 
 ### 1. Always Use a Shadow Database
 
-Set `SHADOW_DATABASE_URL` to test migrations before applying to production:
+Lockplane's `apply` command uses environment variables to know where to execute migrations:
 
 ```bash
+# Set these before running apply
 export DATABASE_URL="postgresql://localhost:5432/myapp"
 export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
+
+# Then apply uses these automatically
+lockplane apply --plan migration.json
 ```
+
+The shadow database is tested first - if the migration fails there, your production database is never touched.
 
 ### 2. Version Control Your Schemas (Optional)
 

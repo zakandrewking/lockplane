@@ -95,6 +95,44 @@ volumes:
 
 **Key difference:** You now have two databases. Main for real data, shadow for testing.
 
+### Configuring Database Connections
+
+Lockplane needs to know how to connect to your databases. Set these environment variables:
+
+```bash
+# Main database (where migrations are applied)
+export DATABASE_URL="postgresql://lockplane:lockplane@localhost:5432/notesapp?sslmode=disable"
+
+# Shadow database (for testing migrations before applying)
+export SHADOW_DATABASE_URL="postgresql://lockplane:lockplane@localhost:5433/notesapp_shadow?sslmode=disable"
+```
+
+**Two ways Lockplane uses database connections:**
+
+1. **Reading schemas** (`--from` / `--to` flags) - You can pass connection strings directly:
+   ```bash
+   # Introspect current production state
+   lockplane plan --from postgresql://localhost:5432/myapp --to schema.json
+   ```
+
+2. **Applying migrations** (`apply` command) - Uses environment variables:
+   ```bash
+   # These environment variables tell apply where to execute
+   export DATABASE_URL="postgresql://localhost:5432/myapp"
+   export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
+
+   # Apply uses the environment variables (not flags)
+   lockplane apply --plan migration.json
+   ```
+
+**Pro tip:** Add these to your shell profile (`~/.bashrc` or `~/.zshrc`) so they persist:
+
+```bash
+# In ~/.bashrc or ~/.zshrc
+export DATABASE_URL="postgresql://lockplane:lockplane@localhost:5432/notesapp?sslmode=disable"
+export SHADOW_DATABASE_URL="postgresql://lockplane:lockplane@localhost:5433/notesapp_shadow?sslmode=disable"
+```
+
 **Your schema source of truth** (single file or directory of `.lp.sql` files):
 ```sql
 CREATE TABLE users (
@@ -219,13 +257,14 @@ You have two options:
 ```bash
 # Generate and save plan (from step 3)
 lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
-# Then apply it
+
+# Apply it (uses DATABASE_URL and SHADOW_DATABASE_URL from environment)
 lockplane apply --plan migration.json
 ```
 
 **Option B: One-step (auto-approve)**
 ```bash
-# Generate and apply in a single command
+# Generate and apply in a single command (uses DATABASE_URL from environment)
 lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
 ```
 

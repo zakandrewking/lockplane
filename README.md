@@ -142,6 +142,42 @@ Both options automatically test on shadow DB first, then apply to main DB if suc
 
 That's it! Your schema is now your single source of truth. Change it, generate a new plan, validate, and apply.
 
+## Configuration
+
+Lockplane can be configured via environment variables or command-line flags. Flags take precedence over environment variables.
+
+| Setting | Environment Variable | CLI Flag | Used By | Default |
+|---------|---------------------|----------|---------|---------|
+| Main database URL | `DATABASE_URL` | `--db` | `apply` | `postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable` |
+| Shadow database URL | `SHADOW_DATABASE_URL` | `--shadow-db` | `apply` | `postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable` |
+
+### Database Connection Strings
+
+Lockplane uses database connections in two ways:
+
+1. **Reading schemas** - Commands like `plan`, `diff`, `introspect`, and `rollback` accept connection strings as arguments to `--from` and `--to`:
+   ```bash
+   # Read current schema directly from database
+   lockplane plan --from postgresql://localhost:5432/myapp --to schema.json
+   ```
+
+2. **Applying migrations** - The `apply` command uses connection strings to know where to execute:
+   ```bash
+   # Via environment variables (recommended for safety)
+   export DATABASE_URL="postgresql://localhost:5432/myapp"
+   export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
+   lockplane apply --plan migration.json
+
+   # Or via command-line flags
+   lockplane apply --plan migration.json \
+     --db "postgresql://localhost:5432/myapp" \
+     --shadow-db "postgresql://localhost:5433/myapp_shadow"
+   ```
+
+**Supported database formats:**
+- PostgreSQL: `postgres://` or `postgresql://`
+- SQLite: `file:path/to/db.sqlite`, `path/to/db.db`, or `:memory:`
+
 ## Schema Definition Formats
 
 Lockplane accepts both SQL DDL (`.lp.sql`) and JSON schema files. Authoring `.lp.sql` is the preferred workflow—it's easy to review, copy/paste into PRs, and matches the SQL your database understands. JSON remains fully supported for tooling and automation.
