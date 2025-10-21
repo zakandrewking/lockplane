@@ -60,30 +60,21 @@ class Post(Base):
 
 ## Step 1: Generate Desired Schema from SQLAlchemy
 
-First, create a temporary PostgreSQL database to extract the schema defined by your SQLAlchemy models:
-
-```bash
-# Create a temporary database for schema generation
-createdb temp_schema_db
-
-# Or using psql:
-# psql -c "CREATE DATABASE temp_schema_db;"
-```
-
-Then use a simple Python script to create your tables:
+Use your shadow database (already running) to extract the schema defined by your SQLAlchemy models:
 
 ```python
 # generate_schema.py
 from sqlalchemy import create_engine
 from models import Base
 
-# Connect to the temporary database
-engine = create_engine('postgresql://localhost/temp_schema_db')
+# Connect to the shadow database (assuming default Lockplane setup)
+engine = create_engine('postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow')
 
-# Create all tables from your SQLAlchemy models
+# Clean slate: drop existing tables, then create from models
+Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 
-print("Created tables in temp_schema_db from SQLAlchemy models")
+print("Created tables in shadow database from SQLAlchemy models")
 ```
 
 Run the script:
@@ -92,14 +83,24 @@ Run the script:
 python generate_schema.py
 ```
 
-Now use Lockplane CLI to introspect the temporary database:
+Now use Lockplane CLI to introspect the shadow database:
 
 ```bash
-# Export the schema to JSON
-lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
+# Export the schema to JSON (using SHADOW_DATABASE_URL from environment)
+lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
 
-# Clean up the temporary database
-dropdb temp_schema_db
+# Or specify the connection string directly
+lockplane introspect --db postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow > desired.json
+```
+
+**Note:** The shadow database gets cleaned automatically during migrations (each test runs in a rolled-back transaction), but if you need to manually clear it:
+
+```bash
+# Option 1: Restart the shadow container
+docker compose restart shadow
+
+# Option 2: Drop all tables via Python
+python -c "from sqlalchemy import create_engine; from models import Base; engine = create_engine('postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow'); Base.metadata.drop_all(engine)"
 ```
 
 Your `desired.json` now contains the schema from your SQLAlchemy models.
@@ -203,19 +204,13 @@ Lockplane will:
 For development environments, you can skip the intermediate plan file:
 
 ```bash
-# 1. Create temporary database
-createdb temp_schema_db
-
-# 2. Generate desired schema from models
+# 1. Generate desired schema from models (uses shadow database)
 python generate_schema.py
 
-# 3. Introspect to JSON
-lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
+# 2. Introspect to JSON
+lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
 
-# 4. Clean up temporary database
-dropdb temp_schema_db
-
-# 5. Apply in one command (directly from your actual database)
+# 3. Apply in one command (directly from your actual database)
 lockplane apply --auto-approve --from $DATABASE_URL --to desired.json --validate
 ```
 
@@ -267,11 +262,11 @@ jobs:
         uses: ikalnytskyi/action-setup-postgres@v4
 
       - name: Generate desired schema from SQLAlchemy models
+        env:
+          SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
         run: |
-          createdb temp_schema_db
           python generate_schema.py
-          ./lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
-          dropdb temp_schema_db
+          ./lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
 
       - name: Generate migration plan
         env:
@@ -333,11 +328,9 @@ In your local development workflow:
 # Make changes to models.py
 # ...
 
-# Regenerate desired schema
-createdb temp_schema_db
+# Regenerate desired schema (using shadow database)
 python generate_schema.py
-lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
-dropdb temp_schema_db
+lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
 
 # See what changed (directly from your database)
 lockplane diff $DATABASE_URL desired.json
@@ -351,11 +344,9 @@ lockplane apply --auto-approve --from $DATABASE_URL --to desired.json
 If you're currently using Alembic, you can migrate to Lockplane easily:
 
 ```bash
-# Generate desired state from SQLAlchemy models
-createdb temp_schema_db
+# Generate desired state from SQLAlchemy models (using shadow database)
 python generate_schema.py
-lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
-dropdb temp_schema_db
+lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
 
 # Use Lockplane for future migrations (directly from your database)
 lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
