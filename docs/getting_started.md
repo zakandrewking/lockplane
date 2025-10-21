@@ -167,6 +167,12 @@ Nothing yet. This is your baseline.
 lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 ```
 
+> **💡 Tip:** You can skip the introspect step by using a database connection string directly:
+> ```bash
+> lockplane plan --from $DATABASE_URL --to schema.lp.sql --validate > migration.json
+> ```
+> Lockplane will automatically introspect the database when it detects a connection string.
+
 Output shows validation:
 ```
 ✓ Validation 1: PASS

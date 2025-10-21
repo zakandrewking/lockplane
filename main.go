@@ -212,20 +212,20 @@ func runPlan(args []string) {
 	var after *Schema
 
 	if *fromSchema != "" && *toSchema != "" {
-		// Generate diff from two schemas
-		before, err := LoadSchema(*fromSchema)
+		// Generate diff from two schemas (supports files, directories, or database connection strings)
+		before, err := LoadSchemaOrIntrospect(*fromSchema)
 		if err != nil {
 			log.Fatalf("Failed to load from schema: %v", err)
 		}
 
-		after, err = LoadSchema(*toSchema)
+		after, err = LoadSchemaOrIntrospect(*toSchema)
 		if err != nil {
 			log.Fatalf("Failed to load to schema: %v", err)
 		}
 
 		diff = DiffSchemas(before, after)
 	} else {
-		log.Fatalf("Usage: lockplane plan --from <before.json> --to <after.json> [--validate]")
+		log.Fatalf("Usage: lockplane plan --from <before.json|db-url> --to <after.json|db-url> [--validate]")
 	}
 
 	// Validate the diff if requested
@@ -300,7 +300,7 @@ func runRollback(args []string) {
 	}
 
 	if *planPath == "" || *fromSchema == "" {
-		log.Fatalf("Usage: lockplane rollback --plan <forward.json> --from <before.json>")
+		log.Fatalf("Usage: lockplane rollback --plan <forward.json> --from <before.json|db-url>")
 	}
 
 	// Load the forward plan
@@ -309,8 +309,8 @@ func runRollback(args []string) {
 		log.Fatalf("Failed to load forward plan: %v", err)
 	}
 
-	// Load the before schema
-	beforeSchema, err := LoadSchema(*fromSchema)
+	// Load the before schema (supports files, directories, or database connection strings)
+	beforeSchema, err := LoadSchemaOrIntrospect(*fromSchema)
 	if err != nil {
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
@@ -347,16 +347,16 @@ func runApply(args []string) {
 	// Auto-approve mode: generate plan in-memory from schemas
 	if *autoApprove {
 		if *fromSchema == "" || *toSchema == "" {
-			log.Fatalf("Usage: lockplane apply --auto-approve --from <before.json> --to <after.json> [--validate] [--skip-shadow]")
+			log.Fatalf("Usage: lockplane apply --auto-approve --from <before.json|db-url> --to <after.json|db-url> [--validate] [--skip-shadow]")
 		}
 
-		// Load schemas
-		before, err := LoadSchema(*fromSchema)
+		// Load schemas (supports files, directories, or database connection strings)
+		before, err := LoadSchemaOrIntrospect(*fromSchema)
 		if err != nil {
 			log.Fatalf("Failed to load from schema: %v", err)
 		}
 
-		after, err := LoadSchema(*toSchema)
+		after, err := LoadSchemaOrIntrospect(*toSchema)
 		if err != nil {
 			log.Fatalf("Failed to load to schema: %v", err)
 		}
@@ -583,17 +583,29 @@ EXAMPLES:
   # Compare schemas
   lockplane diff current.json schema/
 
-  # Generate and validate migration plan
+  # Generate and validate migration plan from files
   lockplane plan --from current.json --to schema/ --validate > migration.json
+
+  # Generate plan using database connection strings (auto-introspect)
+  lockplane plan --from postgres://user:pass@localhost/db1 --to schema/ --validate > migration.json
+
+  # Generate plan comparing two live databases
+  lockplane plan --from $DATABASE_URL --to postgres://user:pass@localhost/db2 > migration.json
 
   # Apply migration (tests on shadow DB first, then applies to main DB)
   lockplane apply --plan migration.json
 
-  # Auto-approve: generate plan and apply in one command
+  # Auto-approve: generate plan and apply in one command with files
   lockplane apply --auto-approve --from current.json --to schema/ --validate
+
+  # Auto-approve: generate plan from database and apply to target schema
+  lockplane apply --auto-approve --from $DATABASE_URL --to schema/ --validate
 
   # Generate rollback plan
   lockplane rollback --plan migration.json --from current.json > rollback.json
+
+  # Generate rollback using database connection string
+  lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
 
   # Validate a schema path against the JSON Schema
   lockplane validate schema schema/
