@@ -44,47 +44,49 @@ class Post(Base):
 
 ## Step 1: Generate Desired Schema from SQLAlchemy
 
-Use a temporary in-memory SQLite database to extract the schema defined by your SQLAlchemy models:
+First, create a temporary PostgreSQL database to extract the schema defined by your SQLAlchemy models:
+
+```bash
+# Create a temporary database for schema generation
+createdb temp_schema_db
+
+# Or using psql:
+# psql -c "CREATE DATABASE temp_schema_db;"
+```
+
+Then use a simple Python script to create your tables:
 
 ```python
 # generate_schema.py
 from sqlalchemy import create_engine
 from models import Base
-import subprocess
-import json
 
-# Create a temporary in-memory database
-engine = create_engine('sqlite:///:memory:')
+# Connect to the temporary database
+engine = create_engine('postgresql://localhost/temp_schema_db')
 
-# Create all tables from your models
+# Create all tables from your SQLAlchemy models
 Base.metadata.create_all(engine)
 
-# For PostgreSQL-specific features, you can also use a temporary Postgres DB:
-# engine = create_engine('postgresql://localhost/temp_schema_db')
-# Base.metadata.create_all(engine)
-
-# Use Lockplane to introspect the temp database
-# For SQLite:
-result = subprocess.run(
-    ['lockplane', 'introspect'],
-    env={'DATABASE_URL': 'sqlite://:memory:'},
-    capture_output=True,
-    text=True
-)
-
-# Or for the temp Postgres approach:
-# result = subprocess.run(
-#     ['lockplane', 'introspect'],
-#     env={'DATABASE_URL': 'postgresql://localhost/temp_schema_db'},
-#     capture_output=True,
-#     text=True
-# )
-
-with open('desired.json', 'w') as f:
-    f.write(result.stdout)
-
-print("Generated desired.json from SQLAlchemy models")
+print("Created tables in temp_schema_db from SQLAlchemy models")
 ```
+
+Run the script:
+
+```bash
+python generate_schema.py
+```
+
+Now use Lockplane CLI to introspect the temporary database:
+
+```bash
+# Export the schema to JSON
+lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
+
+# Clean up the temporary database
+dropdb temp_schema_db
+```
+
+Your `desired.json` now contains the schema from your SQLAlchemy models.
 
 ## Alternative: SQL DDL Approach
 
@@ -185,10 +187,19 @@ Lockplane will:
 For development environments, you can skip the intermediate plan file:
 
 ```bash
-# Generate desired schema from models
+# 1. Create temporary database
+createdb temp_schema_db
+
+# 2. Generate desired schema from models
 python generate_schema.py
 
-# Apply in one command (directly from database)
+# 3. Introspect to JSON
+lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
+
+# 4. Clean up temporary database
+dropdb temp_schema_db
+
+# 5. Apply in one command (directly from your actual database)
 lockplane apply --auto-approve --from $DATABASE_URL --to desired.json --validate
 ```
 
@@ -236,8 +247,15 @@ jobs:
           tar -xzf lockplane_Linux_x86_64.tar.gz
           chmod +x lockplane
 
+      - name: Set up PostgreSQL
+        uses: ikalnytskyi/action-setup-postgres@v4
+
       - name: Generate desired schema from SQLAlchemy models
-        run: python generate_schema.py
+        run: |
+          createdb temp_schema_db
+          python generate_schema.py
+          ./lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
+          dropdb temp_schema_db
 
       - name: Generate migration plan
         env:
@@ -294,7 +312,10 @@ In your local development workflow:
 # ...
 
 # Regenerate desired schema
+createdb temp_schema_db
 python generate_schema.py
+lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
+dropdb temp_schema_db
 
 # See what changed (directly from your database)
 lockplane diff $DATABASE_URL desired.json
@@ -309,7 +330,10 @@ If you're currently using Alembic, you can migrate to Lockplane easily:
 
 ```bash
 # Generate desired state from SQLAlchemy models
+createdb temp_schema_db
 python generate_schema.py
+lockplane introspect --db postgresql://localhost/temp_schema_db > desired.json
+dropdb temp_schema_db
 
 # Use Lockplane for future migrations (directly from your database)
 lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
