@@ -50,8 +50,11 @@ lockplane validate schema desired.json
 ### 3. Generate Your First Migration
 
 ```bash
-lockplane plan --to desired.json --validate > migration.json
+# Since this is a new project with no tables, you can use --from with the database URL
+lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
 ```
+
+> **💡 Tip:** Lockplane automatically introspects your database when you provide a connection string. For a brand new project, the introspection will return an empty schema.
 
 The validation report highlights risky operations. Review and fix before proceeding.
 

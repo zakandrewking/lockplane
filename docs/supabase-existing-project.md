@@ -22,36 +22,35 @@ export SHADOW_DATABASE_URL='postgres://postgres:<password>@<host>:6543/postgres'
 
 Since Supabase blocks direct database creation, point the shadow URL at a separate Supabase project or a local Postgres container. For local testing: `docker compose up supabase-shadow` using the sample `docker-compose.yml` in this repo.
 
-### 2. Capture Current State
+### 2. Author Your Changes
 
-Introspect your existing database to create a baseline:
+Edit `desired.json` to define your target schema. You can use `examples/schemas-json` as a reference, or introspect your current database and modify it:
 
 ```bash
-lockplane introspect > current.json
+# Optional: capture current state to use as a template
+lockplane introspect > desired.json
+# Edit desired.json with your changes
 ```
-
-Commit `current.json` to track your starting point.
-
-### 3. Author Your Changes
-
-Edit `desired.json` to define your target schema. Start by copying `current.json` and making changes, or use `examples/schemas-json` as a reference.
 
 Validate your changes:
 ```bash
 lockplane validate schema desired.json
 ```
 
-### 4. Plan and Review
+### 3. Plan and Review
 
-Generate a migration plan:
+Generate a migration plan directly from your database:
 
 ```bash
-lockplane plan --from current.json --to desired.json --validate > migration.json
+# Lockplane will automatically introspect your current state
+lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
 ```
+
+> **💡 Tip:** You don't need to run `lockplane introspect` first—Lockplane automatically introspects your database when you provide a connection string!
 
 The validation report highlights risky operations (e.g., adding NOT NULL columns without defaults). Fix `desired.json` or add backfill steps before proceeding.
 
-### 5. Test on Shadow Database
+### 4. Test on Shadow Database
 
 Dry-run the migration on your shadow database:
 
@@ -61,7 +60,7 @@ lockplane apply --plan migration.json
 
 Lockplane applies to the shadow database first for safety.
 
-### 6. Deploy to Production
+### 5. Deploy to Production
 
 **Option A: Direct apply**
 ```bash
