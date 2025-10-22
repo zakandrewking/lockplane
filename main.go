@@ -130,11 +130,12 @@ func runIntrospect(args []string) {
 
 	fs := flag.NewFlagSet("introspect", flag.ExitOnError)
 	dbURL := fs.String("db", "", "Database connection string (overrides env var and config file)")
+	format := fs.String("format", "json", "Output format: json or sql")
 
 	// Custom usage function
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: lockplane introspect [options]\n\n")
-		fmt.Fprintf(os.Stderr, "Introspect a database and output its schema as JSON.\n\n")
+		fmt.Fprintf(os.Stderr, "Introspect a database and output its schema.\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fs.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nConfiguration Priority:\n")
@@ -143,12 +144,14 @@ func runIntrospect(args []string) {
 		fmt.Fprintf(os.Stderr, "  3. database_url in lockplane.toml\n")
 		fmt.Fprintf(os.Stderr, "  4. Default value (lowest)\n\n")
 		fmt.Fprintf(os.Stderr, "Examples:\n")
-		fmt.Fprintf(os.Stderr, "  # Use DATABASE_URL from environment or config file\n")
+		fmt.Fprintf(os.Stderr, "  # Introspect to JSON (default)\n")
 		fmt.Fprintf(os.Stderr, "  lockplane introspect > schema.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Introspect to SQL DDL\n")
+		fmt.Fprintf(os.Stderr, "  lockplane introspect --format sql > lockplane/schema.lp.sql\n\n")
 		fmt.Fprintf(os.Stderr, "  # Specify database connection directly\n")
 		fmt.Fprintf(os.Stderr, "  lockplane introspect --db postgresql://localhost:5432/myapp?sslmode=disable > schema.json\n\n")
-		fmt.Fprintf(os.Stderr, "  # Introspect Supabase local database\n")
-		fmt.Fprintf(os.Stderr, "  lockplane introspect --db postgresql://postgres:postgres@127.0.0.1:54322/postgres?sslmode=disable > schema.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Introspect Supabase local database to SQL\n")
+		fmt.Fprintf(os.Stderr, "  lockplane introspect --db postgresql://postgres:postgres@127.0.0.1:54322/postgres?sslmode=disable --format sql > schema.lp.sql\n\n")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -183,12 +186,56 @@ func runIntrospect(args []string) {
 		log.Fatalf("Failed to introspect schema: %v", err)
 	}
 
-	jsonBytes, err := json.MarshalIndent(schema, "", "  ")
-	if err != nil {
-		log.Fatalf("Failed to marshal schema to JSON: %v", err)
-	}
+	// Output in requested format
+	switch *format {
+	case "json":
+		jsonBytes, err := json.MarshalIndent(schema, "", "  ")
+		if err != nil {
+			log.Fatalf("Failed to marshal schema to JSON: %v", err)
+		}
+		fmt.Println(string(jsonBytes))
 
-	fmt.Println(string(jsonBytes))
+	case "sql":
+		// Generate SQL DDL from schema
+		// Use PostgreSQL driver for SQL generation (works for most databases)
+		sqlDriver := postgres.NewDriver()
+		var sqlBuilder strings.Builder
+
+		for _, table := range schema.Tables {
+			sql, _ := sqlDriver.CreateTable(table)
+			sqlBuilder.WriteString(sql)
+			sqlBuilder.WriteString(";\n\n")
+
+			// Add indexes
+			for _, idx := range table.Indexes {
+				sql, _ := sqlDriver.AddIndex(table.Name, idx)
+				sqlBuilder.WriteString(sql)
+				sqlBuilder.WriteString(";\n")
+			}
+
+			if len(table.Indexes) > 0 {
+				sqlBuilder.WriteString("\n")
+			}
+
+			// Add foreign keys
+			for _, fk := range table.ForeignKeys {
+				sql, _ := sqlDriver.AddForeignKey(table.Name, fk)
+				if !strings.HasPrefix(sql, "--") { // Skip comment-only SQL
+					sqlBuilder.WriteString(sql)
+					sqlBuilder.WriteString(";\n")
+				}
+			}
+
+			if len(table.ForeignKeys) > 0 {
+				sqlBuilder.WriteString("\n")
+			}
+		}
+
+		fmt.Print(sqlBuilder.String())
+
+	default:
+		log.Fatalf("Unsupported format: %s (use 'json' or 'sql')", *format)
+	}
 }
 
 func runDiff(args []string) {
