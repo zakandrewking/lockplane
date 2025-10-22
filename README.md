@@ -218,6 +218,97 @@ lockplane convert --input schema/ --output schema.json
 
 Files are read in lexicographic order, so you can prefix them with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to make the order explicit. Only top-level files are considered—subdirectories and symlinks are skipped to avoid accidental recursion.
 
+## Schema Validation
+
+Lockplane provides comprehensive validation for schema and plan files to catch errors early.
+
+### Validating SQL Schemas (`.lp.sql`)
+
+```bash
+# Validate SQL schema file
+lockplane validate sql schema.lp.sql
+
+# Validate with JSON output (for IDE integration)
+lockplane validate sql --format json schema.lp.sql
+
+# Validate directory of SQL files
+lockplane validate sql lockplane/schema/
+```
+
+**What's validated:**
+
+1. **SQL Syntax** (statement-by-statement)
+   - Uses the same PostgreSQL parser as the database itself (via libpg_query)
+   - Detects multiple syntax errors in a single pass
+   - Reports exact line numbers for each error
+
+2. **Schema Structure**
+   - Duplicate column names
+   - Missing data types
+   - Missing primary keys (warning)
+   - Invalid foreign key references (non-existent tables or columns)
+   - Duplicate index names
+   - Invalid index column references
+
+**Example output:**
+```
+✗ SQL syntax errors in schema.lp.sql:
+
+  Line 5: syntax error at or near "SERIAL"
+  Line 19: syntax error at or near "TEXT"
+
+Found 2 syntax error(s). Please fix these before running validation.
+```
+
+### Validating JSON Schemas (`.json`)
+
+```bash
+# Validate JSON schema file
+lockplane validate schema schema.json
+```
+
+**What's validated:**
+- JSON syntax (must be valid JSON)
+- Structure matches Lockplane JSON Schema (`schema-json/schema.json`)
+- All required fields are present
+- Data types are correct
+
+### Validating Migration Plans
+
+```bash
+# Validate migration plan file
+lockplane validate plan migration.json
+
+# Validate with JSON output
+lockplane validate plan --format json migration.json
+```
+
+**What's validated:**
+- JSON syntax
+- Structure matches Lockplane plan schema (`schema-json/plan.json`)
+- All migration steps are well-formed
+- SQL statements in steps are present and non-empty
+
+### IDE Integration
+
+The `--format json` flag outputs structured validation results for IDE integration. The [VSCode Lockplane extension](vscode-lockplane/) uses this to show real-time validation errors as you type.
+
+```json
+{
+  "valid": false,
+  "issues": [
+    {
+      "file": "schema.lp.sql",
+      "line": 5,
+      "column": 1,
+      "severity": "error",
+      "message": "syntax error at or near \"SERIAL\"",
+      "code": "syntax_error"
+    }
+  ]
+}
+```
+
 ## How It Works
 
 ### Single Source of Truth

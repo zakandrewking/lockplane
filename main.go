@@ -599,16 +599,19 @@ func runApply(args []string) {
 func runValidate(args []string) {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
 		fmt.Fprintf(os.Stderr, "Usage: lockplane validate <command> [options]\n\n")
-		fmt.Fprintf(os.Stderr, "Validate schema files in different formats.\n\n")
+		fmt.Fprintf(os.Stderr, "Validate schema and plan files in different formats.\n\n")
 		fmt.Fprintf(os.Stderr, "Commands:\n")
 		fmt.Fprintf(os.Stderr, "  schema    Validate JSON schema file against JSON Schema\n")
-		fmt.Fprintf(os.Stderr, "  sql       Validate SQL DDL file or directory of .lp.sql files\n\n")
+		fmt.Fprintf(os.Stderr, "  sql       Validate SQL DDL file or directory of .lp.sql files\n")
+		fmt.Fprintf(os.Stderr, "  plan      Validate migration plan JSON file\n\n")
 		fmt.Fprintf(os.Stderr, "Examples:\n")
 		fmt.Fprintf(os.Stderr, "  # Validate JSON schema\n")
 		fmt.Fprintf(os.Stderr, "  lockplane validate schema schema.json\n\n")
 		fmt.Fprintf(os.Stderr, "  # Validate SQL schema\n")
 		fmt.Fprintf(os.Stderr, "  lockplane validate sql schema.lp.sql\n\n")
-		fmt.Fprintf(os.Stderr, "  # Validate SQL with JSON output (for IDE integration)\n")
+		fmt.Fprintf(os.Stderr, "  # Validate migration plan\n")
+		fmt.Fprintf(os.Stderr, "  lockplane validate plan migration.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Validate with JSON output (for IDE integration)\n")
 		fmt.Fprintf(os.Stderr, "  lockplane validate sql --format json schema.lp.sql\n\n")
 		if len(args) == 0 {
 			os.Exit(1)
@@ -621,12 +624,15 @@ func runValidate(args []string) {
 		runValidateSchema(args[1:])
 	case "sql":
 		runValidateSQL(args[1:])
+	case "plan":
+		runValidatePlan(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "Error: unknown validate subcommand %q\n\n", args[0])
 		fmt.Fprintf(os.Stderr, "Usage: lockplane validate <command> [options]\n\n")
 		fmt.Fprintf(os.Stderr, "Commands:\n")
 		fmt.Fprintf(os.Stderr, "  schema    Validate JSON schema file against JSON Schema\n")
-		fmt.Fprintf(os.Stderr, "  sql       Validate SQL DDL file or directory of .lp.sql files\n\n")
+		fmt.Fprintf(os.Stderr, "  sql       Validate SQL DDL file or directory of .lp.sql files\n")
+		fmt.Fprintf(os.Stderr, "  plan      Validate migration plan JSON file\n\n")
 		os.Exit(1)
 	}
 }
@@ -696,7 +702,7 @@ COMMANDS:
   apply            Apply migration plan to database (validates on shadow DB first)
   rollback         Generate rollback plan from forward migration
   convert          Convert schema between SQL DDL (.lp.sql) and JSON formats
-  validate         Validate schema JSON files
+  validate         Validate schema and plan files (schema, sql, plan subcommands)
   version          Show version information
   help             Show this help message
 
@@ -731,8 +737,14 @@ EXAMPLES:
   # Generate rollback using database connection string
   lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
 
-  # Validate a schema path against the JSON Schema
-  lockplane validate schema schema/
+  # Validate SQL schema file
+  lockplane validate sql schema.lp.sql
+
+  # Validate JSON schema file
+  lockplane validate schema schema.json
+
+  # Validate migration plan
+  lockplane validate plan migration.json
 
   # Convert SQL DDL to JSON
   lockplane convert --input schema.lp.sql --output schema.json
