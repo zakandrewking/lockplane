@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as cp from 'child_process';
 import { validateSchema } from './validator';
 import { updateDiagnostics, clearDiagnostics } from './diagnostics';
 
@@ -20,6 +21,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   outputChannel.appendLine('Lockplane extension activated');
   console.log('Lockplane extension is now active');
+
+  // Display lockplane CLI info
+  displayLockplaneInfo();
 
   // Validate on document save
   context.subscriptions.push(
@@ -175,6 +179,37 @@ function getSchemaPath(document: vscode.TextDocument): string | undefined {
 
   // Otherwise validate the directory containing the file
   return path.dirname(document.fileName);
+}
+
+function displayLockplaneInfo(): void {
+  const config = vscode.workspace.getConfiguration('lockplane');
+  const lockplanePath = config.get<string>('cliPath', 'lockplane');
+
+  outputChannel.appendLine('---');
+  outputChannel.appendLine(`Lockplane CLI path: ${lockplanePath}`);
+
+  // Try to get the actual resolved path
+  cp.exec('which ' + lockplanePath, (error, stdout, stderr) => {
+    if (!error && stdout) {
+      const resolvedPath = stdout.trim();
+      if (resolvedPath !== lockplanePath) {
+        outputChannel.appendLine(`Resolved to: ${resolvedPath}`);
+      }
+    }
+
+    // Get version
+    cp.exec(lockplanePath + ' version', (error, stdout, stderr) => {
+      if (error) {
+        outputChannel.appendLine(`Warning: Could not get lockplane version: ${error.message}`);
+        outputChannel.appendLine('Make sure lockplane is installed and in your PATH');
+        outputChannel.appendLine('Install from: https://github.com/zakandrewking/lockplane');
+      } else {
+        const version = stdout.trim();
+        outputChannel.appendLine(`Version: ${version}`);
+      }
+      outputChannel.appendLine('---');
+    });
+  });
 }
 
 export function deactivate() {

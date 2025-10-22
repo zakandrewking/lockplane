@@ -2,7 +2,6 @@
 -- This is a simple user management schema
 
 CREATE TABLE users (
-    adsf
     id SERIAL PRIMARY KEY,
     email TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -16,7 +15,7 @@ CREATE UNIQUE INDEX users_email_idx ON users (email);
 CREATE TABLE posts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
-asdfd TEXT TEXT,
+asdfd TEXT,
     title TEXT NOT NULL,
     content TEXT,
     published_at TIMESTAMP,
