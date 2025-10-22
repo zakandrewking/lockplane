@@ -25,7 +25,8 @@
     "validation"
   ],
   "activationEvents": [
-    "onLanguage:sql"
+    "onLanguage:sql",
+    "workspaceContains:**/*.lp.sql"
   ],
   "main": "./out/extension.js",
   "contributes": {

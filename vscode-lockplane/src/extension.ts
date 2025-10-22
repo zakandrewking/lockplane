@@ -4,8 +4,21 @@ import { validateSchema } from './validator';
 import { updateDiagnostics, clearDiagnostics } from './diagnostics';
 
 let validationTimeout: NodeJS.Timeout | undefined;
+let outputChannel: vscode.OutputChannel;
+let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
+  // Create output channel for logging
+  outputChannel = vscode.window.createOutputChannel('Lockplane');
+  context.subscriptions.push(outputChannel);
+
+  // Create status bar item
+  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBarItem.text = '$(check) Lockplane';
+  statusBarItem.tooltip = 'Lockplane extension is active';
+  context.subscriptions.push(statusBarItem);
+
+  outputChannel.appendLine('Lockplane extension activated');
   console.log('Lockplane extension is now active');
 
   // Validate on document save
@@ -77,31 +90,61 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function isLockplaneFile(document: vscode.TextDocument): boolean {
-  return document.fileName.endsWith('.lp.sql');
+  const isLpSql = document.fileName.endsWith('.lp.sql');
+  if (isLpSql) {
+    outputChannel.appendLine(`Detected .lp.sql file: ${document.fileName}`);
+    statusBarItem.show();
+  }
+  return isLpSql;
 }
 
 async function runValidation(document: vscode.TextDocument): Promise<void> {
   const config = vscode.workspace.getConfiguration('lockplane');
   if (!config.get<boolean>('enabled', true)) {
+    outputChannel.appendLine('Validation skipped: extension is disabled');
     return;
   }
 
   const schemaPath = getSchemaPath(document);
   if (!schemaPath) {
+    outputChannel.appendLine('Validation skipped: could not determine schema path');
     return;
   }
 
+  outputChannel.appendLine(`Validating schema at: ${schemaPath}`);
+  statusBarItem.text = '$(sync~spin) Lockplane';
+  statusBarItem.tooltip = 'Validating schema...';
+
   try {
     const results = await validateSchema(schemaPath);
+    outputChannel.appendLine(`Validation complete: ${results.length} issues found`);
+
     updateDiagnostics(document, results);
+
+    // Update status bar
+    if (results.length === 0) {
+      statusBarItem.text = '$(check) Lockplane';
+      statusBarItem.tooltip = 'Schema is valid';
+    } else {
+      const errors = results.filter(r => r.severity === 'error').length;
+      const warnings = results.filter(r => r.severity === 'warning').length;
+      statusBarItem.text = `$(warning) Lockplane: ${errors} errors, ${warnings} warnings`;
+      statusBarItem.tooltip = `Lockplane validation: ${errors} errors, ${warnings} warnings`;
+    }
   } catch (error) {
+    statusBarItem.text = '$(error) Lockplane';
+    statusBarItem.tooltip = 'Validation failed';
+
     if (error instanceof Error) {
+      outputChannel.appendLine(`Validation error: ${error.message}`);
+
       // Only show error if lockplane CLI is not found or critical error
       if (error.message.includes('not found') || error.message.includes('ENOENT')) {
         vscode.window.showErrorMessage(
           `Lockplane CLI not found. Install from https://github.com/zakandrewking/lockplane`
         );
       } else {
+        outputChannel.appendLine(`Full error: ${error.stack || error}`);
         console.error('Lockplane validation error:', error);
       }
     }

@@ -1,7 +1,8 @@
 -- Example Lockplane SQL schema
 -- This is a simple user management schema
 
-CREATE TABLE users (
+CREATE OR REPLACE TABLE users (
+    adsf
     id SERIAL PRIMARY KEY,
     email TEXT NOT NULL,
     name TEXT NOT NULL,

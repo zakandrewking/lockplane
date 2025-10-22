@@ -33,6 +33,9 @@ export async function validateSchema(
     // We'll use --from (empty schema) and --to (schema path) to validate
     const cmd = `${lockplanePath} plan --from '{"tables":[]}' --to "${schemaPath}" --validate 2>&1`;
 
+    console.log(`[Lockplane] Running command: ${cmd}`);
+    console.log(`[Lockplane] Working directory: ${cwd}`);
+
     cp.exec(
       cmd,
       { cwd, maxBuffer: 10 * 1024 * 1024 },
