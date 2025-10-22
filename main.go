@@ -122,12 +122,41 @@ func main() {
 }
 
 func runIntrospect(args []string) {
+	// Load config file (if it exists)
+	config, err := LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load config file: %v", err)
+	}
+
 	fs := flag.NewFlagSet("introspect", flag.ExitOnError)
+	dbURL := fs.String("db", "", "Database connection string (overrides env var and config file)")
+
+	// Custom usage function
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: lockplane introspect [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Introspect a database and output its schema as JSON.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fs.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nConfiguration Priority:\n")
+		fmt.Fprintf(os.Stderr, "  1. --db flag (highest)\n")
+		fmt.Fprintf(os.Stderr, "  2. DATABASE_URL environment variable\n")
+		fmt.Fprintf(os.Stderr, "  3. database_url in lockplane.toml\n")
+		fmt.Fprintf(os.Stderr, "  4. Default value (lowest)\n\n")
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  # Use DATABASE_URL from environment or config file\n")
+		fmt.Fprintf(os.Stderr, "  lockplane introspect > schema.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Specify database connection directly\n")
+		fmt.Fprintf(os.Stderr, "  lockplane introspect --db postgresql://localhost:5432/myapp?sslmode=disable > schema.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Introspect Supabase local database\n")
+		fmt.Fprintf(os.Stderr, "  lockplane introspect --db postgresql://postgres:postgres@127.0.0.1:54322/postgres?sslmode=disable > schema.json\n\n")
+	}
+
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
 
-	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	// Priority: --db flag > DATABASE_URL env var > config file > default
+	connStr := GetDatabaseURL(*dbURL, config, "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
 
 	// Detect database driver from connection string
 	driver, err := newDriverFromConnString(connStr)
