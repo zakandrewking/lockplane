@@ -1,22 +1,22 @@
 -- Example Lockplane SQL schema
 -- This is a simple user management schema
 
-CREATE OR REPLACE TABLE users (
-    adsflk
+CREATE TABLE users (
+    adsf
     id SERIAL PRIMARY KEY,
     email TEXT NOT NULL,
     name TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    asdfj
     is_active BOOLEAN DEFAULT true
 );
 
 CREATE UNIQUE INDEX users_email_idx ON users (email);
 
+
 CREATE TABLE posts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
-    adsf
+asdfd TEXT TEXT,
     title TEXT NOT NULL,
     content TEXT,
     published_at TIMESTAMP,

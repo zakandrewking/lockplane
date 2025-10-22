@@ -116,8 +116,9 @@ func main() {
 	case "convert":
 		runConvert(os.Args[2:])
 	default:
-		// If not a recognized command, assume it's a flag for introspect
-		runIntrospect(os.Args[1:])
+		fmt.Fprintf(os.Stderr, "Error: unknown subcommand '%s'\n\n", command)
+		printHelp()
+		os.Exit(1)
 	}
 }
 
@@ -596,15 +597,37 @@ func runApply(args []string) {
 }
 
 func runValidate(args []string) {
-	if len(args) == 0 {
-		log.Fatalf("Usage: lockplane validate <command> [options]")
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+		fmt.Fprintf(os.Stderr, "Usage: lockplane validate <command> [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Validate schema files in different formats.\n\n")
+		fmt.Fprintf(os.Stderr, "Commands:\n")
+		fmt.Fprintf(os.Stderr, "  schema    Validate JSON schema file against JSON Schema\n")
+		fmt.Fprintf(os.Stderr, "  sql       Validate SQL DDL file or directory of .lp.sql files\n\n")
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  # Validate JSON schema\n")
+		fmt.Fprintf(os.Stderr, "  lockplane validate schema schema.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Validate SQL schema\n")
+		fmt.Fprintf(os.Stderr, "  lockplane validate sql schema.lp.sql\n\n")
+		fmt.Fprintf(os.Stderr, "  # Validate SQL with JSON output (for IDE integration)\n")
+		fmt.Fprintf(os.Stderr, "  lockplane validate sql --format json schema.lp.sql\n\n")
+		if len(args) == 0 {
+			os.Exit(1)
+		}
+		return
 	}
 
 	switch args[0] {
 	case "schema":
 		runValidateSchema(args[1:])
+	case "sql":
+		runValidateSQL(args[1:])
 	default:
-		log.Fatalf("Unknown validate command %q", args[0])
+		fmt.Fprintf(os.Stderr, "Error: unknown validate subcommand %q\n\n", args[0])
+		fmt.Fprintf(os.Stderr, "Usage: lockplane validate <command> [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Commands:\n")
+		fmt.Fprintf(os.Stderr, "  schema    Validate JSON schema file against JSON Schema\n")
+		fmt.Fprintf(os.Stderr, "  sql       Validate SQL DDL file or directory of .lp.sql files\n\n")
+		os.Exit(1)
 	}
 }
 
@@ -612,6 +635,20 @@ func runValidateSchema(args []string) {
 	fs := flag.NewFlagSet("validate schema", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "Path to schema JSON file")
 	fileShort := fs.String("f", "", "Path to schema JSON file (shorthand)")
+
+	// Custom usage function
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: lockplane validate schema [options] <file>\n\n")
+		fmt.Fprintf(os.Stderr, "Validate a JSON schema file against the Lockplane JSON Schema.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fs.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  # Validate JSON schema file\n")
+		fmt.Fprintf(os.Stderr, "  lockplane validate schema schema.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Validate using --file flag\n")
+		fmt.Fprintf(os.Stderr, "  lockplane validate schema --file schema.json\n\n")
+	}
+
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
@@ -628,7 +665,8 @@ func runValidateSchema(args []string) {
 		path = fs.Arg(0)
 	}
 	if path == "" {
-		log.Fatalf("Usage: lockplane validate schema --file <schema.json>")
+		fs.Usage()
+		os.Exit(1)
 	}
 
 	if err := ValidateJSONSchema(path); err != nil {

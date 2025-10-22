@@ -14,6 +14,20 @@ export interface ValidationResult {
 /**
  * Validate a schema file or directory using the lockplane CLI
  */
+export interface SQLValidationIssue {
+  file: string;
+  line: number;
+  column: number;
+  severity: 'error' | 'warning';
+  message: string;
+  code?: string;
+}
+
+export interface SQLValidationResult {
+  valid: boolean;
+  issues: SQLValidationIssue[] | null;
+}
+
 export async function validateSchema(
   schemaPath: string
 ): Promise<ValidationResult[]> {
@@ -21,18 +35,12 @@ export async function validateSchema(
     const config = vscode.workspace.getConfiguration('lockplane');
     const lockplanePath = config.get<string>('cliPath', 'lockplane');
 
-    // For now, we'll use a simplified approach since we don't have
-    // lockplane validate --format json yet. We'll parse the output
-    // from the plan command which includes validation.
-
     // Get workspace folder for cwd
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const cwd = workspaceFolders ? workspaceFolders[0].uri.fsPath : undefined;
 
-    // Validate by trying to convert the schema to JSON
-    // This will catch SQL syntax errors and basic validation issues
-    // If the conversion succeeds, the schema is valid
-    const cmd = `${lockplanePath} convert --input "${schemaPath}" 2>&1`;
+    // Use the new lockplane validate sql --format json command
+    const cmd = `${lockplanePath} validate sql --format json "${schemaPath}"`;
 
     console.log(`[Lockplane] Running command: ${cmd}`);
     console.log(`[Lockplane] Working directory: ${cwd}`);
@@ -45,69 +53,56 @@ export async function validateSchema(
         console.log(`[Lockplane] stderr:`, stderr);
         console.log(`[Lockplane] error:`, error);
 
-        // Parse validation output
-        const results: ValidationResult[] = [];
-
-        // The command might fail if there are validation errors,
-        // but we still want to parse the output
-        const output = stdout + stderr;
-        console.log(`[Lockplane] Combined output:`, output);
-
-        // Parse validation messages from convert command
-        // If there's an error, it will be in the output
-        // If successful, output will be JSON (which we can ignore for validation)
-
-        // Check if command succeeded (no error and JSON output)
-        if (!error && output.trim().startsWith('{')) {
-          // Schema is valid (successfully converted to JSON)
-          console.log('[Lockplane] Schema is valid');
-          resolve([]);
-          return;
-        }
-
-        // Parse error messages
-        const lines = output.split('\n');
-        let currentFile = schemaPath;
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-
-          // Skip empty lines and JSON output
-          if (!trimmed || trimmed.startsWith('{') || trimmed.startsWith('}')) {
-            continue;
-          }
-
-          // Check for error messages
-          if (trimmed.includes('Failed to') ||
-              trimmed.includes('Error:') ||
-              trimmed.includes('error:') ||
-              trimmed.includes('parse error')) {
-
-            // Try to extract line number from error messages like "line 5:"
-            const lineMatch = trimmed.match(/line (\d+)/i);
-            const lineNum = lineMatch ? parseInt(lineMatch[1]) : 1;
-
-            results.push({
-              file: currentFile,
-              line: lineNum,
-              column: 1,
-              severity: 'error',
-              message: trimmed.replace(/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\s+/, '') // Remove timestamp
-            });
-          }
-        }
-
-        // Check if lockplane CLI is not found (before resolving)
+        // Check if lockplane CLI is not found
         if (error && (error.message.includes('not found') || error.message.includes('ENOENT'))) {
           reject(new Error('Lockplane CLI not found. Make sure it is installed and in your PATH.'));
           return;
         }
 
-        // Log what we parsed
-        console.log(`[Lockplane] Parsed ${results.length} validation results:`, results);
+        // Parse JSON output from validate sql command
+        try {
+          const result: SQLValidationResult = JSON.parse(stdout);
+          console.log(`[Lockplane] Validation result:`, result);
 
-        // Return the results (empty array if no errors)
-        resolve(results);
+          if (result.valid) {
+            // Schema is valid
+            console.log('[Lockplane] Schema is valid');
+            resolve([]);
+            return;
+          }
+
+          // Convert SQLValidationIssue[] to ValidationResult[]
+          const results: ValidationResult[] = (result.issues || []).map(issue => ({
+            file: issue.file,
+            line: issue.line,
+            column: issue.column,
+            severity: issue.severity === 'warning' ? 'warning' : 'error',
+            message: issue.message,
+            code: issue.code
+          }));
+
+          console.log(`[Lockplane] Parsed ${results.length} validation issues`);
+          resolve(results);
+        } catch (parseError) {
+          // If JSON parsing fails, treat as a general error
+          console.error('[Lockplane] Failed to parse JSON output:', parseError);
+
+          // Check if there's a validation error in stderr
+          if (stderr && stderr.includes('Failed to parse SQL')) {
+            const lineMatch = stderr.match(/line (\d+)/i);
+            const lineNum = lineMatch ? parseInt(lineMatch[1]) : 1;
+
+            resolve([{
+              file: schemaPath,
+              line: lineNum,
+              column: 1,
+              severity: 'error',
+              message: stderr.trim()
+            }]);
+          } else {
+            reject(new Error(`Failed to parse validation output: ${parseError}`));
+          }
+        }
       }
     );
   });
