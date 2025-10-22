@@ -40,12 +40,17 @@ export async function validateSchema(
       cmd,
       { cwd, maxBuffer: 10 * 1024 * 1024 },
       (error, stdout, stderr) => {
+        console.log(`[Lockplane] stdout:`, stdout);
+        console.log(`[Lockplane] stderr:`, stderr);
+        console.log(`[Lockplane] error:`, error);
+
         // Parse validation output
         const results: ValidationResult[] = [];
 
         // The command might fail if there are validation errors,
         // but we still want to parse the output
         const output = stdout + stderr;
+        console.log(`[Lockplane] Combined output:`, output);
 
         // Parse validation messages
         // Look for lines like: "✗ Validation X: FAIL"
@@ -102,6 +107,9 @@ export async function validateSchema(
             });
           }
         }
+
+        // Log what we parsed
+        console.log(`[Lockplane] Parsed ${results.length} validation results:`, results);
 
         // If we got results, return them
         if (results.length > 0) {
