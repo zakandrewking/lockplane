@@ -8,19 +8,44 @@ With SQLAlchemy, your ORM models are the source of truth. Lockplane helps you sa
 
 ## Prerequisites
 
-Before you begin, set up your database connection strings:
+Before you begin, configure your database connections. You have three options:
+
+**Option 1: Configuration File (Recommended)**
+
+Create `lockplane.toml` in your project root:
+
+```toml
+# lockplane.toml
+database_url = "postgresql://user:password@localhost:5432/myapp?sslmode=disable"
+shadow_database_url = "postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
+schema_path = "lockplane/schema/"
+```
+
+> **Important:** Add `?sslmode=disable` for local development databases. Remove it for production databases with SSL enabled.
+
+**Option 2: Environment Variables**
 
 ```bash
 # Production database (where migrations will be applied)
-export DATABASE_URL="postgresql://user:password@localhost:5432/myapp"
+export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
 
 # Shadow database (for testing migrations safely before applying to production)
-export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow"
+export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
 ```
 
-**Important:** The `apply` command uses these environment variables to know where to execute migrations. Commands like `plan`, `diff`, and `introspect` can accept connection strings as arguments, but `apply` always reads from `DATABASE_URL` and `SHADOW_DATABASE_URL`.
-
 Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, or `.env` file) to make them persistent.
+
+**Option 3: CLI Flags**
+
+```bash
+lockplane apply --plan migration.json \
+  --db "postgresql://localhost:5432/myapp?sslmode=disable" \
+  --shadow-db "postgresql://localhost:5433/myapp_shadow?sslmode=disable"
+```
+
+**Priority Order:** CLI flags > Environment variables > Config file > Defaults
+
+**Important:** The `apply` command uses these settings to know where to execute migrations. Commands like `plan`, `diff`, and `introspect` can accept connection strings as arguments.
 
 ## Workflow
 

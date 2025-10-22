@@ -1,0 +1,46 @@
+# Lockplane Configuration File
+#
+# This file allows you to configure Lockplane without using environment variables
+# or CLI flags. Place this file as `lockplane.toml` in your project root.
+#
+# Priority order (highest to lowest):
+#   1. CLI flags (--db, --shadow-db)
+#   2. Environment variables (DATABASE_URL, SHADOW_DATABASE_URL)
+#   3. This config file
+#   4. Default values
+#
+# To use this file, copy it to `lockplane.toml` and uncomment the options you need.
+
+# Main database connection string
+# Used by: apply, introspect (with --db flag)
+# IMPORTANT: Add "?sslmode=disable" for local development (Docker, Supabase local, etc.)
+#            Remove it for production databases with SSL enabled
+# database_url = "postgresql://user:password@localhost:5432/myapp?sslmode=disable"
+
+# Shadow database connection string (for testing migrations before applying)
+# Used by: apply command
+# IMPORTANT: Add "?sslmode=disable" for local development
+# shadow_database_url = "postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
+
+# Default path to schema files (recommended: lockplane/schema/)
+# Can be a single .lp.sql file or a directory containing .lp.sql files
+# Used by: plan, diff, convert (when not specified via CLI)
+# RECOMMENDED: Use "lockplane/schema/" for clear project organization
+# schema_path = "lockplane/schema/"
+
+# Example configurations for different environments:
+
+# Local development with Lockplane defaults:
+# database_url = "postgresql://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
+# shadow_database_url = "postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable"
+# schema_path = "lockplane/schema/"
+
+# Supabase local development:
+# database_url = "postgresql://postgres:postgres@127.0.0.1:54322/postgres?sslmode=disable"
+# shadow_database_url = "postgresql://postgres:postgres@127.0.0.1:54323/postgres?sslmode=disable"
+# schema_path = "supabase/migrations"
+
+# SQLite:
+# database_url = "sqlite://./myapp.db"
+# shadow_database_url = "sqlite://./myapp_shadow.db"
+# schema_path = "db/schema.lp.sql"

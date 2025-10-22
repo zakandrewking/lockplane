@@ -97,7 +97,24 @@ volumes:
 
 ### Configuring Database Connections
 
-Lockplane needs to know how to connect to your databases. Set these environment variables:
+Lockplane needs to know how to connect to your databases. You have three options:
+
+**Option 1: Configuration File (Recommended)**
+
+Create a `lockplane.toml` file in your project root:
+
+```toml
+# lockplane.toml
+database_url = "postgresql://lockplane:lockplane@localhost:5432/notesapp?sslmode=disable"
+shadow_database_url = "postgresql://lockplane:lockplane@localhost:5433/notesapp_shadow?sslmode=disable"
+schema_path = "lockplane/schema/"
+```
+
+> **Important:** Always add `?sslmode=disable` for local development databases (Docker Compose, Supabase local, etc.). Without it, you'll get SSL connection errors.
+
+Lockplane will automatically find and use this configuration file.
+
+**Option 2: Environment Variables**
 
 ```bash
 # Main database (where migrations are applied)
@@ -107,40 +124,60 @@ export DATABASE_URL="postgresql://lockplane:lockplane@localhost:5432/notesapp?ss
 export SHADOW_DATABASE_URL="postgresql://lockplane:lockplane@localhost:5433/notesapp_shadow?sslmode=disable"
 ```
 
+> **Important:** The `?sslmode=disable` parameter is required for local development. Remove it for production databases with SSL enabled.
+
+Add these to your shell profile (`~/.bashrc` or `~/.zshrc`) to make them persist.
+
+**Option 3: CLI Flags**
+
+```bash
+lockplane apply --plan migration.json \
+  --db "postgresql://localhost:5432/notesapp" \
+  --shadow-db "postgresql://localhost:5433/notesapp_shadow"
+```
+
+**Priority Order:**
+1. CLI flags (highest priority)
+2. Environment variables
+3. Config file (`lockplane.toml`)
+4. Default values (lowest priority)
+
 **Two ways Lockplane uses database connections:**
 
 1. **Reading schemas** (`--from` / `--to` flags) - You can pass connection strings directly:
    ```bash
    # Introspect current production state
-   lockplane plan --from postgresql://localhost:5432/myapp --to schema.json
+   lockplane plan --from postgresql://localhost:5432/myapp --to lockplane/schema/
    ```
 
-2. **Applying migrations** (`apply` command) - Uses environment variables:
+2. **Applying migrations** (`apply` command) - Uses the priority order above:
    ```bash
-   # These environment variables tell apply where to execute
-   export DATABASE_URL="postgresql://localhost:5432/myapp"
-   export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
-
-   # Apply uses the environment variables (not flags)
+   # Apply uses config file, env vars, or flags (in priority order)
    lockplane apply --plan migration.json
    ```
 
-**Pro tip:** Add these to your shell profile (`~/.bashrc` or `~/.zshrc`) so they persist:
+**Your schema source of truth** - Create directory `lockplane/schema/` (recommended):
 
 ```bash
-# In ~/.bashrc or ~/.zshrc
-export DATABASE_URL="postgresql://lockplane:lockplane@localhost:5432/notesapp?sslmode=disable"
-export SHADOW_DATABASE_URL="postgresql://lockplane:lockplane@localhost:5433/notesapp_shadow?sslmode=disable"
+# Create the recommended schema directory
+mkdir -p lockplane/schema
 ```
 
-**Your schema source of truth** (single file or directory of `.lp.sql` files):
+Then create your schema files inside:
+
 ```sql
+-- lockplane/schema/001_users.lp.sql
 CREATE TABLE users (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX users_email_key ON users(email);
+```
+
+```sql
+-- lockplane/schema/002_notes.lp.sql
 CREATE TABLE notes (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id),
@@ -149,24 +186,29 @@ CREATE TABLE notes (
   created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX users_email_key ON users(email);
 CREATE INDEX idx_notes_user_id ON notes(user_id);
 ```
 
-Need JSON instead? Convert on demand:
+**Why `lockplane/schema/`?**
+- Clear separation from other project files
+- Easy to find and maintain
+- Works well with `schema_path` in `lockplane.toml`
+- Lockplane processes `.lp.sql` files sorted lexicographically
+- Prefix with numbers (e.g., `001_`, `002_`) to control order
+
+**Single file alternative:**
+
+If you prefer a single file, use `lockplane/schema.lp.sql`:
 
 ```bash
-lockplane convert --input schema.lp.sql --output schema.json
+lockplane plan --from current.json --to lockplane/schema.lp.sql --validate
 ```
 
-Prefer splitting DDL across files? Place them in `schema/` (or any directory) and point Lockplane there:
+**Convert to JSON when needed:**
 
 ```bash
-lockplane plan --from current.json --to schema/ --validate > migration.json
-lockplane convert --input schema/ --output schema.json
+lockplane convert --input lockplane/schema/ --output lockplane/schema.json
 ```
-
-Lockplane processes the `.lp.sql` files in that directory only (non-recursive), sorted lexicographically. Prefix file names with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to control order. Subdirectories and symlinks are ignored.
 
 **Key insight:** This describes WHAT you want, not HOW to get there. Lockplane generates the migration plans.
 

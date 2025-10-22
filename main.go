@@ -331,6 +331,12 @@ func runRollback(args []string) {
 }
 
 func runApply(args []string) {
+	// Load config file (if it exists)
+	config, err := LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load config file: %v", err)
+	}
+
 	fs := flag.NewFlagSet("apply", flag.ExitOnError)
 	planPath := fs.String("plan", "", "Migration plan file to apply")
 	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
@@ -338,8 +344,8 @@ func runApply(args []string) {
 	fromSchema := fs.String("from", "", "Source schema path (before) - used with --auto-approve")
 	toSchema := fs.String("to", "", "Target schema path (after) - used with --auto-approve")
 	validate := fs.Bool("validate", false, "Validate migration safety and reversibility - used with --auto-approve")
-	dbURL := fs.String("db", "", "Main database connection string (overrides DATABASE_URL env var)")
-	shadowDBURL := fs.String("shadow-db", "", "Shadow database connection string (overrides SHADOW_DATABASE_URL env var)")
+	dbURL := fs.String("db", "", "Main database connection string (overrides env var and config file)")
+	shadowDBURL := fs.String("shadow-db", "", "Shadow database connection string (overrides env var and config file)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
@@ -438,11 +444,8 @@ func runApply(args []string) {
 	}
 
 	// Connect to main database
-	// Priority: --db flag > DATABASE_URL env var > default
-	mainConnStr := *dbURL
-	if mainConnStr == "" {
-		mainConnStr = getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
-	}
+	// Priority: --db flag > DATABASE_URL env var > config file > default
+	mainConnStr := GetDatabaseURL(*dbURL, config, "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
 
 	// Detect database driver from connection string
 	mainDriver, err := newDriverFromConnString(mainConnStr)
@@ -465,11 +468,8 @@ func runApply(args []string) {
 	// Connect to shadow database if not skipped
 	var shadowDB *sql.DB
 	if !*skipShadow {
-		// Priority: --shadow-db flag > SHADOW_DATABASE_URL env var > default
-		shadowConnStr := *shadowDBURL
-		if shadowConnStr == "" {
-			shadowConnStr = getEnv("SHADOW_DATABASE_URL", "postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable")
-		}
+		// Priority: --shadow-db flag > SHADOW_DATABASE_URL env var > config file > default
+		shadowConnStr := GetShadowDatabaseURL(*shadowDBURL, config, "postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable")
 
 		// Detect shadow database driver
 		shadowDriver, err := newDriverFromConnString(shadowConnStr)
