@@ -1,0 +1,90 @@
+{
+  "name": "lockplane",
+  "displayName": "Lockplane",
+  "description": "Schema validation for Lockplane .lp.sql files",
+  "version": "0.1.0",
+  "publisher": "lockplane",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zakandrewking/lockplane"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "lockplane",
+    "sql",
+    "postgres",
+    "postgresql",
+    "schema",
+    "database",
+    "validation"
+  ],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "sql",
+        "extensions": [".lp.sql"],
+        "aliases": ["Lockplane SQL"]
+      }
+    ],
+    "configuration": {
+      "title": "Lockplane",
+      "properties": {
+        "lockplane.schemaPath": {
+          "type": "string",
+          "default": "lockplane/schema/",
+          "description": "Path to Lockplane schema directory or file"
+        },
+        "lockplane.validateOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate schema files on save"
+        },
+        "lockplane.validateOnType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate schema files as you type"
+        },
+        "lockplane.validationDelay": {
+          "type": "number",
+          "default": 500,
+          "description": "Delay in milliseconds before validating on type"
+        },
+        "lockplane.cliPath": {
+          "type": "string",
+          "default": "lockplane",
+          "description": "Path to lockplane CLI executable"
+        },
+        "lockplane.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Lockplane validation"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
