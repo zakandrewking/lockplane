@@ -46,9 +46,9 @@ lockplane version
 lockplane help
 ```
 
-### Optional: Install Claude Code Skill
+### Optional: AI Assistant Integration
 
-If you use [Claude Code](https://claude.com/claude-code), you can install the Lockplane skill to get expert assistance:
+**For Claude Code users**: Install the Lockplane skill to get expert assistance:
 
 ```bash
 # In your project directory
@@ -57,7 +57,7 @@ curl -o .claude/skills/lockplane.md \
   https://raw.githubusercontent.com/zakandrewking/lockplane/main/.claude/skills/lockplane.md
 ```
 
-Now when you ask Claude for help with database migrations, it will have deep knowledge of Lockplane workflows, safety validations, and best practices.
+**For other LLMs**: Reference the [llms.txt](https://github.com/zakandrewking/lockplane/blob/main/llms.txt) file for comprehensive Lockplane context following the [llms.txt standard](https://llmstxt.org/).
 
 ---
 
