@@ -31,11 +31,14 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
 ### Phase 3: Documentation (CRITICAL - DO NOT SKIP)
 - [ ] Update `printHelp()` in `main.go` if CLI changed
 - [ ] Update `README.md` with examples and usage
+- [ ] Update `.claude/skills/lockplane.md` (Claude skill)
+- [ ] Update `llms.txt` (LLM context file)
 - [ ] Update `docs/getting_started.md` with user workflows
 - [ ] Check if `docs/prisma.md` needs updates
 - [ ] Check if `docs/supabase.md` needs updates
 - [ ] Check if `docs/alembic.md` needs updates
 - [ ] Update any other relevant docs in `docs/` directory
+- [ ] Run `./scripts/check-docs-consistency.sh` to verify
 
 ### Phase 4: Git (CRITICAL - ALWAYS COMMIT AND PUSH)
 - [ ] Check git status: `git status`

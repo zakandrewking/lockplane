@@ -106,6 +106,28 @@ lockplane rollback --plan migration.json --from current.json > rollback.json
 lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
 ```
 
+### Diff and Comparison
+```bash
+# Show differences between two schemas
+lockplane diff current.json schema.lp.sql
+
+# Compare two database states
+lockplane diff schema1.json schema2.json
+```
+
+### Utility Commands
+```bash
+# Show version information
+lockplane version
+lockplane --version
+lockplane -v
+
+# Show help
+lockplane help
+lockplane --help
+lockplane -h
+```
+
 ## Configuration
 
 Lockplane can be configured via `lockplane.toml`:
