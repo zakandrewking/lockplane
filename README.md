@@ -46,6 +46,19 @@ lockplane version
 lockplane help
 ```
 
+### Optional: Install Claude Code Skill
+
+If you use [Claude Code](https://claude.com/claude-code), you can install the Lockplane skill to get expert assistance:
+
+```bash
+# In your project directory
+mkdir -p .claude/skills
+curl -o .claude/skills/lockplane.md \
+  https://raw.githubusercontent.com/zakandrewking/lockplane/main/.claude/skills/lockplane.md
+```
+
+Now when you ask Claude for help with database migrations, it will have deep knowledge of Lockplane workflows, safety validations, and best practices.
+
 ---
 
 ## Quick Start
