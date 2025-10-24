@@ -85,15 +85,26 @@ func runValidateSQL(args []string) {
 		os.Exit(1)
 	}
 
-	// If syntax is valid, load and validate schema structure
+	// Check for dangerous patterns (data loss operations, etc.)
+	dangerousIssues := validateDangerousPatterns(path, string(sqlContent))
+
+	// If syntax is valid, try to load and validate schema structure
+	// Note: Loading may fail for files with only DROP/DELETE statements
+	var structureIssues []ValidationIssue
 	schema, err := LoadSchema(path)
-	if err != nil {
-		// This shouldn't happen if syntax validation passed, but handle it anyway
+	if err == nil {
+		// Validate the schema structure (referential integrity, etc.)
+		structureIssues = validateSchemaStructure(schema, path)
+	}
+	// If schema loading failed but we have dangerous issues, that's OK
+	// We'll report the dangerous issues. If no dangerous issues and schema
+	// loading failed, that's a real error.
+	if err != nil && len(dangerousIssues) == 0 {
 		log.Fatalf("Failed to load schema: %v", err)
 	}
 
-	// Validate the schema structure (referential integrity, etc.)
-	issues := validateSchemaStructure(schema, path)
+	// Combine all issues (dangerous patterns + structure issues)
+	issues := append(dangerousIssues, structureIssues...)
 
 	// Output results
 	if *formatFlag == "json" {
