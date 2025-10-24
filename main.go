@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	_ "github.com/lib/pq"
@@ -23,6 +24,56 @@ var (
 	commit  = "none"
 	date    = "unknown"
 )
+
+// getVersionInfo returns version information, preferring goreleaser values
+// but falling back to VCS info from debug.BuildInfo (for go install builds)
+func getVersionInfo() (v, c, d string) {
+	v, c, d = version, commit, date
+
+	// If goreleaser set the version, use those values
+	if version != "dev" {
+		return
+	}
+
+	// Otherwise, try to get VCS info from build metadata (go install / go build)
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+
+	var revision string
+	var modified bool
+	var buildTime string
+
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		case "vcs.time":
+			buildTime = setting.Value
+		}
+	}
+
+	// Use short commit hash (first 7 chars like git)
+	if len(revision) > 7 {
+		revision = revision[:7]
+	}
+
+	if revision != "" {
+		c = revision
+		if modified {
+			c += " (modified)"
+		}
+	}
+
+	if buildTime != "" {
+		d = buildTime
+	}
+
+	return
+}
 
 // Type aliases for backward compatibility
 type Schema = database.Schema
@@ -92,9 +143,10 @@ func main() {
 
 	switch command {
 	case "version", "-v", "--version":
-		fmt.Printf("lockplane %s\n", version)
-		fmt.Printf("  commit: %s\n", commit)
-		fmt.Printf("  built:  %s\n", date)
+		v, c, d := getVersionInfo()
+		fmt.Printf("lockplane %s\n", v)
+		fmt.Printf("  commit: %s\n", c)
+		fmt.Printf("  built:  %s\n", d)
 		return
 	case "help", "-h", "--help":
 		printHelp()
