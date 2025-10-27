@@ -1,6 +1,6 @@
 # Build artifacts
 dist/
-lockplane
+/lockplane
 
 # Go build cache
 *.exe
@@ -34,3 +34,5 @@ go.work
 # Environment files
 .env
 .env.local
+
+build/

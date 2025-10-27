@@ -1,10 +1,17 @@
+---
+name: lockplane
+description: Use Lockplane for safe, AI-friendly database schema migrations with shadow DB testing and automatic rollback plans.
+---
+
 # Lockplane Database Migration Expert
 
-You are an expert at using Lockplane, a Postgres-first control plane for safe, AI-friendly schema management.
+You are an expert at using Lockplane, a Postgres-first control plane for safe,
+AI-friendly schema management.
 
 ## What is Lockplane?
 
 Lockplane is a declarative schema management tool that:
+
 - Tests migrations on a shadow database before applying to production
 - Generates rollback plans automatically
 - Validates SQL for dangerous patterns (data loss, blocking operations)
@@ -14,6 +21,7 @@ Lockplane is a declarative schema management tool that:
 ## When to Use This Skill
 
 Use this skill when users ask about:
+
 - Database schema migrations
 - Creating/modifying database tables
 - Generating migration plans
@@ -163,6 +171,7 @@ CREATE UNIQUE INDEX users_email_idx ON users(email);
 ```
 
 **Best practices**:
+
 - Keep schema files in `lockplane/schema/` directory
 - Use `.lp.sql` extension
 - Can split across multiple files (combined in lexicographic order)
@@ -173,16 +182,19 @@ CREATE UNIQUE INDEX users_email_idx ON users(email);
 Lockplane validates SQL and detects dangerous patterns:
 
 ### Data Loss Operations (ERROR)
+
 - `DROP TABLE` - Permanently deletes all data
 - `DROP COLUMN` - Deletes column data irreversibly
 - `TRUNCATE TABLE` - Removes all rows
 - `DELETE FROM table` (no WHERE) - Deletes all rows
 
 ### Blocking Operations (WARNING)
+
 - `CREATE INDEX` without `CONCURRENTLY` - Locks table during build
 - `DROP INDEX` without `CONCURRENTLY` - Locks table during drop
 
 ### Schema Structure Validation
+
 - Duplicate column names
 - Missing data types
 - Missing primary keys (warning)

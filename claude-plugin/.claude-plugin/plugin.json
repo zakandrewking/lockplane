@@ -1,0 +1,24 @@
+{
+  "name": "lockplane",
+  "description": "Lockplane database migration expertise - safe, AI-friendly schema management with shadow DB testing",
+  "version": "1.0.0",
+  "author": {
+    "name": "Lockplane Team",
+    "email": "zakandrewking@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/zakandrewking/lockplane",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zakandrewking/lockplane"
+  },
+  "license": "MIT",
+  "keywords": [
+    "postgres",
+    "database",
+    "migrations",
+    "schema",
+    "postgresql",
+    "ddl",
+    "sql"
+  ]
+}

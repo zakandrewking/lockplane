@@ -53,6 +53,7 @@ lockplane help
 ```bash
 # In your project directory
 mkdir -p .claude/skills
+# TODO update
 curl -o .claude/skills/lockplane.md \
   https://raw.githubusercontent.com/zakandrewking/lockplane/main/.claude/skills/lockplane.md
 ```
@@ -73,18 +74,22 @@ Lockplane follows a simple, declarative workflow:
 4. **Apply to database** - Execute with shadow DB validation
 
 ### Prerequisites
+
 - Lockplane CLI (see Installation above)
 - Docker & Docker Compose (for local Postgres)
 
 ### Setup
 
 1. Prepare your Docker Compose file for Lockplane:
+
 ```bash
 lockplane init docker-compose
 ```
+
 This finds your `docker-compose.yml`, clones your primary Postgres service, and adds a `shadow` service on port `5433`.
 
 2. Start Postgres:
+
 ```bash
 docker compose up -d
 ```
