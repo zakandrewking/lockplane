@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "lockplane",
-      "source": "./",
+      "source": "./claude-plugin",
       "description": "Lockplane database migration expertise - safe, AI-friendly schema management with shadow DB testing and automatic rollback plans",
       "version": "1.0.0",
       "keywords": ["postgres", "database", "migrations", "schema", "postgresql", "ddl", "sql"]
