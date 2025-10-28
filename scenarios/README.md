@@ -1,0 +1,279 @@
+# Lockplane Evaluation Scenarios
+
+This directory contains end-to-end evaluation scenarios for testing Lockplane with AI assistants like Claude Code.
+
+## Prerequisites
+
+- Python 3.11+
+- [uv](https://github.com/astral-sh/uv) - Fast Python package installer
+- Lockplane CLI
+
+Install uv:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+## Structure
+
+Each scenario is a subdirectory containing:
+
+- `scenario.py` - Python script that runs the scenario (with inline dependencies via uv)
+- `validate.py` - Python script that validates expected outcomes
+- `scenario.yaml` - Metadata (name, description, timeout, tags)
+- `README.md` - (optional) Human-readable description
+- `expected/` - (optional) Expected output files for comparison
+
+## Running Scenarios
+
+### Run all scenarios
+
+```bash
+./run-evals.py
+```
+
+### Run a specific scenario
+
+```bash
+./run-evals.py todo
+```
+
+### Run with verbose output
+
+```bash
+./run-evals.py --verbose
+```
+
+### Generate JSON report
+
+```bash
+./run-evals.py --format json > results.json
+```
+
+## Creating a New Scenario
+
+1. Create a new directory under `scenarios/`:
+
+```bash
+mkdir scenarios/my-scenario
+```
+
+2. Create `scenario.yaml`:
+
+```yaml
+name: my-scenario
+description: Short description of what this tests
+timeout: 300  # seconds
+tags:
+  - cli
+  - migrations
+```
+
+3. Create `scenario.py`:
+
+```python
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "requests>=2.31.0",  # Add any dependencies here
+# ]
+# ///
+
+"""
+My scenario description.
+"""
+
+import sys
+from pathlib import Path
+
+def main():
+    """Run the scenario."""
+    # Your scenario implementation
+    print("Running scenario...")
+    return 0  # 0 = success, non-zero = failure
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+4. Create `validate.py`:
+
+```python
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+
+"""
+Validation for my scenario.
+"""
+
+import sys
+from pathlib import Path
+
+def main():
+    """Validate the scenario results."""
+    failures = 0
+
+    # Your validation logic
+    print("✓ Check passed")
+    # Or: print("✗ Check failed", file=sys.stderr); failures += 1
+
+    if failures == 0:
+        print("✅ All validations passed")
+        return 0
+    else:
+        print(f"❌ {failures} validation(s) failed", file=sys.stderr)
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+5. Make scripts executable:
+
+```bash
+chmod +x scenarios/my-scenario/*.py
+```
+
+6. (Optional) Create `README.md` documenting the scenario.
+
+## Scenario Best Practices
+
+- **Isolation**: Scenarios should clean up their own state
+- **Deterministic**: Scenarios should produce consistent results
+- **Fast**: Keep scenarios under 5 minutes when possible
+- **Clear validation**: Validation should clearly report what failed
+- **Documentation**: Explain what the scenario tests and why
+- **Dependencies**: Use uv's inline script metadata for Python dependencies
+
+## Why Python + uv?
+
+- **Inline dependencies**: Specify dependencies at the top of each script
+- **No virtual env management**: uv handles everything automatically
+- **Fast**: uv is extremely fast at resolving and installing packages
+- **Reproducible**: Dependencies are explicit and version-locked
+- **Better error handling**: Python's exception handling is clearer than bash
+
+## Validation Patterns
+
+### File existence
+
+```python
+from pathlib import Path
+
+if not Path("expected-file.txt").exists():
+    print("✗ expected-file.txt not found", file=sys.stderr)
+    failures += 1
+```
+
+### File content
+
+```python
+content = Path("file.txt").read_text()
+if "expected pattern" not in content:
+    print("✗ file.txt missing expected pattern", file=sys.stderr)
+    failures += 1
+```
+
+### Command output
+
+```python
+import subprocess
+
+result = subprocess.run(["lockplane", "version"], capture_output=True, text=True)
+if "lockplane version" not in result.stdout:
+    print("✗ Unexpected lockplane version output", file=sys.stderr)
+    failures += 1
+```
+
+### JSON validation
+
+```python
+import json
+
+with open("output.json") as f:
+    data = json.load(f)
+
+if "expected_key" not in data:
+    print("✗ Missing expected key in output", file=sys.stderr)
+    failures += 1
+```
+
+### Database state
+
+```python
+import subprocess
+import json
+
+result = subprocess.run(
+    ["lockplane", "introspect", "--db", db_url],
+    capture_output=True, text=True, check=True
+)
+schema = json.loads(result.stdout)
+
+has_users_table = any(t["name"] == "users" for t in schema.get("tables", []))
+if not has_users_table:
+    print("✗ users table not found", file=sys.stderr)
+    failures += 1
+```
+
+## Available Scenarios
+
+### `basic-migration`
+**Type**: Smoke test
+**Duration**: < 1 minute
+**Prerequisites**: PostgreSQL databases
+
+Tests the fundamental Lockplane workflow: introspect → define schema → plan → validate → apply. No AI assistance required.
+
+### `todo`
+**Type**: End-to-end integration
+**Duration**: ~5-10 minutes
+**Prerequisites**: Claude Code CLI
+
+Tests Claude Code's ability to generate a full-stack Next.js todo app using Lockplane for schema management. Validates schema-first development workflow.
+
+## Continuous Integration
+
+Scenarios can run automatically on:
+- Push to main
+- Pull requests
+- Scheduled nightly builds
+
+Add a GitHub Actions workflow at `.github/workflows/evals.yml`:
+
+```yaml
+name: Run Evaluations
+
+on: [push, pull_request]
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: lockplane
+          POSTGRES_USER: lockplane
+          POSTGRES_DB: lockplane
+        ports:
+          - 5432:5432
+          - 5433:5433
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install Lockplane
+        run: |
+          # Download and install lockplane
+          # Or build from source
+
+      - name: Run evaluations
+        run: scenarios/run-evals.py --format json
+```
