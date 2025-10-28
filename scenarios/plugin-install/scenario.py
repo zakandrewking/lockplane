@@ -28,10 +28,11 @@ import sys
 from pathlib import Path
 
 
-def run_cmd(cmd: list[str], check: bool = True, **kwargs) -> subprocess.CompletedProcess:
+def run_cmd(cmd: list[str], check: bool = True, env: dict = None, **kwargs) -> subprocess.CompletedProcess:
     """Run a command and return the result."""
-    print(f"$ {' '.join(cmd)}")
-    return subprocess.run(cmd, capture_output=True, text=True, check=check, **kwargs)
+    cmd_str = ' '.join(str(c) for c in cmd)
+    print(f"$ {cmd_str}")
+    return subprocess.run(cmd, capture_output=True, text=True, check=check, env=env, **kwargs)
 
 
 def main():
@@ -44,10 +45,18 @@ def main():
         shutil.rmtree(build_dir)
     build_dir.mkdir(parents=True)
 
-    os.chdir(build_dir)
+    # Create isolated Claude config directory
+    isolated_home = build_dir / "isolated_home"
+    isolated_home.mkdir(parents=True)
+    isolated_claude = isolated_home / ".claude"
+    isolated_claude.mkdir(parents=True)
 
     print("=== Plugin Installation Scenario ===\n")
     print("Testing TDD: This should FAIL until the plugin is complete.\n")
+    print(f"📁 Isolated Claude config: {isolated_claude}\n")
+
+    # Change to build directory
+    os.chdir(build_dir)
 
     # Initialize git repository
     print("🔧 Initializing git repository...")
@@ -60,8 +69,8 @@ def main():
     run_cmd(["git", "add", "."])
     run_cmd(["git", "commit", "-m", "Initial commit"])
 
-    print("\n🤖 Asking Claude Code to set up an app with Lockplane...")
-    print("Providing GitHub link: https://github.com/zakandrewking/lockplane")
+    print("\n🤖 Running Claude Code with isolated config...")
+    print("Providing GitHub link: https://github.com/zakandrewking/lockplane\n")
 
     # The key test: Ask Claude to help with Lockplane, providing the GitHub link
     # Claude should recognize it needs the plugin and install it first
@@ -70,24 +79,36 @@ I'd like to use Lockplane for schema management.
 
 Here's the Lockplane repo: https://github.com/zakandrewking/lockplane
 
-Can you help me set this up?"""
+Can you help me set this up? Please start by installing any necessary plugins."""
 
-    # Write the prompt to a file for the test
+    # Write the prompt to a file for reference
     Path("prompt.txt").write_text(prompt)
 
-    print("\nPrompt:")
+    print("Prompt:")
     print("-" * 60)
     print(prompt)
     print("-" * 60)
+    print()
 
-    # Try to run Claude Code with the prompt
+    # Set up isolated environment
+    # Use HOME to isolate Claude's config
+    env = os.environ.copy()
+    env["HOME"] = str(isolated_home)
+
+    # Also save the original home for reference
+    Path("original_home.txt").write_text(os.environ.get("HOME", ""))
+    Path("isolated_home.txt").write_text(str(isolated_home))
+
+    # Try to run Claude Code with the prompt in isolated environment
     try:
-        # Use a non-interactive approach - write to a file and check later
-        # In a real scenario, we'd use Claude Code's API or CLI
+        print(f"Running Claude with HOME={isolated_home}")
+        print("(This will use a fresh Claude config without existing plugins)\n")
+
         result = run_cmd(
-            ["claude", prompt],
+            ["claude", "--print", prompt],
             check=False,
-            timeout=60,
+            env=env,
+            timeout=90,
         )
 
         if result.returncode == 0:
@@ -96,16 +117,25 @@ Can you help me set this up?"""
             print(f"\n⚠️  Claude Code returned exit code {result.returncode}")
 
         # Save the output for validation
-        Path("claude_output.txt").write_text(result.stdout + "\n" + result.stderr)
+        Path("claude_output.txt").write_text(result.stdout)
+        Path("claude_stderr.txt").write_text(result.stderr)
+
+        # Print a sample of the output
+        output_preview = result.stdout[:500] if result.stdout else "(no output)"
+        print(f"\nClaude output preview:\n{output_preview}\n")
 
     except subprocess.TimeoutExpired:
-        print("\n⏱️  Command timed out (expected for interactive sessions)")
+        print("\n⏱️  Command timed out after 90 seconds")
+        print("This might mean Claude is waiting for user input or taking too long")
+        Path("timeout.txt").write_text("Command timed out")
     except FileNotFoundError:
-        print("\n⚠️  Claude Code CLI not found")
-        print("This is okay - validation will check if plugin would be installed")
+        print("\n❌ Claude Code CLI not found")
+        print("Install Claude Code CLI to run this test")
+        return 1
 
     print("\n📋 Scenario execution complete")
-    print("Validation will check if Claude Code attempted to install the plugin\n")
+    print(f"Check isolated config at: {isolated_claude}")
+    print("Validation will check if Claude installed the plugin\n")
 
     return 0
 

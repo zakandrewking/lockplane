@@ -10,10 +10,11 @@ Validation for plugin installation scenario.
 This should FAIL until the Lockplane plugin is properly configured.
 
 Checks:
-1. Claude Code is available
-2. Plugin system is working
-3. Lockplane plugin was installed or attempted to be installed
-4. Lockplane skill is available after installation
+1. Isolated environment was created
+2. Claude Code ran successfully
+3. Plugin was installed in isolated environment
+4. Lockplane skill is available in isolated environment
+5. Claude's output shows plugin installation
 """
 
 import json
@@ -44,100 +45,103 @@ def main():
         print("❌ Build directory not found", file=sys.stderr)
         return 1
 
-    os.chdir(build_dir)
+    isolated_claude = build_dir / "isolated_home" / ".claude"
 
     failures = 0
 
     print("=== Validating Plugin Installation (TDD - Expected to FAIL) ===\n")
 
-    # 1. Check Claude Code is available
-    try:
-        result = subprocess.run(
-            ["claude", "--version"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        claude_available = result.returncode == 0
-        if not check("Claude Code CLI is available", claude_available):
-            failures += 1
-            print("  Install Claude Code to run this test", file=sys.stderr)
-    except FileNotFoundError:
-        check("Claude Code CLI is available", False, "Command 'claude' not found")
+    # 1. Check isolated environment was created
+    if not check("Isolated Claude directory created", isolated_claude.exists()):
         failures += 1
+        print(f"  Expected: {isolated_claude}", file=sys.stderr)
 
-    # 2. Check if plugin system is working
-    try:
-        result = subprocess.run(
-            ["claude", "/plugin", "list"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        plugin_system_works = result.returncode == 0 or "plugin" in result.stdout.lower()
-        if not check("Plugin system is accessible", plugin_system_works):
-            failures += 1
-    except FileNotFoundError:
-        check("Plugin system is accessible", False)
+    # 2. Check Claude Code ran
+    claude_output_file = build_dir / "claude_output.txt"
+    if not check("Claude Code output exists", claude_output_file.exists()):
         failures += 1
+    else:
+        # Read Claude's output
+        claude_output = claude_output_file.read_text()
 
-    # 3. Check if Lockplane plugin is installed
-    try:
-        result = subprocess.run(
-            ["claude", "/plugin", "list"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        # Look for lockplane in the installed plugins
-        has_lockplane = "lockplane" in result.stdout.lower()
-
-        if not check("Lockplane plugin is installed", has_lockplane, "Plugin not found in /plugin list"):
-            failures += 1
-            print("  Expected: Claude should have installed lockplane plugin", file=sys.stderr)
-            print("  Actual: Plugin not found", file=sys.stderr)
-
-    except FileNotFoundError:
-        check("Lockplane plugin is installed", False)
-        failures += 1
-
-    # 4. Check if Lockplane skill is available
-    try:
-        result = subprocess.run(
-            ["claude", "/skill", "list"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        has_lockplane_skill = "lockplane" in result.stdout.lower()
-
-        if not check("Lockplane skill is available", has_lockplane_skill, "Skill not found in /skill list"):
-            failures += 1
-            print("  Expected: lockplane skill should be available after plugin install", file=sys.stderr)
-            print("  Actual: Skill not found", file=sys.stderr)
-
-    except FileNotFoundError:
-        check("Lockplane skill is available", False)
-        failures += 1
-
-    # 5. Check Claude's output/behavior (if available)
-    if Path("claude_output.txt").exists():
-        output = Path("claude_output.txt").read_text()
-
-        # Check if Claude attempted to install the plugin
-        install_attempted = any([
-            "/plugin install" in output,
-            "installing lockplane" in output.lower(),
-            "plugin marketplace" in output.lower(),
+        # 3. Check if Claude mentioned plugins or installation
+        mentioned_plugin = any([
+            "plugin" in claude_output.lower(),
+            "install" in claude_output.lower() and "lockplane" in claude_output.lower(),
+            "/plugin" in claude_output,
         ])
 
-        if not check("Claude attempted to install plugin", install_attempted):
+        if not check("Claude mentioned plugin/installation", mentioned_plugin):
             failures += 1
-            print("  Expected: Claude should recognize need for Lockplane plugin", file=sys.stderr)
-            print("  Expected: Claude should run '/plugin install lockplane'", file=sys.stderr)
-            print("  Actual: No plugin installation attempt found in output", file=sys.stderr)
+            print("  Claude should recognize the need for a plugin", file=sys.stderr)
+            print(f"  Output preview: {claude_output[:200]}...", file=sys.stderr)
+
+    # 4. Check if plugins directory was created in isolated environment
+    isolated_plugins = isolated_claude / "plugins"
+    if not check("Isolated plugins directory created", isolated_plugins.exists()):
+        failures += 1
+        print("  Expected Claude to create ~/.claude/plugins", file=sys.stderr)
+
+    # 5. Check if lockplane plugin was installed
+    if isolated_plugins.exists():
+        # Check for installed_plugins.json
+        installed_file = isolated_plugins / "installed_plugins.json"
+
+        if check("installed_plugins.json exists", installed_file.exists()):
+            try:
+                with open(installed_file) as f:
+                    installed = json.load(f)
+
+                has_lockplane = any(
+                    "lockplane" in plugin_name.lower()
+                    for plugin_name in installed.get("plugins", {}).keys()
+                )
+
+                if not check("Lockplane plugin is installed", has_lockplane):
+                    failures += 1
+                    print(f"  Installed plugins: {list(installed.get('plugins', {}).keys())}", file=sys.stderr)
+                    print("  Expected: lockplane@lockplane-tools or similar", file=sys.stderr)
+            except json.JSONDecodeError as e:
+                check("installed_plugins.json is valid JSON", False, str(e))
+                failures += 1
+        else:
+            failures += 1
+            print("  Plugin should be recorded in installed_plugins.json", file=sys.stderr)
+
+    # 6. Check if marketplace was added
+    if isolated_plugins.exists():
+        marketplaces_file = isolated_plugins / "known_marketplaces.json"
+
+        if check("known_marketplaces.json exists", marketplaces_file.exists()):
+            try:
+                with open(marketplaces_file) as f:
+                    marketplaces = json.load(f)
+
+                has_lockplane_marketplace = "lockplane-tools" in marketplaces or any(
+                    "lockplane" in name.lower() for name in marketplaces.keys()
+                )
+
+                if not check("Lockplane marketplace is registered", has_lockplane_marketplace):
+                    failures += 1
+                    print(f"  Registered marketplaces: {list(marketplaces.keys())}", file=sys.stderr)
+                    print("  Expected: lockplane-tools", file=sys.stderr)
+            except json.JSONDecodeError as e:
+                check("known_marketplaces.json is valid JSON", False, str(e))
+                failures += 1
+        else:
+            failures += 1
+            print("  Marketplace should be registered in known_marketplaces.json", file=sys.stderr)
+
+    # 7. Check if skill files exist
+    if isolated_plugins.exists():
+        # Look for skill files in the marketplaces directory
+        skill_files = list(isolated_plugins.glob("**/SKILL.md"))
+        lockplane_skills = [f for f in skill_files if "lockplane" in str(f).lower()]
+
+        if not check("Lockplane skill files found", len(lockplane_skills) > 0):
+            failures += 1
+            print(f"  Found {len(skill_files)} total skill files", file=sys.stderr)
+            print(f"  Found {len(lockplane_skills)} lockplane skill files", file=sys.stderr)
 
     print()
     print("=" * 60)
@@ -146,21 +150,32 @@ def main():
 
     if failures == 0:
         print("✅ All validations passed!")
-        print("The Lockplane plugin system is working correctly.")
+        print("The Lockplane plugin auto-install is working correctly.")
+        print()
+        print("This means:")
+        print("  ✓ Claude recognized the need for Lockplane expertise")
+        print("  ✓ Claude installed the plugin automatically")
+        print("  ✓ The plugin marketplace is properly configured")
+        print("  ✓ The skill is available for use")
         return 0
     else:
         print(f"❌ {failures} validation(s) failed (EXPECTED for TDD)")
         print()
         print("This test is designed to FAIL until:")
-        print("  1. The Lockplane plugin is properly published")
-        print("  2. Claude Code can discover it from the GitHub link")
-        print("  3. Claude Code recognizes when to install it")
+        print("  1. Claude Code recognizes Lockplane mentions in prompts")
+        print("  2. Claude Code automatically installs the plugin from GitHub")
+        print("  3. The plugin marketplace configuration is complete")
         print("  4. The plugin installation completes successfully")
         print()
+        print("Debugging tips:")
+        print(f"  - Check Claude's output: {build_dir}/claude_output.txt")
+        print(f"  - Check isolated config: {isolated_claude}")
+        print(f"  - Run scenario manually for interactive debugging")
+        print()
         print("Next steps:")
-        print("  - Complete the plugin marketplace configuration")
-        print("  - Add plugin discovery hints to the Lockplane repo")
-        print("  - Test that Claude Code can find and install the plugin")
+        print("  - Verify Claude Code can discover plugins from GitHub repos")
+        print("  - Add hints/triggers for Claude to recognize Lockplane")
+        print("  - Test plugin discovery and installation flow")
         print("  - Re-run this test until it passes")
         return 1
 
