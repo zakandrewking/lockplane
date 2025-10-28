@@ -1,0 +1,8 @@
+name: plugin-install
+description: Test that Claude Code installs the Lockplane plugin when given GitHub link
+timeout: 120
+tags:
+  - claude-code
+  - plugin
+  - tdd
+  - smoke-test

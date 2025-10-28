@@ -228,6 +228,24 @@ if not has_users_table:
 
 Tests the fundamental Lockplane workflow: introspect → define schema → plan → validate → apply. No AI assistance required.
 
+### `plugin-install` 🚨 **TDD - Expected to FAIL**
+**Type**: TDD / Integration test
+**Duration**: < 2 minutes
+**Prerequisites**: Claude Code CLI
+
+Tests that Claude Code automatically installs the Lockplane plugin when given the GitHub repository link. This test is designed to fail until the plugin system is fully configured and Claude can discover and install plugins automatically.
+
+**Expected failures:**
+- Lockplane plugin is not auto-installed
+- Lockplane skill is not available after providing GitHub link
+- Claude does not recognize it needs the plugin
+
+**Success criteria (when passing):**
+- Claude recognizes Lockplane from GitHub link
+- Claude runs `/plugin install` automatically
+- Plugin installation completes successfully
+- Lockplane skill becomes available
+
 ### `todo`
 **Type**: End-to-end integration
 **Duration**: ~5-10 minutes
