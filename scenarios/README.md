@@ -25,28 +25,35 @@ Each scenario is a subdirectory containing:
 
 ## Running Scenarios
 
-### Run all scenarios
+**⚠️ Important**: You must specify a scenario name. Running all scenarios is disabled to avoid unnecessary costs.
+
+### Run a scenario
 
 ```bash
-./run-evals.py
+./run-evals.py <scenario-name>
 ```
 
-### Run a specific scenario
+### Examples
 
 ```bash
-./run-evals.py todo
+# Run basic migration test
+./run-evals.py basic-migration
+
+# Run plugin installation test
+./run-evals.py plugin-install
+
+# Run with verbose output
+./run-evals.py plugin-install --verbose
+
+# Generate JSON report
+./run-evals.py basic-migration --format json > results.json
 ```
 
-### Run with verbose output
+### List available scenarios
 
 ```bash
-./run-evals.py --verbose
-```
-
-### Generate JSON report
-
-```bash
-./run-evals.py --format json > results.json
+./run-evals.py nonexistent
+# Will show error and list all available scenarios
 ```
 
 ## Creating a New Scenario

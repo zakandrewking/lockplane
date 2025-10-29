@@ -58,22 +58,32 @@ class ScenarioResult:
     tags: list[str] = None
 
 
-def find_scenarios(scenarios_dir: Path, specific_scenario: Optional[str] = None) -> list[Path]:
-    """Find all scenario directories."""
-    if specific_scenario:
-        scenario_path = scenarios_dir / specific_scenario
-        if not scenario_path.exists():
-            console.print(f"[red]Error: Scenario '{specific_scenario}' not found[/red]")
-            sys.exit(1)
-        return [scenario_path]
+def find_scenarios(scenarios_dir: Path, specific_scenario: str) -> list[Path]:
+    """Find the specified scenario directory."""
+    scenario_path = scenarios_dir / specific_scenario
+    if not scenario_path.exists():
+        console.print(f"[red]Error: Scenario '{specific_scenario}' not found[/red]")
+        console.print(f"[yellow]Looking in: {scenarios_dir}[/yellow]")
 
-    # Find all directories with scenario.yaml
-    scenarios = []
-    for path in scenarios_dir.iterdir():
-        if path.is_dir() and (path / "scenario.yaml").exists():
-            scenarios.append(path)
+        # List available scenarios
+        available = []
+        for path in scenarios_dir.iterdir():
+            if path.is_dir() and (path / "scenario.yaml").exists():
+                available.append(path.name)
 
-    return sorted(scenarios)
+        if available:
+            console.print("\n[yellow]Available scenarios:[/yellow]")
+            for name in sorted(available):
+                console.print(f"  - {name}")
+
+        sys.exit(1)
+
+    if not (scenario_path / "scenario.yaml").exists():
+        console.print(f"[red]Error: '{specific_scenario}' is not a valid scenario[/red]")
+        console.print(f"[yellow]Missing: {scenario_path / 'scenario.yaml'}[/yellow]")
+        sys.exit(1)
+
+    return [scenario_path]
 
 
 def run_script(script_path: Path, timeout: int, verbose: bool = False) -> tuple[bool, str]:
@@ -210,11 +220,13 @@ def print_results_table(results: list[ScenarioResult]):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Lockplane evaluation scenarios")
+    parser = argparse.ArgumentParser(
+        description="Run a specific Lockplane evaluation scenario",
+        epilog="Example: %(prog)s basic-migration"
+    )
     parser.add_argument(
         "scenario",
-        nargs="?",
-        help="Specific scenario to run (runs all if not specified)",
+        help="Name of the scenario to run (e.g., 'basic-migration', 'plugin-install')",
     )
     parser.add_argument(
         "--format",
@@ -237,14 +249,10 @@ def main():
 
     args = parser.parse_args()
 
-    # Find scenarios
+    # Find the specified scenario
     scenarios = find_scenarios(args.scenarios_dir, args.scenario)
 
-    if not scenarios:
-        console.print("[yellow]No scenarios found[/yellow]")
-        sys.exit(0)
-
-    console.print(f"Found {len(scenarios)} scenario(s)")
+    console.print(f"Running scenario: [bold cyan]{args.scenario}[/bold cyan]")
 
     # Run scenarios
     results = []
