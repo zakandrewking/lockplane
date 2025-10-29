@@ -1,6 +1,6 @@
 === Scenario: plugin-install ===
 Description: Test that Claude Code installs the Lockplane plugin when given GitHub link
-Started at: 2025-10-28 20:27:38
+Started at: 2025-10-29 07:30:11
 
 --- Scenario Execution ---
 === Plugin Installation Scenario ===
@@ -42,21 +42,76 @@ Can you help me get started with Lockplane setup? Just focus on the initial setu
 ======================================================================
 FULL CLAUDE OUTPUT:
 ======================================================================
-I see that the `lockplane` command requires approval. Let me explain what I'm trying to do:
+Let me guide you through the Lockplane setup process. Based on the repository, here are the steps you'll need to follow:
 
-**Setup Steps:**
+## Lockplane Setup Guide
 
-1. **Lockplane is already installed** ✓ - Found at `/Users/zak/go/bin/lockplane`
+### Step 1: Install Lockplane
 
-2. **Initialize Lockplane** - I need to run `lockplane init` which will:
-   - Create a `docker-compose.yml` file in your project
-   - Set up two PostgreSQL databases (main DB and shadow DB for testing)
+You have a few options to install Lockplane:
 
-3. **Start the databases** - Run `docker compose up -d` to start the PostgreSQL containers
+**Option A: Install from source (recommended for latest version)**
+```bash
+# Clone the repository
+git clone https://github.com/zakandrewking/lockplane.git
+cd lockplane
 
-4. **Verify setup** - Check that everything is running correctly
+# Build the binary
+go build -o lockplane .
 
-**Would you like me to proceed with running `lockplane init`?** This will create the docker-compose.yml file needed for the PostgreSQL databases that Lockplane uses for schema management and migration testing.
+# Optionally, move to your PATH
+sudo mv lockplane /usr/local/bin/
+```
+
+**Option B: Download pre-built binary**
+Check the releases page: https://github.com/zakandrewking/lockplane/releases
+
+### Step 2: Initialize Lockplane in Your Project
+
+Once installed, navigate to your project directory and run:
+
+```bash
+lockplane init
+```
+
+This will:
+- Create a `docker-compose.yml` for local Postgres databases
+- Set up the main database (port 5432) and shadow database (port 5433)
+- Create a `.lockplane/` directory for configuration
+
+### Step 3: Start the Databases
+
+```bash
+docker compose up -d
+```
+
+This starts:
+- **Main database**: `postgres://lockplane:lockplane@localhost:5432/lockplane`
+- **Shadow database**: `postgres://lockplane:lockplane@localhost:5433/lockplane_shadow`
+
+### Step 4: Verify Setup
+
+Check that Lockplane is working:
+
+```bash
+# Check version
+lockplane version
+
+# Check help
+lockplane help
+
+# Check database connection
+docker compose ps
+```
+
+---
+
+Would you like me to help you with any of these installation steps? I can:
+1. Help you install Lockplane if you have Go installed
+2. Initialize Lockplane in your current project directory
+3. Guide you through creating your first schema
+
+Let me know which step you'd like to proceed with!
 
 ======================================================================
 
@@ -84,18 +139,18 @@ To make this pass:
   Expected: '/plugin install lockplane' or similar
   
   Claude's response preview:
-    I see that the `lockplane` command requires approval. Let me explain what I'm tr
+    Let me guide you through the Lockplane setup process. Based on the repository, h
     
-    **Setup Steps:**
+    ## Lockplane Setup Guide
     
-    1. **Lockplane is already installed** ✓ - Found at `/Users/zak/go/bin/lockplane`
+    ### Step 1: Install Lockplane
     
-    2. **Initialize Lockplane** - I need to run `lockplane init` which will:
-       - Create a `docker-compose.yml` file in your project
-       - Set up two PostgreSQL databases (main DB and shadow DB for testing)
+    You have a few options to install Lockplane:
     
+    **Option A: Install from source (recommended for latest version)**
+    ```bash
 ✗ Claude explained plugin benefits
 
 
 Status: FAILED
-Duration: 42.5s
+Duration: 42.0s
