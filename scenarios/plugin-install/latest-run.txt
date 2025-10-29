@@ -1,0 +1,101 @@
+=== Scenario: plugin-install ===
+Description: Test that Claude Code installs the Lockplane plugin when given GitHub link
+Started at: 2025-10-28 20:27:38
+
+--- Scenario Execution ---
+=== Plugin Installation Scenario ===
+
+Testing: Does Claude suggest installing the Lockplane plugin?
+
+📁 Isolated Claude config: /Users/zak/repos/lockplane/scenarios/plugin-install/build/isolated_home/.claude
+
+🔧 Initializing git repository...
+$ git init
+$ git config user.name Test User
+$ git config user.email test@example.com
+$ git add .
+$ git commit -m Initial commit
+
+🤖 Running Claude Code with isolated config...
+Providing GitHub link: https://github.com/zakandrewking/lockplane
+
+Prompt:
+------------------------------------------------------------
+I want to use Lockplane for database schema management in my project.
+
+Here's the Lockplane repo: https://github.com/zakandrewking/lockplane
+
+Can you help me get started with Lockplane setup? Just focus on the initial setup - I'll handle the actual implementation later.
+------------------------------------------------------------
+
+Running Claude with HOME=/Users/zak/repos/lockplane/scenarios/plugin-install/build/isolated_home
+(This will use a fresh Claude config without existing plugins)
+
+$ claude --print I want to use Lockplane for database schema management in my project.
+
+Here's the Lockplane repo: https://github.com/zakandrewking/lockplane
+
+Can you help me get started with Lockplane setup? Just focus on the initial setup - I'll handle the actual implementation later.
+
+✅ Claude Code executed successfully
+
+======================================================================
+FULL CLAUDE OUTPUT:
+======================================================================
+I see that the `lockplane` command requires approval. Let me explain what I'm trying to do:
+
+**Setup Steps:**
+
+1. **Lockplane is already installed** ✓ - Found at `/Users/zak/go/bin/lockplane`
+
+2. **Initialize Lockplane** - I need to run `lockplane init` which will:
+   - Create a `docker-compose.yml` file in your project
+   - Set up two PostgreSQL databases (main DB and shadow DB for testing)
+
+3. **Start the databases** - Run `docker compose up -d` to start the PostgreSQL containers
+
+4. **Verify setup** - Check that everything is running correctly
+
+**Would you like me to proceed with running `lockplane init`?** This will create the docker-compose.yml file needed for the PostgreSQL databases that Lockplane uses for schema management and migration testing.
+
+======================================================================
+
+📋 Scenario execution complete
+Check isolated config at: /Users/zak/repos/lockplane/scenarios/plugin-install/build/isolated_home/.claude
+Validation will check if Claude suggested installing the plugin
+
+
+
+--- Validation ---
+=== Validating Plugin Suggestion (TDD) ===
+
+✓ Claude Code output exists
+✓ Claude mentioned 'lockplane'
+
+============================================================
+❌ FAIL - 3 check(s) failed
+
+To make this pass:
+  - Add plugin mention to Lockplane README.md
+  - Add 'Claude Code Plugin' section
+  - Ensure Claude recognizes the hint
+✗ Claude mentioned 'plugin'
+✗ Claude suggested installing plugin
+  Expected: '/plugin install lockplane' or similar
+  
+  Claude's response preview:
+    I see that the `lockplane` command requires approval. Let me explain what I'm tr
+    
+    **Setup Steps:**
+    
+    1. **Lockplane is already installed** ✓ - Found at `/Users/zak/go/bin/lockplane`
+    
+    2. **Initialize Lockplane** - I need to run `lockplane init` which will:
+       - Create a `docker-compose.yml` file in your project
+       - Set up two PostgreSQL databases (main DB and shadow DB for testing)
+    
+✗ Claude explained plugin benefits
+
+
+Status: FAILED
+Duration: 42.5s
