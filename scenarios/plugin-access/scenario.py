@@ -70,43 +70,93 @@ def main():
     env["HOME"] = str(isolated_home)
 
     print("\n📦 Installing Lockplane plugin in isolated environment...")
-    plugin_path = lockplane_repo / "claude-plugin"
+    print("Manually copying plugin files and registering...\n")
 
-    # Install the plugin using Claude CLI
-    # Note: This uses the /plugin install command
-    install_cmd = f"/plugin install {plugin_path}"
-    print(f"Command: {install_cmd}\n")
+    # Create plugin directories
+    plugins_dir = isolated_claude / "plugins"
+    plugins_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write a script that installs the plugin
-    install_script = f"""
-# Install the Lockplane plugin
-claude "{install_cmd}" --print
-"""
+    marketplaces_dir = plugins_dir / "marketplaces"
+    marketplaces_dir.mkdir(parents=True, exist_ok=True)
 
-    Path("install_plugin.sh").write_text(install_script)
+    marketplace_name = "lockplane-tools"
+    marketplace_dir = marketplaces_dir / marketplace_name
+    marketplace_dir.mkdir(parents=True, exist_ok=True)
 
-    # Try to run the install command
-    try:
-        result = run_cmd(
-            ["bash", "install_plugin.sh"],
-            check=False,
-            env=env,
-            timeout=30,
+    # Copy the entire lockplane repo to the marketplace directory
+    print(f"Copying {lockplane_repo} to {marketplace_dir}...")
+    shutil.copytree(
+        lockplane_repo,
+        marketplace_dir,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            '.git', '__pycache__', '*.pyc', 'node_modules',
+            'dist', 'build', 'scenarios/*/build'
         )
+    )
 
-        Path("install_output.txt").write_text(result.stdout)
-        Path("install_stderr.txt").write_text(result.stderr)
+    # Create known_marketplaces.json
+    marketplaces_config = {
+        marketplace_name: {
+            "source": {
+                "source": "local",
+                "path": str(lockplane_repo)
+            },
+            "installLocation": str(marketplace_dir),
+            "lastUpdated": "2025-10-28T00:00:00.000Z"
+        }
+    }
 
-        if result.returncode == 0:
-            print("✓ Plugin installation command completed")
-        else:
-            print(f"⚠️  Plugin installation returned code {result.returncode}")
+    marketplaces_file = plugins_dir / "known_marketplaces.json"
+    with open(marketplaces_file, "w") as f:
+        json.dump(marketplaces_config, f, indent=2)
 
-        print(f"Output: {result.stdout[:200]}...")
+    print(f"✓ Created {marketplaces_file}")
 
-    except subprocess.TimeoutExpired:
-        print("⏱️  Installation timed out")
-        Path("install_timeout.txt").write_text("Timeout")
+    # Create installed_plugins.json
+    installed_plugins = {
+        "version": 1,
+        "plugins": {
+            f"lockplane@{marketplace_name}": {
+                "version": "1.0.0",
+                "installedAt": "2025-10-28T00:00:00.000Z",
+                "lastUpdated": "2025-10-28T00:00:00.000Z",
+                "installPath": str(marketplace_dir / "claude-plugin"),
+                "isLocal": True
+            }
+        }
+    }
+
+    installed_file = plugins_dir / "installed_plugins.json"
+    with open(installed_file, "w") as f:
+        json.dump(installed_plugins, f, indent=2)
+
+    print(f"✓ Created {installed_file}")
+
+    # Save installation log
+    install_log = f"""Plugin installed successfully!
+
+Marketplace: {marketplace_name}
+Location: {marketplace_dir}
+Plugin path: {marketplace_dir / 'claude-plugin'}
+
+Files created:
+- {marketplaces_file}
+- {installed_file}
+
+Plugin structure:
+"""
+    # List key plugin files
+    skill_file = marketplace_dir / "claude-plugin" / "skills" / "lockplane" / "SKILL.md"
+    if skill_file.exists():
+        install_log += f"- ✓ Skill file: {skill_file}\n"
+    else:
+        install_log += f"- ✗ Skill file not found\n"
+
+    Path("install_output.txt").write_text(install_log)
+    print("\n✓ Plugin installed successfully")
+    print(f"  Marketplace: {marketplace_name}")
+    print(f"  Location: {marketplace_dir}")
 
     print("\n🤖 Testing plugin access with Claude...")
     print("Asking a Lockplane-specific question...\n")

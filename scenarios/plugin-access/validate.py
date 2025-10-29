@@ -60,26 +60,66 @@ def main():
         failures += 1
         print("  Plugin may not have been installed", file=sys.stderr)
 
-    # 3. Check for installed plugin files
-    if isolated_plugins.exists():
-        # Look for lockplane plugin files
-        lockplane_files = list(isolated_plugins.glob("**/lockplane/**"))
-        has_lockplane_files = len(lockplane_files) > 0
-
-        if not check("Lockplane plugin files found", has_lockplane_files):
+    # 3. Check for marketplace directory
+    marketplace_dir = isolated_plugins / "marketplaces" / "lockplane-tools"
+    if not check("Marketplace directory exists", marketplace_dir.exists()):
+        failures += 1
+        print(f"  Expected: {marketplace_dir}", file=sys.stderr)
+    else:
+        # Check for plugin directory
+        plugin_dir = marketplace_dir / "claude-plugin"
+        if not check("Plugin directory exists", plugin_dir.exists()):
             failures += 1
-            print(f"  Found {len(list(isolated_plugins.glob('**/*')))} total files in plugins/", file=sys.stderr)
+            print(f"  Expected: {plugin_dir}", file=sys.stderr)
 
         # Check for skill file specifically
-        skill_files = list(isolated_plugins.glob("**/SKILL.md"))
-        has_skill = len(skill_files) > 0
-
-        if not check("Skill file found", has_skill):
+        skill_file = plugin_dir / "skills" / "lockplane" / "SKILL.md"
+        if not check("Skill file found", skill_file.exists()):
             failures += 1
+            print(f"  Expected: {skill_file}", file=sys.stderr)
         else:
-            print(f"  Found {len(skill_files)} skill file(s)")
+            # Check skill file has content
+            skill_content = skill_file.read_text()
+            has_content = len(skill_content) > 100
+            if not check("Skill file has content", has_content):
+                failures += 1
+                print(f"  Size: {len(skill_content)} bytes", file=sys.stderr)
 
-    # 4. Check Claude's response
+    # 4. Check for installed_plugins.json
+    installed_file = isolated_plugins / "installed_plugins.json"
+    if not check("installed_plugins.json exists", installed_file.exists()):
+        failures += 1
+    else:
+        try:
+            with open(installed_file) as f:
+                installed = json.load(f)
+
+            has_lockplane = "lockplane@lockplane-tools" in installed.get("plugins", {})
+            if not check("Lockplane registered in installed_plugins.json", has_lockplane):
+                failures += 1
+                print(f"  Plugins: {list(installed.get('plugins', {}).keys())}", file=sys.stderr)
+        except json.JSONDecodeError as e:
+            check("installed_plugins.json is valid JSON", False, str(e))
+            failures += 1
+
+    # 5. Check for known_marketplaces.json
+    marketplaces_file = isolated_plugins / "known_marketplaces.json"
+    if not check("known_marketplaces.json exists", marketplaces_file.exists()):
+        failures += 1
+    else:
+        try:
+            with open(marketplaces_file) as f:
+                marketplaces = json.load(f)
+
+            has_lockplane = "lockplane-tools" in marketplaces
+            if not check("lockplane-tools in marketplaces", has_lockplane):
+                failures += 1
+                print(f"  Marketplaces: {list(marketplaces.keys())}", file=sys.stderr)
+        except json.JSONDecodeError as e:
+            check("known_marketplaces.json is valid JSON", False, str(e))
+            failures += 1
+
+    # 6. Check Claude's response
     claude_output_file = build_dir / "claude_output.txt"
     if not check("Claude output exists", claude_output_file.exists()):
         failures += 1
@@ -88,12 +128,12 @@ def main():
     claude_output = claude_output_file.read_text()
     output_lower = claude_output.lower()
 
-    # 5. Check for Lockplane-specific content
+    # 7. Check for Lockplane-specific content
     mentioned_lockplane = "lockplane" in output_lower
     if not check("Response mentions Lockplane", mentioned_lockplane):
         failures += 1
 
-    # 6. Check for Lockplane commands
+    # 8. Check for Lockplane commands
     lockplane_commands = [
         "lockplane plan",
         "lockplane apply",
@@ -123,7 +163,7 @@ def main():
     if not check("Response includes Lockplane commands/concepts", has_commands, '\n'.join(cmd_msg)):
         failures += 1
 
-    # 7. Check for safety guidance (indicates skill knowledge)
+    # 9. Check for safety guidance (indicates skill knowledge)
     safety_terms = [
         "not null",
         "default",
@@ -141,7 +181,7 @@ def main():
         failures += 1
         print(f"  Found safety terms: {found_safety if found_safety else 'none'}", file=sys.stderr)
 
-    # 8. Check response quality (length indicates detailed response)
+    # 10. Check response quality (length indicates detailed response)
     response_length = len(claude_output)
     is_detailed = response_length > 200  # At least 200 characters
 
