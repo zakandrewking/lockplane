@@ -5,19 +5,19 @@
 # ///
 
 """
-Plugin installation scenario - Test that Claude Code installs the Lockplane plugin.
+Plugin installation scenario - Test that Claude suggests installing the Lockplane plugin.
 
 This is a TDD scenario - it should FAIL until the plugin is properly set up.
 
 Tests that when a user:
-1. Asks Claude Code to help set up an app with Lockplane
+1. Asks Claude Code to help with Lockplane
 2. Provides a link to the Lockplane GitHub repo
-3. Claude Code will first install the Lockplane plugin before proceeding
+3. Claude Code suggests installing the Lockplane plugin
 
 Expected behavior:
-- Claude should recognize it needs Lockplane expertise
-- Claude should install the plugin via /plugin install
-- The Lockplane skill should become available
+- Claude should recognize Lockplane plugin exists
+- Claude should suggest: "/plugin install lockplane" or similar
+- Claude should explain the benefits of the plugin
 """
 
 import json
@@ -52,7 +52,7 @@ def main():
     isolated_claude.mkdir(parents=True)
 
     print("=== Plugin Installation Scenario ===\n")
-    print("Testing TDD: This should FAIL until the plugin is complete.\n")
+    print("Testing: Does Claude suggest installing the Lockplane plugin?\n")
     print(f"📁 Isolated Claude config: {isolated_claude}\n")
 
     # Change to build directory
@@ -60,26 +60,25 @@ def main():
 
     # Initialize git repository
     print("🔧 Initializing git repository...")
-    run_cmd(["git", "init"])
-    run_cmd(["git", "config", "user.name", "Test User"])
-    run_cmd(["git", "config", "user.email", "test@example.com"])
+    run_cmd(["git", "init"], check=True)
+    run_cmd(["git", "config", "user.name", "Test User"], check=True)
+    run_cmd(["git", "config", "user.email", "test@example.com"], check=True)
 
     # Create initial commit so there's a git history
     Path("README.md").write_text("# Test Project\n")
-    run_cmd(["git", "add", "."])
-    run_cmd(["git", "commit", "-m", "Initial commit"])
+    run_cmd(["git", "add", "."], check=True)
+    run_cmd(["git", "commit", "-m", "Initial commit"], check=True)
 
     print("\n🤖 Running Claude Code with isolated config...")
     print("Providing GitHub link: https://github.com/zakandrewking/lockplane\n")
 
     # The key test: Ask Claude to help with Lockplane, providing the GitHub link
-    # Claude should recognize it needs the plugin and install it first
-    prompt = """I want to build a simple task tracking app with Next.js and Postgres.
-I'd like to use Lockplane for schema management.
+    # Claude should recognize the plugin exists and suggest installing it
+    prompt = """I want to use Lockplane for database schema management in my project.
 
 Here's the Lockplane repo: https://github.com/zakandrewking/lockplane
 
-Can you help me set this up? Please start by installing any necessary plugins."""
+Can you help me get started with Lockplane setup? Just focus on the initial setup - I'll handle the actual implementation later."""
 
     # Write the prompt to a file for reference
     Path("prompt.txt").write_text(prompt)
@@ -120,9 +119,19 @@ Can you help me set this up? Please start by installing any necessary plugins.""
         Path("claude_output.txt").write_text(result.stdout)
         Path("claude_stderr.txt").write_text(result.stderr)
 
-        # Print a sample of the output
-        output_preview = result.stdout[:500] if result.stdout else "(no output)"
-        print(f"\nClaude output preview:\n{output_preview}\n")
+        # Print the FULL output for debugging
+        print("\n" + "=" * 70)
+        print("FULL CLAUDE OUTPUT:")
+        print("=" * 70)
+        print(result.stdout if result.stdout else "(no stdout)")
+
+        if result.stderr:
+            print("\n" + "=" * 70)
+            print("STDERR:")
+            print("=" * 70)
+            print(result.stderr)
+
+        print("=" * 70)
 
     except subprocess.TimeoutExpired:
         print("\n⏱️  Command timed out after 90 seconds")
@@ -135,7 +144,7 @@ Can you help me set this up? Please start by installing any necessary plugins.""
 
     print("\n📋 Scenario execution complete")
     print(f"Check isolated config at: {isolated_claude}")
-    print("Validation will check if Claude installed the plugin\n")
+    print("Validation will check if Claude suggested installing the plugin\n")
 
     return 0
 

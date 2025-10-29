@@ -21,6 +21,27 @@ A Postgres-first control plane for safe, AI-friendly schema management.
 
 ---
 
+## 🤖 Using with AI Assistants
+
+**Claude Code Users**: There's a Lockplane plugin that provides expert knowledge about Lockplane commands, workflows, and best practices!
+
+```bash
+/plugin install lockplane@lockplane-tools
+```
+
+The plugin automatically helps with:
+- Schema migration planning
+- Safety validation
+- SQL generation
+- Rollback strategies
+- Best practices
+
+[Learn more about the plugin →](claude-plugin/README.md)
+
+**Other AI Assistants**: See [llms.txt](https://github.com/zakandrewking/lockplane/blob/main/llms.txt) for comprehensive Lockplane context.
+
+---
+
 ## Installation
 
 ### Download Pre-built Binary (Recommended)
