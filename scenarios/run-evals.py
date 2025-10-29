@@ -133,14 +133,34 @@ def run_scenario(scenario_dir: Path, config: ScenarioConfig, verbose: bool = Fal
     if not validate_script.exists():
         validate_script = scenario_dir / "validate.sh"
 
+    # Prepare to capture all output
+    full_output = []
+    full_output.append(f"=== Scenario: {config.name} ===")
+    full_output.append(f"Description: {config.description}")
+    full_output.append(f"Started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    full_output.append("")
+
     # Run the scenario
     if verbose:
         console.print(f"\n[bold]Running scenario: {config.name}[/bold]")
 
+    full_output.append("--- Scenario Execution ---")
     success, output = run_script(scenario_script, config.timeout, verbose)
+    full_output.append(output)
+    full_output.append("")
+
+    validation_output = ""
 
     if not success:
         duration = time.time() - start_time
+        full_output.append(f"Status: FAILED")
+        full_output.append(f"Duration: {duration:.1f}s")
+        full_output.append(f"Error: Scenario execution failed")
+
+        # Save output file
+        output_file = scenario_dir / "latest-run.txt"
+        output_file.write_text("\n".join(full_output))
+
         return ScenarioResult(
             name=config.name,
             description=config.description,
@@ -155,8 +175,18 @@ def run_scenario(scenario_dir: Path, config: ScenarioConfig, verbose: bool = Fal
         if verbose:
             console.print(f"[bold]Validating scenario: {config.name}[/bold]")
 
+        full_output.append("--- Validation ---")
         success, validation_output = run_script(validate_script, 60, verbose)
+        full_output.append(validation_output)
+        full_output.append("")
+
         duration = time.time() - start_time
+        full_output.append(f"Status: {'PASSED' if success else 'FAILED'}")
+        full_output.append(f"Duration: {duration:.1f}s")
+
+        # Save output file
+        output_file = scenario_dir / "latest-run.txt"
+        output_file.write_text("\n".join(full_output))
 
         return ScenarioResult(
             name=config.name,
@@ -169,6 +199,13 @@ def run_scenario(scenario_dir: Path, config: ScenarioConfig, verbose: bool = Fal
     else:
         # No validation script - just check scenario ran
         duration = time.time() - start_time
+        full_output.append("Status: PASSED (no validation)")
+        full_output.append(f"Duration: {duration:.1f}s")
+
+        # Save output file
+        output_file = scenario_dir / "latest-run.txt"
+        output_file.write_text("\n".join(full_output))
+
         return ScenarioResult(
             name=config.name,
             description=config.description,

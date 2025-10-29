@@ -36,3 +36,6 @@ go.work
 .env.local
 
 build/
+
+# Scenario outputs
+scenarios/*/latest-run.txt
