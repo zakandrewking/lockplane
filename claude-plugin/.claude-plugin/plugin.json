@@ -7,10 +7,7 @@
     "email": "zakandrewking@users.noreply.github.com"
   },
   "homepage": "https://github.com/zakandrewking/lockplane",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/zakandrewking/lockplane"
-  },
+  "repository": "https://github.com/zakandrewking/lockplane",
   "license": "MIT",
   "keywords": [
     "postgres",
