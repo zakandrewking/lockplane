@@ -67,26 +67,6 @@ lockplane version
 lockplane help
 ```
 
-### Optional: AI Assistant Integration
-
-**For Claude Code users**: Install the Lockplane plugin to get expert assistance:
-
-```bash
-# Add the marketplace
-/plugin marketplace add zakandrewking/lockplane
-
-# Install the plugin
-/plugin install lockplane@lockplane-tools
-```
-
-Or install directly from GitHub:
-
-```bash
-/plugin install github:zakandrewking/lockplane/claude-plugin
-```
-
-**For other LLMs**: Reference the [llms.txt](https://github.com/zakandrewking/lockplane/blob/main/llms.txt) file for comprehensive Lockplane context following the [llms.txt standard](https://llmstxt.org/).
-
 ---
 
 ## Quick Start
