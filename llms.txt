@@ -156,6 +156,11 @@ Lockplane validates SQL and detects dangerous patterns:
 - `TRUNCATE TABLE` - Removes all rows
 - `DELETE FROM table` (no WHERE) - Deletes all rows
 
+### Non-declarative patterns (ERROR)
+- `IF NOT EXISTS` clauses - Makes schema non-deterministic (Lockplane manages existence checks)
+- Transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`) - Lockplane manages transactions automatically
+- `CREATE OR REPLACE` - Use plain `CREATE` statements (Lockplane handles updates via DROP/CREATE)
+
 ### Blocking operations (WARNING)
 - `CREATE INDEX` without `CONCURRENTLY` - Locks table during build
 - `DROP INDEX` without `CONCURRENTLY` - Locks table during drop

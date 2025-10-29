@@ -275,6 +275,17 @@ lockplane validate sql lockplane/schema/
    - Duplicate index names
    - Invalid index column references
 
+3. **Dangerous Patterns** (data loss risks)
+   - `DROP TABLE` - Permanently deletes data
+   - `DROP COLUMN` - Irreversible data loss
+   - `TRUNCATE TABLE` - Deletes all rows
+   - `DELETE` without `WHERE` clause - Unintentional data deletion
+
+4. **Non-Declarative Patterns** (imperative SQL not allowed in schema files)
+   - `IF NOT EXISTS` clauses - Makes schema non-deterministic
+   - Transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`) - Lockplane manages transactions
+   - `CREATE OR REPLACE` - Use plain `CREATE` statements instead
+
 **Example output:**
 ```
 ✗ SQL syntax errors in schema.lp.sql:

@@ -29,6 +29,9 @@ func validateDangerousPatterns(filePath string, sqlContent string) []ValidationI
 		stmtIssues := detectDataLossOperations(filePath, stmt.Stmt, currentLine)
 		issues = append(issues, stmtIssues...)
 
+		nonDeclarativeIssues := detectNonDeclarativePatterns(filePath, stmt.Stmt, currentLine)
+		issues = append(issues, nonDeclarativeIssues...)
+
 		// Update line counter (approximate - we'd need full source locations for precision)
 		// For now, we'll use the statement's position
 		currentLine++
@@ -203,4 +206,106 @@ func getCascadeWarning(cascade string) string {
 		return "\n                  CASCADE will also drop all dependent objects (foreign keys, views, etc.)"
 	}
 	return ""
+}
+
+// detectNonDeclarativePatterns detects SQL patterns that shouldn't be in declarative schema files
+func detectNonDeclarativePatterns(filePath string, stmt *pg_query.Node, line int) []ValidationIssue {
+	var issues []ValidationIssue
+
+	switch node := stmt.Node.(type) {
+	case *pg_query.Node_CreateStmt:
+		// CREATE TABLE with IF NOT EXISTS
+		createStmt := node.CreateStmt
+		if createStmt.IfNotExists {
+			tableName := extractRangeVarName(createStmt.Relation)
+			issues = append(issues, ValidationIssue{
+				File:     filePath,
+				Line:     line,
+				Column:   1,
+				Severity: "error",
+				Message: fmt.Sprintf("IF NOT EXISTS should not be used in declarative schema files\n"+
+					"  Found: CREATE TABLE IF NOT EXISTS %s\n"+
+					"  Impact: Makes schema non-deterministic and harder to version control\n"+
+					"  Recommendation: Remove IF NOT EXISTS - Lockplane manages existence checks\n"+
+					"                  Use: CREATE TABLE %s",
+					tableName, tableName),
+				Code: "non_declarative_if_not_exists",
+			})
+		}
+
+	case *pg_query.Node_IndexStmt:
+		// CREATE INDEX with IF NOT EXISTS
+		indexStmt := node.IndexStmt
+		if indexStmt.IfNotExists {
+			indexName := indexStmt.Idxname
+			if indexName == "" {
+				indexName = "unnamed_index"
+			}
+			issues = append(issues, ValidationIssue{
+				File:     filePath,
+				Line:     line,
+				Column:   1,
+				Severity: "error",
+				Message: fmt.Sprintf("IF NOT EXISTS should not be used in declarative schema files\n"+
+					"  Found: CREATE INDEX IF NOT EXISTS %s\n"+
+					"  Impact: Makes schema non-deterministic and harder to version control\n"+
+					"  Recommendation: Remove IF NOT EXISTS - Lockplane manages existence checks",
+					indexName),
+				Code: "non_declarative_if_not_exists",
+			})
+		}
+
+	case *pg_query.Node_TransactionStmt:
+		// BEGIN, COMMIT, ROLLBACK, etc.
+		txnStmt := node.TransactionStmt
+		var txnType string
+		switch txnStmt.Kind {
+		case pg_query.TransactionStmtKind_TRANS_STMT_BEGIN:
+			txnType = "BEGIN"
+		case pg_query.TransactionStmtKind_TRANS_STMT_COMMIT:
+			txnType = "COMMIT"
+		case pg_query.TransactionStmtKind_TRANS_STMT_ROLLBACK:
+			txnType = "ROLLBACK"
+		case pg_query.TransactionStmtKind_TRANS_STMT_START:
+			txnType = "START TRANSACTION"
+		default:
+			txnType = "transaction control"
+		}
+
+		issues = append(issues, ValidationIssue{
+			File:     filePath,
+			Line:     line,
+			Column:   1,
+			Severity: "error",
+			Message: fmt.Sprintf("Transaction control statements should not be in schema files\n"+
+				"  Found: %s\n"+
+				"  Impact: Schema files should be declarative definitions only\n"+
+				"  Recommendation: Remove %s - Lockplane manages transactions automatically\n"+
+				"                  Migration plans are executed in transactions by default",
+				txnType, txnType),
+			Code: "non_declarative_transaction",
+		})
+
+	case *pg_query.Node_ViewStmt:
+		// CREATE OR REPLACE VIEW
+		viewStmt := node.ViewStmt
+		if viewStmt.Replace {
+			viewName := extractRangeVarName(viewStmt.View)
+			issues = append(issues, ValidationIssue{
+				File:     filePath,
+				Line:     line,
+				Column:   1,
+				Severity: "error",
+				Message: fmt.Sprintf("CREATE OR REPLACE should not be used in declarative schema files\n"+
+					"  Found: CREATE OR REPLACE VIEW %s\n"+
+					"  Impact: Makes schema non-deterministic and harder to version control\n"+
+					"  Recommendation: Use CREATE VIEW - Lockplane handles updates via DROP/CREATE\n"+
+					"                  Or use: CREATE VIEW %s",
+					viewName, viewName),
+				Code: "non_declarative_or_replace",
+			})
+		}
+	}
+
+	return issues
 }
