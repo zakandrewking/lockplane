@@ -1,8 +1,0 @@
-name: basic-migration
-description: Test basic schema migration workflow (introspect, plan, validate, apply)
-timeout: 60
-tags:
-  - cli
-  - migrations
-  - postgres
-  - smoke-test

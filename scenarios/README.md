@@ -36,17 +36,17 @@ Each scenario is a subdirectory containing:
 ### Examples
 
 ```bash
-# Run basic migration test
-./run-evals.py basic-migration
-
 # Run plugin installation test
 ./run-evals.py plugin-install
+
+# Run plugin access test
+./run-evals.py plugin-access
 
 # Run with verbose output
 ./run-evals.py plugin-install --verbose
 
 # Generate JSON report
-./run-evals.py basic-migration --format json > results.json
+./run-evals.py plugin-install --format json > results.json
 ```
 
 ### List available scenarios
@@ -228,13 +228,6 @@ if not has_users_table:
 
 ## Available Scenarios
 
-### `basic-migration`
-**Type**: Smoke test
-**Duration**: < 1 minute
-**Prerequisites**: PostgreSQL databases
-
-Tests the fundamental Lockplane workflow: introspect → define schema → plan → validate → apply. No AI assistance required.
-
 ### `plugin-install` 🚨 **TDD - Expected to FAIL**
 **Type**: TDD / Integration test
 **Duration**: < 2 minutes
@@ -253,12 +246,18 @@ Tests that Claude Code automatically installs the Lockplane plugin when given th
 - Plugin installation completes successfully
 - Lockplane skill becomes available
 
-### `todo`
-**Type**: End-to-end integration
-**Duration**: ~5-10 minutes
+### `plugin-access`
+**Type**: Integration test
+**Duration**: < 1 minute
 **Prerequisites**: Claude Code CLI
 
-Tests Claude Code's ability to generate a full-stack Next.js todo app using Lockplane for schema management. Validates schema-first development workflow.
+Tests that Claude Code can access and use an installed Lockplane plugin. Verifies the complete plugin workflow: explicit install → access → use skills. The scenario manually installs the plugin in an isolated environment and validates that Claude provides Lockplane-specific guidance.
+
+**Success criteria:**
+- Plugin files installed correctly in isolated environment
+- Claude can access the installed plugin
+- Claude uses Lockplane skill to provide expert guidance
+- Response includes Lockplane commands and safety concepts
 
 ## Continuous Integration
 

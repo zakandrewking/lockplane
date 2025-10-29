@@ -1,9 +1,0 @@
-name: todo-app
-description: Generate a Next.js todo app with SQLite and Lockplane using Claude Code
-timeout: 600  # 10 minutes - AI generation can take time
-tags:
-  - claude-code
-  - next.js
-  - sqlite
-  - full-stack
-  - integration
