@@ -1,0 +1,7 @@
+name: plugin-access
+description: Install Lockplane plugin and verify Claude can access it and use the skills
+timeout: 120
+tags:
+  - plugin
+  - skills
+  - integration
