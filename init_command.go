@@ -25,8 +25,32 @@ var (
 )
 
 func runInit(args []string) {
-	if len(args) == 0 {
-		log.Fatalf("Usage: lockplane init <target>")
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+		fmt.Fprintf(os.Stderr, "Usage: lockplane init <target> [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Initialize Lockplane configuration and setup.\n\n")
+		fmt.Fprintf(os.Stderr, "TARGETS:\n")
+		fmt.Fprintf(os.Stderr, "  docker-compose    Add shadow database service to Docker Compose file\n\n")
+		fmt.Fprintf(os.Stderr, "EXAMPLES:\n")
+		fmt.Fprintf(os.Stderr, "  # Add shadow database to docker-compose.yml (auto-detected)\n")
+		fmt.Fprintf(os.Stderr, "  lockplane init docker-compose\n\n")
+		fmt.Fprintf(os.Stderr, "  # Specify custom docker compose file\n")
+		fmt.Fprintf(os.Stderr, "  lockplane init docker-compose --file docker-compose.prod.yml\n\n")
+		fmt.Fprintf(os.Stderr, "DESCRIPTION:\n\n")
+		fmt.Fprintf(os.Stderr, "  The init command helps set up Lockplane for your project.\n\n")
+		fmt.Fprintf(os.Stderr, "  docker-compose:\n")
+		fmt.Fprintf(os.Stderr, "    Finds your Docker Compose file (docker-compose.yml, docker-compose.yaml,\n")
+		fmt.Fprintf(os.Stderr, "    compose.yml, or compose.yaml) and adds a shadow database service.\n\n")
+		fmt.Fprintf(os.Stderr, "    The shadow database is used to test migrations before applying them\n")
+		fmt.Fprintf(os.Stderr, "    to your production database. Lockplane will:\n\n")
+		fmt.Fprintf(os.Stderr, "    1. Detect your primary Postgres service (highest scoring match)\n")
+		fmt.Fprintf(os.Stderr, "    2. Clone its configuration (image, environment variables, healthcheck)\n")
+		fmt.Fprintf(os.Stderr, "    3. Add a \"shadow\" service on port 5433 (or next available port)\n")
+		fmt.Fprintf(os.Stderr, "    4. Name the shadow database with \"_shadow\" suffix\n\n")
+		fmt.Fprintf(os.Stderr, "    If a shadow service already exists, no changes are made.\n\n")
+		if len(args) == 0 {
+			os.Exit(1)
+		}
+		return
 	}
 
 	target := args[0]
@@ -34,13 +58,47 @@ func runInit(args []string) {
 	case "docker-compose":
 		runInitDockerCompose(args[1:])
 	default:
-		log.Fatalf("Unknown init target: %s", target)
+		fmt.Fprintf(os.Stderr, "Error: unknown init target %q\n\n", target)
+		fmt.Fprintf(os.Stderr, "Usage: lockplane init <target> [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Available targets:\n")
+		fmt.Fprintf(os.Stderr, "  docker-compose    Add shadow database service to Docker Compose file\n\n")
+		os.Exit(1)
 	}
 }
 
 func runInitDockerCompose(args []string) {
 	fs := flag.NewFlagSet("init docker-compose", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "Path to docker compose file")
+	fileFlag := fs.String("file", "", "Path to docker compose file (auto-detected if not specified)")
+
+	// Custom usage function
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: lockplane init docker-compose [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Add a shadow database service to your Docker Compose file.\n\n")
+		fmt.Fprintf(os.Stderr, "The shadow database is used by Lockplane to test migrations before\n")
+		fmt.Fprintf(os.Stderr, "applying them to your production database. This ensures migrations are\n")
+		fmt.Fprintf(os.Stderr, "safe and reversible.\n\n")
+		fmt.Fprintf(os.Stderr, "HOW IT WORKS:\n\n")
+		fmt.Fprintf(os.Stderr, "  1. Finds your Docker Compose file (looks for: docker-compose.yml,\n")
+		fmt.Fprintf(os.Stderr, "     docker-compose.yaml, compose.yml, compose.yaml)\n")
+		fmt.Fprintf(os.Stderr, "  2. Detects your primary Postgres service (by scoring image name,\n")
+		fmt.Fprintf(os.Stderr, "     POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)\n")
+		fmt.Fprintf(os.Stderr, "  3. Creates a \"shadow\" service that:\n")
+		fmt.Fprintf(os.Stderr, "     - Uses the same Postgres image\n")
+		fmt.Fprintf(os.Stderr, "     - Clones environment variables from primary service\n")
+		fmt.Fprintf(os.Stderr, "     - Names database with \"_shadow\" suffix (e.g., myapp_shadow)\n")
+		fmt.Fprintf(os.Stderr, "     - Runs on port 5433 (or next available port)\n")
+		fmt.Fprintf(os.Stderr, "     - Copies healthcheck configuration if present\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fs.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  # Auto-detect docker-compose.yml and add shadow service\n")
+		fmt.Fprintf(os.Stderr, "  lockplane init docker-compose\n\n")
+		fmt.Fprintf(os.Stderr, "  # Specify custom compose file\n")
+		fmt.Fprintf(os.Stderr, "  lockplane init docker-compose --file docker-compose.prod.yml\n\n")
+		fmt.Fprintf(os.Stderr, "  # After initialization, start databases:\n")
+		fmt.Fprintf(os.Stderr, "  docker compose up -d\n\n")
+	}
+
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}

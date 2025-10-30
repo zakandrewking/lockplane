@@ -18,17 +18,30 @@ works.
 **Guarantees safety.** Lockplane validates migrations, only runs migrations
 against expected database state, safely rolls back every time.
 
-**Long-running operations are executed durably.** Building an index on 100M rows? Backfilling a column? Lockplane will handle timeouts, retries, and progress tracking so operations complete even if connections drop.
+**Long-running operations are executed durably.** Building an index on 100M
+rows? Backfilling a column? Lockplane will handle timeouts, retries, and
+progress tracking so operations complete even if connections drop.
 
 ---
 
-**New to Lockplane?** Check out our extensive guides in the `docs/` directory.
+Get started by following these steps:
 
----
+## 1. 📦 Installation
 
-## 🤖 Using with AI Assistants
+### Download Pre-built Binary
 
-**Claude Code Users**: There's a Lockplane plugin that provides expert knowledge about Lockplane commands, workflows, and best practices!
+1. Download the latest release for your platform from [GitHub
+   Releases](https://github.com/zakandrewking/lockplane/releases/latest)
+2. Extract the archive: `tar -xzf lockplane_*.tar.gz`
+3. Move to your PATH: `sudo mv lockplane /usr/local/bin/`
+4. Verify: `lockplane version`
+
+For more options, see the [Installation Guide](docs/installation.md).
+
+## 2. 🤖 Use with AI Assistants
+
+**Claude Code Users**: There's a Lockplane plugin that provides expert knowledge
+about Lockplane commands, workflows, and best practices!
 
 ```bash
 /plugin install lockplane@lockplane-tools
@@ -43,36 +56,62 @@ The plugin automatically helps with:
 
 [Learn more about the plugin →](claude-plugin/README.md)
 
-**Other AI Assistants**: See [llms.txt](https://github.com/zakandrewking/lockplane/blob/main/llms.txt) for comprehensive Lockplane context.
+**Other AI Assistants**: See
+[llms.txt](https://github.com/zakandrewking/lockplane/blob/main/llms.txt) for
+comprehensive Lockplane context.
 
----
+## 3. 🚀 Create your first schema
 
-## Installation
+With Lockplane, you define your desired database with special SQL files that end
+in `.lp.sql`. These files contain normal valid SQL (supporting either PostgreSQL
+or SQLite dialects), but with an extra level of strictness to guarantee that
+your schema is safe to use.
 
-### Download Pre-built Binary (Recommended)
+Let's get started with an example. Create a new directory called `schema/` at
+the root of your project, and create a new file called `users.lp.sql` inside it:
 
-1. Download the latest release for your platform from [GitHub Releases](https://github.com/zakandrewking/lockplane/releases/latest)
-2. Extract the archive: `tar -xzf lockplane_*.tar.gz`
-3. Move to your PATH: `sudo mv lockplane /usr/local/bin/`
-4. Verify: `lockplane version`
-
-### Build from Source
-
-```bash
-git clone https://github.com/zakandrewking/lockplane.git
-cd lockplane
-go install .
+```sql
+CREATE TABLE users (
+  id BIGINT PRIMARY KEY,
+  email TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
 
-### Verify Installation
+This file defines a simple `users` table with an `id`, `email`, and `created_at`
+column.
+
+Now, let's validate our schema:
 
 ```bash
-lockplane
-lockplane version
-lockplane help
+lockplane validate sql schema/users.lp.sql
 ```
 
----
+This will output a report of any issues with your schema. If there are no issues,
+you'll see a message like this:
+
+```
+✓ Validation 1: PASS
+```
+
+Lockplane schema files cannot contain any dangerous SQL statements, or any
+statements that are not "declarative". For example, you cannot use `DROP TABLE`
+or `DROP COLUMN` statements -- statements like this make sense when you are
+interacting with a live database, but for schema definition we want to focus on
+creating a structure. Later, we'll see how lockplane can drop tables and columns
+for you when needed.
+
+For more information on `.lp.sql` files, run `lockplane validate sql --help`.
+
+4. 📜 Run your first migration
+
+Now that we have a schema, we can generate a migration plan to apply it to our
+database.
+
+NOTE: If you do not have a database yet, you can use the `lockplane init` command to
+create a new database for you. For more information, run `lockplane init --help`.
+
+
 
 ## Quick Start
 
