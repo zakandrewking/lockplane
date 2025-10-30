@@ -7,8 +7,22 @@ import (
 
 // GeneratePlan creates a migration plan from a schema diff
 func GeneratePlan(diff *SchemaDiff) (*Plan, error) {
+	return GeneratePlanWithHash(diff, nil)
+}
+
+// GeneratePlanWithHash creates a migration plan with a source schema hash
+func GeneratePlanWithHash(diff *SchemaDiff, sourceSchema *Schema) (*Plan, error) {
 	plan := &Plan{
 		Steps: []PlanStep{},
+	}
+
+	// Compute source schema hash if provided
+	if sourceSchema != nil {
+		hash, err := ComputeSchemaHash(sourceSchema)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute source schema hash: %w", err)
+		}
+		plan.SourceHash = hash
 	}
 
 	// Order of operations for safe migrations:

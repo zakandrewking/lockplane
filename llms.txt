@@ -124,6 +124,33 @@ schema_path = "lockplane/schema/"
 
 Priority order: CLI flags > Environment variables > Config file > Defaults
 
+## Migration plan safety
+
+Every migration plan includes a `source_hash` field - a SHA-256 hash of the source database schema. This ensures plans are applied to the correct database state.
+
+**What it prevents:**
+- Applying plans to the wrong database
+- Applying plans after the database has been modified
+- Applying plans out of order
+
+**How it works:**
+```bash
+# Generate plan (includes hash of current.json)
+lockplane plan --from current.json --to schema.lp.sql > migration.json
+
+# Plan contains source_hash
+cat migration.json
+# {
+#   "source_hash": "a3f2db8c1e4f9b7a...",
+#   "steps": [...]
+# }
+
+# Apply plan (validates hash matches current DB)
+lockplane apply --plan migration.json
+```
+
+If the hash doesn't match, Lockplane rejects the plan with a clear error message explaining what to do.
+
 ## Schema format
 
 Lockplane uses standard PostgreSQL DDL in `.lp.sql` files:

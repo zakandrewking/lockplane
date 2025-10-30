@@ -338,11 +338,13 @@ func runPlan(args []string) {
 
 	// Generate diff first
 	var diff *SchemaDiff
+	var before *Schema
 	var after *Schema
 
 	if *fromSchema != "" && *toSchema != "" {
 		// Generate diff from two schemas (supports files, directories, or database connection strings)
-		before, err := LoadSchemaOrIntrospect(*fromSchema)
+		var err error
+		before, err = LoadSchemaOrIntrospect(*fromSchema)
 		if err != nil {
 			log.Fatalf("Failed to load from schema: %v", err)
 		}
@@ -405,8 +407,8 @@ func runPlan(args []string) {
 		}
 	}
 
-	// Generate plan
-	plan, err := GeneratePlan(diff)
+	// Generate plan with source hash
+	plan, err := GeneratePlanWithHash(diff, before)
 	if err != nil {
 		log.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -549,8 +551,8 @@ func runApply(args []string) {
 			}
 		}
 
-		// Generate plan
-		generatedPlan, err := GeneratePlan(diff)
+		// Generate plan with source hash
+		generatedPlan, err := GeneratePlanWithHash(diff, before)
 		if err != nil {
 			log.Fatalf("Failed to generate plan: %v", err)
 		}
@@ -620,6 +622,42 @@ func runApply(args []string) {
 		fmt.Fprintf(os.Stderr, "🔍 Testing migration on shadow database...\n")
 	} else {
 		fmt.Fprintf(os.Stderr, "⚠️  Skipping shadow DB validation (--skip-shadow)\n")
+	}
+
+	// Validate source hash if present in plan
+	if plan.SourceHash != "" {
+		fmt.Fprintf(os.Stderr, "🔐 Validating source schema hash...\n")
+
+		// Introspect current database state
+		currentSchema, err := mainDriver.IntrospectSchema(ctx, mainDB)
+		if err != nil {
+			log.Fatalf("Failed to introspect current database schema: %v", err)
+		}
+
+		// Compute hash of current state
+		currentHash, err := ComputeSchemaHash((*Schema)(currentSchema))
+		if err != nil {
+			log.Fatalf("Failed to compute current schema hash: %v", err)
+		}
+
+		// Compare hashes
+		if currentHash != plan.SourceHash {
+			fmt.Fprintf(os.Stderr, "\n❌ Source schema mismatch!\n\n")
+			fmt.Fprintf(os.Stderr, "The migration plan was generated for a different database state.\n")
+			fmt.Fprintf(os.Stderr, "This usually happens when:\n")
+			fmt.Fprintf(os.Stderr, "  - The plan is being applied to the wrong database\n")
+			fmt.Fprintf(os.Stderr, "  - The database has been modified since the plan was generated\n")
+			fmt.Fprintf(os.Stderr, "  - The plan is being applied out of order\n\n")
+			fmt.Fprintf(os.Stderr, "Expected source hash: %s\n", plan.SourceHash)
+			fmt.Fprintf(os.Stderr, "Current database hash: %s\n\n", currentHash)
+			fmt.Fprintf(os.Stderr, "To fix this:\n")
+			fmt.Fprintf(os.Stderr, "  1. Introspect the current database: lockplane introspect > current.json\n")
+			fmt.Fprintf(os.Stderr, "  2. Generate a new plan: lockplane plan --from current.json --to desired.lp.sql\n")
+			fmt.Fprintf(os.Stderr, "  3. Apply the new plan: lockplane apply --plan migration.json\n\n")
+			os.Exit(1)
+		}
+
+		fmt.Fprintf(os.Stderr, "✓ Source schema hash matches (hash: %s...)\n", currentHash[:12])
 	}
 
 	// Apply the plan
@@ -827,7 +865,8 @@ For more information: https://github.com/lockplane/lockplane
 
 // Plan represents a migration plan with a series of steps
 type Plan struct {
-	Steps []PlanStep `json:"steps"`
+	SourceHash string     `json:"source_hash"`
+	Steps      []PlanStep `json:"steps"`
 }
 
 // PlanStep represents a single migration operation

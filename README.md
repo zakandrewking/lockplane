@@ -742,6 +742,7 @@ Migration plans are JSON files with a series of SQL steps:
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/zakandrewking/lockplane/main/schema-json/plan.json",
+  "source_hash": "a3f2...8b1c",
   "steps": [
     {
       "description": "Create posts table",
@@ -757,6 +758,60 @@ Migration plans are JSON files with a series of SQL steps:
 
 See example plans in `examples/schemas-json/` and `testdata/plans-json/`.
 For reproducible validation, swap `main` in the `$schema` URL with a tagged release such as `v0.1.0`.
+
+### Source Hash Verification
+
+Every migration plan includes a `source_hash` field - a SHA-256 hash of the source database schema. This prevents applying plans to the wrong database state.
+
+**Why this matters:**
+- Prevents applying the wrong plan to a database
+- Detects if the database was modified since the plan was generated
+- Ensures plans are applied in the correct order
+
+**How it works:**
+
+When you generate a plan:
+```bash
+lockplane plan --from current.json --to schema.lp.sql > migration.json
+```
+
+The plan includes the hash of `current.json`:
+```json
+{
+  "source_hash": "a3f2db8c1e4f9b7a5d6e2c8f1a4b9e7c3d5f8a1b2c4e6f8a9b1c3d5e7f9a2b4c6",
+  "steps": [...]
+}
+```
+
+When you apply the plan:
+```bash
+lockplane apply --plan migration.json
+```
+
+Lockplane:
+1. Introspects the current database state
+2. Computes the hash of the current state
+3. Compares it to `source_hash` in the plan
+4. **Rejects the plan if hashes don't match**
+
+**Example error:**
+```
+❌ Source schema mismatch!
+
+The migration plan was generated for a different database state.
+This usually happens when:
+  - The plan is being applied to the wrong database
+  - The database has been modified since the plan was generated
+  - The plan is being applied out of order
+
+Expected source hash: a3f2...2b4c6
+Current database hash: b7c8...5e9f1
+
+To fix this:
+  1. Introspect the current database: lockplane introspect > current.json
+  2. Generate a new plan: lockplane plan --from current.json --to desired.lp.sql
+  3. Apply the new plan: lockplane apply --plan migration.json
+```
 
 ### Using the Executor
 

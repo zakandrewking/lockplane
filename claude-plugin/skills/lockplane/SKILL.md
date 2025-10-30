@@ -38,6 +38,32 @@ The standard Lockplane workflow is:
 3. **Generate migration plan** - `lockplane plan --from current.json --to schema/ --validate`
 4. **Apply safely** - `lockplane apply --plan migration.json` (tests on shadow DB first)
 
+## Migration Plan Safety
+
+Every migration plan includes a `source_hash` field - a SHA-256 hash of the source database schema. This prevents applying plans to the wrong database state.
+
+**What it prevents:**
+- Applying plans to the wrong database
+- Applying plans after the database has been modified
+- Applying plans out of order
+
+**How it works:**
+When you generate a plan, it includes the hash of the source schema:
+```json
+{
+  "source_hash": "a3f2db8c1e4f9b7a5d6e2c8f1a4b9e7c3d5f8a1b2c4e6f8a9b1c3d5e7f9a2b4c6",
+  "steps": [...]
+}
+```
+
+When you apply the plan, Lockplane:
+1. Introspects the current database
+2. Computes its hash
+3. Compares to `source_hash` in the plan
+4. **Rejects if they don't match**
+
+If a mismatch occurs, Lockplane shows a clear error with instructions to regenerate the plan from the current database state.
+
 ## Common Commands
 
 ### Introspection
