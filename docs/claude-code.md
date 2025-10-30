@@ -1,4 +1,4 @@
-# Getting Started: Building Your First App with Lockplane
+# Getting Started: Building Your First App with Lockplane and Claude Code
 
 You want to build an app. Here's how Lockplane fits into that journey.
 

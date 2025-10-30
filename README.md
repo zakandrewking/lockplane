@@ -3,21 +3,26 @@
 
 # Lockplane
 
-A Postgres-first control plane for safe, AI-friendly schema management.
+A control plane for safe, AI-friendly schema management. Works with PostgreSQL and SQLite.
 
 ## Why Lockplane?
 
-**Shadow DB validation catches problems before production.** Most tools roll back after failure. Lockplane tests migrations on a shadow database first, so bad plans never touch your real data. *(Implemented)*
+**Shadow DB validation catches problems before production.** Most tools roll back after failure. Lockplane tests migrations on a shadow database first, so bad plans never touch your real data.
 
-**Every change is explainable.** See exactly what SQL runs, in what order, with clear descriptions. *(Implemented)*
+**Every change is explainable.** See exactly what SQL runs, in what order, with clear descriptions.
 
-**Rollbacks are generated and validated, not manually written.** For every forward migration, Lockplane computes the reverse operation and validates it works. *(Implemented)*
+**Rollbacks are generated and validated, not manually written.** For every
+forward migration, Lockplane computes the reverse operation and validates it
+works.
 
-**Long-running operations will execute durably.** Building an index on 100M rows? Backfilling a column? Lockplane will handle timeouts, retries, and progress tracking so operations complete even if connections drop. *(Planned)*
+**Guarantees safety.** Lockplane validates migrations, only runs migrations
+against expected database state, safely rolls back every time.
+
+**Long-running operations are executed durably.** Building an index on 100M rows? Backfilling a column? Lockplane will handle timeouts, retries, and progress tracking so operations complete even if connections drop.
 
 ---
 
-**New to Lockplane?** See [Getting Started](docs/getting_started.md) for a guide to building your first app with Claude Code and Lockplane.
+**New to Lockplane?** Check out our extensive guides in the `docs/` directory.
 
 ---
 

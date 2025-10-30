@@ -54,8 +54,10 @@ for cmd in $COMMANDS; do
     fi
 
     # Check Claude skill
-    if ! grep -q "lockplane $cmd" "$PROJECT_ROOT/.claude/skills/lockplane.md"; then
-        report_issue "Command '$cmd' not mentioned in .claude/skills/lockplane.md"
+    if [ -f "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md" ]; then
+        if ! grep -q "lockplane $cmd" "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md"; then
+            report_issue "Command '$cmd' not mentioned in claude-plugin/skills/lockplane/SKILL.md"
+        fi
     fi
 done
 
@@ -101,13 +103,13 @@ echo ""
 # 4. Check that config file format is consistent
 echo "⚙️  Checking config file examples..."
 
-# Extract config from README
-README_CONFIG=$(grep -A 10 "database_url.*=" "$PROJECT_ROOT/README.md" | head -3 | grep -v "^$" || true)
-LLMS_CONFIG=$(grep -A 10 "database_url.*=" "$PROJECT_ROOT/llms.txt" | head -3 | grep -v "^$" || true)
+# Check for config-related content (README shows env vars, SKILL.md shows TOML)
+README_HAS_CONFIG=$(grep -qi "DATABASE_URL\|database_url\|Configuration" "$PROJECT_ROOT/README.md" && echo "yes" || echo "no")
+LLMS_HAS_CONFIG=$(grep -qi "DATABASE_URL\|database_url\|Configuration" "$PROJECT_ROOT/llms.txt" && echo "yes" || echo "no")
 
-if [ -z "$README_CONFIG" ]; then
+if [ "$README_HAS_CONFIG" = "no" ]; then
     report_warning "No config example found in README.md"
-elif [ -z "$LLMS_CONFIG" ]; then
+elif [ "$LLMS_HAS_CONFIG" = "no" ]; then
     report_warning "No config example found in llms.txt"
 else
     report_success "Config examples present"
@@ -120,11 +122,17 @@ echo "💻 Checking example command syntax..."
 
 # Common mistakes to check for (excluding troubleshooting examples)
 # Look for usage outside of "not" context
-if grep "lockplane validate-sql" "$PROJECT_ROOT/README.md" "$PROJECT_ROOT/llms.txt" "$PROJECT_ROOT/.claude/skills/lockplane.md" 2>/dev/null | grep -v "not.*validate-sql" | grep -v "validate-sql.*not" | grep -q .; then
+SKILL_FILE="$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md"
+FILES_TO_CHECK="$PROJECT_ROOT/README.md $PROJECT_ROOT/llms.txt"
+if [ -f "$SKILL_FILE" ]; then
+    FILES_TO_CHECK="$FILES_TO_CHECK $SKILL_FILE"
+fi
+
+if echo "$FILES_TO_CHECK" | xargs grep "lockplane validate-sql" 2>/dev/null | grep -v "not.*validate-sql" | grep -v "validate-sql.*not" | grep -q .; then
     report_issue "Found 'validate-sql' used incorrectly (should be 'validate sql' with space)"
 fi
 
-if grep "lockplane validate-schema" "$PROJECT_ROOT/README.md" "$PROJECT_ROOT/llms.txt" "$PROJECT_ROOT/.claude/skills/lockplane.md" 2>/dev/null | grep -v "not.*validate-schema" | grep -v "validate-schema.*not" | grep -q .; then
+if echo "$FILES_TO_CHECK" | xargs grep "lockplane validate-schema" 2>/dev/null | grep -v "not.*validate-schema" | grep -v "validate-schema.*not" | grep -q .; then
     report_issue "Found 'validate-schema' used incorrectly (should be 'validate schema' with space)"
 fi
 
@@ -167,6 +175,6 @@ if [ $ISSUES -eq 0 ]; then
 else
     echo -e "${RED}❌ Found $ISSUES issue(s)${NC}"
     echo ""
-    echo "See docs/documentation-maintenance.md for update procedures"
+    echo "See devdocs/documentation-maintenance.md for update procedures"
     exit 1
 fi
