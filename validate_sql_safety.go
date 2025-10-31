@@ -85,11 +85,13 @@ func detectDataLossOperations(filePath string, stmt *pg_query.Node, line int) []
 				Line:     line,
 				Column:   1,
 				Severity: "error",
-				Message: fmt.Sprintf("DROP TABLE is destructive and irreversible\n"+
+				Message: fmt.Sprintf("DROP TABLE is not allowed in .lp.sql schema files\n"+
 					"  Found: DROP TABLE %s%s\n"+
-					"  Impact: Permanently deletes all data in '%s' table%s\n"+
-					"  Recommendation: Use separate DROP migration only after verifying data is safely migrated",
-					tableName, cascade, tableName, getCascadeWarning(cascade)),
+					"  Why: .lp.sql files are declarative schema definitions (CREATE only)\n"+
+					"       Destructive operations like DROP are handled by Lockplane migrations\n"+
+					"  To drop a table: Remove it from your schema, then run 'lockplane apply'\n"+
+					"  Learn more: https://github.com/zakandrewking/lockplane#schema-definition-formats",
+					tableName, cascade),
 				Code: "dangerous_drop_table",
 			})
 		}
@@ -104,11 +106,11 @@ func detectDataLossOperations(filePath string, stmt *pg_query.Node, line int) []
 			Line:     line,
 			Column:   1,
 			Severity: "error",
-			Message: fmt.Sprintf("TRUNCATE TABLE deletes all rows and cannot be rolled back easily\n"+
+			Message: fmt.Sprintf("TRUNCATE is not allowed in .lp.sql schema files\n"+
 				"  Found: TRUNCATE TABLE %s\n"+
-				"  Impact: Removes all data from table(s)\n"+
-				"  Recommendation: Use DELETE with explicit WHERE clause if you need selective deletion\n"+
-				"                  Ensure you have a backup before truncating",
+				"  Why: .lp.sql files are declarative schema definitions (CREATE only)\n"+
+				"       Data operations like TRUNCATE are not part of schema definitions\n"+
+				"  Learn more: https://github.com/zakandrewking/lockplane#schema-definition-formats",
 				strings.Join(tableNames, ", ")),
 			Code: "dangerous_truncate",
 		})
@@ -125,12 +127,12 @@ func detectDataLossOperations(filePath string, stmt *pg_query.Node, line int) []
 				Line:     line,
 				Column:   1,
 				Severity: "error",
-				Message: fmt.Sprintf("DELETE without WHERE clause deletes all rows\n"+
+				Message: fmt.Sprintf("DELETE is not allowed in .lp.sql schema files\n"+
 					"  Found: DELETE FROM %s\n"+
-					"  Impact: Removes all data from '%s' table\n"+
-					"  Recommendation: Add WHERE clause or use TRUNCATE with explicit confirmation\n"+
-					"                  If you really want to delete all rows, use: DELETE FROM %s WHERE true",
-					tableName, tableName, tableName),
+					"  Why: .lp.sql files are declarative schema definitions (CREATE only)\n"+
+					"       Data operations like DELETE are not part of schema definitions\n"+
+					"  Learn more: https://github.com/zakandrewking/lockplane#schema-definition-formats",
+					tableName),
 				Code: "dangerous_delete_all",
 			})
 		}
@@ -154,12 +156,13 @@ func detectDataLossOperations(filePath string, stmt *pg_query.Node, line int) []
 						Line:     line,
 						Column:   1,
 						Severity: "error",
-						Message: fmt.Sprintf("DROP COLUMN permanently deletes data\n"+
+						Message: fmt.Sprintf("DROP COLUMN is not allowed in .lp.sql schema files\n"+
 							"  Found: ALTER TABLE %s DROP COLUMN %s\n"+
-							"  Impact: All data in '%s' column is lost and cannot be recovered\n"+
-							"  Recommendation: Ensure data is migrated or no longer needed before dropping\n"+
-							"                  Consider keeping column and deprecating in application code first",
-							tableName, columnName, columnName),
+							"  Why: .lp.sql files are declarative schema definitions (CREATE only)\n"+
+							"       Destructive operations like DROP COLUMN are handled by Lockplane migrations\n"+
+							"  To drop a column: Remove it from your table definition, then run 'lockplane apply'\n"+
+							"  Learn more: https://github.com/zakandrewking/lockplane#schema-definition-formats",
+							tableName, columnName),
 						Code: "dangerous_drop_column",
 					})
 				}
