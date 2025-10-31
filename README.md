@@ -116,17 +116,33 @@ database.
 NOTE: If you do not have a database yet, you can use the `lockplane init` command to
 create a new database for you. For more information, run `lockplane init --help`.
 
-Let's assume your postgres database is running on localhost:5432 and is called
-`myapp`. You can set an environment variable for your database connection string
-by running the following command. Replace `user` and `password` with your actual
-database credentials.
+### Choose your database
+
+Lockplane supports both PostgreSQL and SQLite. Choose the option that matches your setup:
+
+#### Option A: PostgreSQL
+
+If you have a PostgreSQL database running on localhost:5432 called `myapp`, set the connection string environment variable. Replace `user` and `password` with your actual database credentials:
 
 ```bash
 export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
 ```
 
-NOTE: You must add `?sslmode=disable` to the connection string for local
-development.
+NOTE: You must add `?sslmode=disable` to the connection string for local development.
+
+#### Option B: SQLite
+
+If you're using SQLite, you can point to a file or use an in-memory database:
+
+```bash
+# Use a file-based SQLite database
+export DATABASE_URL="myapp.db"
+
+# Or use an in-memory database (useful for testing)
+export DATABASE_URL=":memory:"
+```
+
+### Apply the migration
 
 Now, we can generate a migration plan to apply our schema to our database with the following command:
 
