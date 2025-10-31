@@ -131,8 +131,8 @@ Add these to your shell profile (`~/.bashrc` or `~/.zshrc`) to make them persist
 **Option 3: CLI Flags**
 
 ```bash
-lockplane apply --plan migration.json \
-  --db "postgresql://localhost:5432/notesapp" \
+lockplane apply migration.json \
+  --target "postgresql://localhost:5432/notesapp" \
   --shadow-db "postgresql://localhost:5433/notesapp_shadow"
 ```
 
@@ -153,7 +153,7 @@ lockplane apply --plan migration.json \
 2. **Applying migrations** (`apply` command) - Uses the priority order above:
    ```bash
    # Apply uses config file, env vars, or flags (in priority order)
-   lockplane apply --plan migration.json
+   lockplane apply migration.json
    ```
 
 **Your schema source of truth** - Create directory `lockplane/schema/` (recommended):
@@ -301,13 +301,13 @@ You have two options:
 lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 
 # Apply it (uses DATABASE_URL and SHADOW_DATABASE_URL from environment)
-lockplane apply --plan migration.json
+lockplane apply migration.json
 ```
 
 **Option B: One-step (auto-approve)**
 ```bash
 # Generate and apply in a single command (uses DATABASE_URL from environment)
-lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
+lockplane apply --auto-approve --target $DATABASE_URL --schema schema.lp.sql --validate
 ```
 
 **What happens in both cases:**
@@ -411,12 +411,12 @@ lockplane plan --from current.json --to schema.lp.sql --validate > add_tags.json
 # Review the plan
 cat add_tags.json
 # Apply it
-lockplane apply --plan add_tags.json
+lockplane apply add_tags.json
 ```
 
 **Option B: One-step (auto-approve)**
 ```bash
-lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
+lockplane apply --auto-approve --target $DATABASE_URL --schema schema.lp.sql --validate
 ```
 
 Lockplane generates:
@@ -531,7 +531,7 @@ services:
 3. Generate migration plan: `lockplane plan --from current.json --to schema/ --validate`
 4. Apply migrations to staging DB:
    ```bash
-   lockplane apply --plan migration.json
+   lockplane apply migration.json
    ```
 5. Deploy new app code
 6. Verify with smoke tests
@@ -565,7 +565,7 @@ services:
 pg_dump notesapp > backup_$(date +%Y%m%d).sql
 
 # 2. Apply migrations (skip shadow DB in production)
-lockplane apply --plan migration.json --skip-shadow
+lockplane apply migration.json --skip-shadow
 
 # 3. Deploy new app code
 docker compose up -d app
@@ -666,7 +666,7 @@ lockplane plan --from current.json --to schema/ --validate > add_profiles.json
 cat add_profiles.json
 
 # 6. Apply it
-lockplane apply --plan add_profiles.json
+lockplane apply add_profiles.json
 ```
 
 **One-step auto-approve approach:**
@@ -681,7 +681,7 @@ lockplane introspect > current.json
 # (adds columns to users table)
 
 # 4. Generate and apply in one command
-lockplane apply --auto-approve --from current.json --to schema/ --validate
+lockplane apply --auto-approve --target $DATABASE_URL --schema schema/ --validate
 ```
 
 **Reviewing a pull request:**

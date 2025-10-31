@@ -55,7 +55,7 @@ The validation report highlights risky operations (e.g., adding NOT NULL columns
 Dry-run the migration on your shadow database:
 
 ```bash
-lockplane apply --plan migration.json
+lockplane apply migration.json
 ```
 
 Lockplane applies to the shadow database first for safety.
@@ -64,7 +64,7 @@ Lockplane applies to the shadow database first for safety.
 
 **Option A: Direct apply**
 ```bash
-lockplane apply --plan migration.json --target production
+lockplane apply migration.json --target production
 ```
 
 **Option B: Via Supabase CLI**

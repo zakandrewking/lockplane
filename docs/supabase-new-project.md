@@ -61,7 +61,7 @@ The validation report highlights risky operations. Review and fix before proceed
 ### 4. Apply
 
 ```bash
-lockplane apply --plan migration.json
+lockplane apply migration.json
 ```
 
 This runs on the shadow database first, then applies to production.

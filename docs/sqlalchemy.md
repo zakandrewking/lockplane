@@ -38,8 +38,8 @@ Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, or `.env` file) to mak
 **Option 3: CLI Flags**
 
 ```bash
-lockplane apply --plan migration.json \
-  --db "postgresql://localhost:5432/myapp?sslmode=disable" \
+lockplane apply migration.json \
+  --target "postgresql://localhost:5432/myapp?sslmode=disable" \
   --shadow-db "postgresql://localhost:5433/myapp_shadow?sslmode=disable"
 ```
 
@@ -215,7 +215,7 @@ Example output:
 
 ```bash
 # Apply to production database
-lockplane apply --plan migration.json
+lockplane apply migration.json
 ```
 
 Lockplane will:
@@ -236,7 +236,7 @@ python generate_schema.py
 lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
 
 # 3. Apply in one command (directly from your actual database)
-lockplane apply --auto-approve --from $DATABASE_URL --to desired.json --validate
+lockplane apply --auto-approve --target $DATABASE_URL --schema desired.json --validate
 ```
 
 ## Rollback Plan
@@ -248,7 +248,7 @@ Always generate a rollback before applying to production:
 lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
 
 # If something goes wrong, apply the rollback
-lockplane apply --plan rollback.json
+lockplane apply rollback.json
 ```
 
 ## Integration with CI/CD
@@ -314,7 +314,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
-        run: ./lockplane apply --plan migration.json
+        run: ./lockplane apply migration.json
 ```
 
 ## Tips and Best Practices
@@ -329,7 +329,7 @@ export DATABASE_URL="postgresql://localhost:5432/myapp"
 export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
 
 # Then apply uses these automatically
-lockplane apply --plan migration.json
+lockplane apply migration.json
 ```
 
 The shadow database is tested first - if the migration fails there, your production database is never touched.
@@ -361,7 +361,7 @@ lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
 lockplane diff $DATABASE_URL desired.json
 
 # Apply changes locally
-lockplane apply --auto-approve --from $DATABASE_URL --to desired.json
+lockplane apply --auto-approve --target $DATABASE_URL --schema desired.json
 ```
 
 ### 4. Alembic Migration
@@ -426,7 +426,7 @@ For data migrations or complex schema changes, use Lockplane for DDL and a separ
 
 ```bash
 # 1. Run DDL migration with Lockplane
-lockplane apply --plan migration.json
+lockplane apply migration.json
 
 # 2. Run data migration
 python migrate_data.py

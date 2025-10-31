@@ -80,7 +80,7 @@ Use `op.create_table`/`op.add_column` where convenient; Lockplane SQL serves as 
 ### 5. Test against a shadow database
 Set `SHADOW_DATABASE_URL` to your staging database or an ephemeral container and run:
 ```bash
-lockplane apply --plan migration.json --skip-shadow
+lockplane apply migration.json --skip-shadow
 ```
 - Or, run `lockplane apply` without `--skip-shadow` to let it dry-run on the shadow, then perform `alembic upgrade head` once confident.
 

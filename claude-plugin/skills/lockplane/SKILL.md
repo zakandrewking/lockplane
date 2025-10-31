@@ -15,7 +15,7 @@ Lockplane tests migrations on a shadow database before applying to production, v
 
 1. **Create schema** - Write `.lp.sql` files with CREATE TABLE statements
 2. **Validate** - `lockplane validate sql schema/`
-3. **Apply** - `lockplane apply --auto-approve --from $DATABASE_URL --to schema/`
+3. **Apply** - `lockplane apply --auto-approve --target $DATABASE_URL --schema schema/`
 
 ## Commands
 
@@ -31,7 +31,7 @@ lockplane validate sql schema/  # validate entire directory
 export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
 
 # Apply changes (tests on shadow DB first)
-lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
 ```
 
 ## Configuration
@@ -41,7 +41,7 @@ export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=dis
 export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
 ```
 
-Or use CLI flags: `--db` and `--shadow-db`
+Or use CLI flags: `--target` and `--shadow-db`
 
 ## Schema Format
 
@@ -98,7 +98,7 @@ CREATE TABLE users (
 Then validate and apply:
 ```bash
 lockplane validate sql schema/users.lp.sql
-lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
 ```
 
 Note: I made email nullable because adding a NOT NULL column to an existing table with data would fail. To make it NOT NULL:

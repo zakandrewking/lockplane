@@ -38,7 +38,7 @@ Prisma and Lockplane both target PostgreSQL, so you can combine them to keep you
 5. **Apply via Lockplane**
    - After validation, apply with shadow testing:
      ```bash
-     lockplane apply --plan migration.json
+     lockplane apply migration.json
      ```
    - Prisma stays responsible for generating client types (`npx prisma generate`).
 

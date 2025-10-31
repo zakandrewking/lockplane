@@ -469,92 +469,76 @@ func runApply(args []string) {
 	}
 
 	fs := flag.NewFlagSet("apply", flag.ExitOnError)
-	planPath := fs.String("plan", "", "Migration plan file to apply")
+	target := fs.String("target", "", "Target database URL to apply migration to")
+	schema := fs.String("schema", "", "Desired schema file/directory (required for plan generation)")
+	autoApprove := fs.Bool("auto-approve", false, "Skip interactive approval of migration plan")
 	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
-	autoApprove := fs.Bool("auto-approve", false, "Automatically generate and apply plan from --from and --to schemas")
-	fromSchema := fs.String("from", "", "Source schema path (before) - used with --auto-approve")
-	toSchema := fs.String("to", "", "Target schema path (after) - used with --auto-approve")
-	validate := fs.Bool("validate", false, "Validate migration safety and reversibility - used with --auto-approve")
-	dbURL := fs.String("db", "", "Main database connection string (overrides env var and config file)")
 	shadowDBURL := fs.String("shadow-db", "", "Shadow database connection string (overrides env var and config file)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
 
-	var plan *Plan
+	// Get positional arguments (for plan file)
+	positionalArgs := fs.Args()
 
-	// Auto-approve mode: generate plan in-memory from schemas
-	if *autoApprove {
-		if *fromSchema == "" || *toSchema == "" {
-			fmt.Fprintf(os.Stderr, "Error: --auto-approve requires both --from and --to arguments\n\n")
-			fmt.Fprintf(os.Stderr, "Usage:\n")
-			fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --from <before.json|db-url> --to <after.json|db-url> [--validate] [--skip-shadow]\n\n")
-			fmt.Fprintf(os.Stderr, "Examples:\n")
-			fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --from $DATABASE_URL --to schema/\n")
-			fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --from current.json --to schema/ --validate\n")
+	var plan *Plan
+	var planFile string
+
+	// Check if first positional arg is a plan file
+	if len(positionalArgs) > 0 {
+		planFile = positionalArgs[0]
+
+		// Load plan from file
+		loadedPlan, err := LoadJSONPlan(planFile)
+		if err != nil {
+			log.Fatalf("Failed to load migration plan: %v", err)
+		}
+		plan = loadedPlan
+
+		fmt.Fprintf(os.Stderr, "📋 Loaded migration plan with %d steps from %s\n", len(plan.Steps), planFile)
+	} else {
+		// Generate plan mode - require --schema
+		if *schema == "" {
+			printApplyUsage()
 			os.Exit(1)
 		}
 
-		// Load schemas (supports files, directories, or database connection strings)
-		before, err := LoadSchemaOrIntrospect(*fromSchema)
-		if err != nil {
-			log.Fatalf("Failed to load from schema: %v", err)
+		// Get target database URL
+		// Priority: --target flag > DATABASE_URL env var > config file
+		targetURL := *target
+		if targetURL == "" {
+			targetURL = os.Getenv("DATABASE_URL")
+			if targetURL == "" {
+				targetURL = GetDatabaseURL("", config, "")
+			}
+		}
+		if targetURL == "" {
+			fmt.Fprintf(os.Stderr, "Error: --target required (or set DATABASE_URL environment variable)\n\n")
+			printApplyUsage()
+			os.Exit(1)
 		}
 
-		after, err := LoadSchemaOrIntrospect(*toSchema)
+		// Introspect target database (this is the "from" state)
+		fmt.Fprintf(os.Stderr, "🔍 Introspecting target database...\n")
+		before, err := LoadSchemaOrIntrospect(targetURL)
 		if err != nil {
-			log.Fatalf("Failed to load to schema: %v", err)
+			log.Fatalf("Failed to introspect target database: %v", err)
+		}
+
+		// Load desired schema (this is the "to" state)
+		fmt.Fprintf(os.Stderr, "📖 Loading desired schema from %s...\n", *schema)
+		after, err := LoadSchemaOrIntrospect(*schema)
+		if err != nil {
+			log.Fatalf("Failed to load schema: %v", err)
 		}
 
 		// Generate diff
 		diff := DiffSchemas(before, after)
 
-		// Validate the diff if requested
-		if *validate {
-			validationResults := ValidateSchemaDiffWithSchema(diff, after)
-
-			if len(validationResults) > 0 {
-				fmt.Fprintf(os.Stderr, "\n=== Validation Results ===\n\n")
-
-				for i, result := range validationResults {
-					if result.Valid {
-						fmt.Fprintf(os.Stderr, "✓ Validation %d: PASS\n", i+1)
-					} else {
-						fmt.Fprintf(os.Stderr, "✗ Validation %d: FAIL\n", i+1)
-					}
-
-					if !result.Reversible {
-						fmt.Fprintf(os.Stderr, "  ⚠ NOT REVERSIBLE\n")
-					}
-
-					for _, err := range result.Errors {
-						fmt.Fprintf(os.Stderr, "  Error: %s\n", err)
-					}
-
-					for _, warning := range result.Warnings {
-						fmt.Fprintf(os.Stderr, "  Warning: %s\n", warning)
-					}
-
-					for _, reason := range result.Reasons {
-						fmt.Fprintf(os.Stderr, "  - %s\n", reason)
-					}
-
-					fmt.Fprintf(os.Stderr, "\n")
-				}
-
-				if !AllValid(validationResults) {
-					fmt.Fprintf(os.Stderr, "❌ Validation FAILED: Some operations are not safe\n\n")
-					os.Exit(1)
-				}
-
-				if AllReversible(validationResults) {
-					fmt.Fprintf(os.Stderr, "✓ All operations are reversible\n")
-				} else {
-					fmt.Fprintf(os.Stderr, "⚠ Warning: Some operations are not reversible\n")
-				}
-
-				fmt.Fprintf(os.Stderr, "✓ All validations passed\n\n")
-			}
+		// Check if there are any changes
+		if diff.IsEmpty() {
+			fmt.Fprintf(os.Stderr, "\n✓ No changes detected - database already matches desired schema\n")
+			os.Exit(0)
 		}
 
 		// Generate plan with source hash
@@ -564,35 +548,45 @@ func runApply(args []string) {
 		}
 		plan = generatedPlan
 
-		fmt.Fprintf(os.Stderr, "📋 Generated migration plan with %d steps\n", len(plan.Steps))
-
-	} else {
-		// Traditional mode: load plan from file
-		if *planPath == "" {
-			fmt.Fprintf(os.Stderr, "Error: Missing required arguments\n\n")
-			fmt.Fprintf(os.Stderr, "Usage: lockplane apply [options]\n\n")
-			fmt.Fprintf(os.Stderr, "Two main ways to apply migrations:\n\n")
-			fmt.Fprintf(os.Stderr, "1. Apply from a migration plan file:\n")
-			fmt.Fprintf(os.Stderr, "   lockplane apply --plan <migration.json> [--skip-shadow]\n\n")
-			fmt.Fprintf(os.Stderr, "2. Auto-approve: generate and apply in one step:\n")
-			fmt.Fprintf(os.Stderr, "   lockplane apply --auto-approve --from <before.json|db-url> --to <after.json|db-url> [--validate] [--skip-shadow]\n\n")
-			fmt.Fprintf(os.Stderr, "Examples:\n")
-			fmt.Fprintf(os.Stderr, "  lockplane apply --plan migration.json\n")
-			fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --from $DATABASE_URL --to schema/\n")
-			os.Exit(1)
+		// Print plan details
+		fmt.Fprintf(os.Stderr, "\n📋 Migration plan (%d steps):\n\n", len(plan.Steps))
+		for i, step := range plan.Steps {
+			fmt.Fprintf(os.Stderr, "  %d. %s\n", i+1, step.Description)
+			if step.SQL != "" {
+				// Truncate SQL for display
+				sql := step.SQL
+				if len(sql) > 100 {
+					sql = sql[:100] + "..."
+				}
+				fmt.Fprintf(os.Stderr, "     SQL: %s\n", sql)
+			}
 		}
+		fmt.Fprintf(os.Stderr, "\n")
 
-		// Load the migration plan
-		loadedPlan, err := LoadJSONPlan(*planPath)
-		if err != nil {
-			log.Fatalf("Failed to load migration plan: %v", err)
+		// Ask for confirmation unless --auto-approve
+		if !*autoApprove {
+			fmt.Fprintf(os.Stderr, "Do you want to perform these actions?\n")
+			fmt.Fprintf(os.Stderr, "  Lockplane will perform the actions described above.\n")
+			fmt.Fprintf(os.Stderr, "  Only 'yes' will be accepted to approve.\n\n")
+			fmt.Fprintf(os.Stderr, "  Enter a value: ")
+
+			var response string
+			fmt.Scanln(&response)
+
+			if response != "yes" {
+				fmt.Fprintf(os.Stderr, "\nApply cancelled.\n")
+				os.Exit(0)
+			}
+			fmt.Fprintf(os.Stderr, "\n")
 		}
-		plan = loadedPlan
 	}
 
 	// Connect to main database
-	// Priority: --db flag > DATABASE_URL env var > config file > default
-	mainConnStr := GetDatabaseURL(*dbURL, config, "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	// Priority: --target flag > DATABASE_URL env var > config file > default
+	mainConnStr := *target
+	if mainConnStr == "" {
+		mainConnStr = GetDatabaseURL("", config, "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	}
 
 	// Detect database driver from connection string
 	mainDriver, err := newDriverFromConnString(mainConnStr)
@@ -795,6 +789,31 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+func printApplyUsage() {
+	fmt.Fprintf(os.Stderr, "Error: Missing required arguments\n\n")
+	fmt.Fprintf(os.Stderr, "Usage: lockplane apply [plan.json] [options]\n\n")
+	fmt.Fprintf(os.Stderr, "Three ways to use lockplane apply:\n\n")
+	fmt.Fprintf(os.Stderr, "1. Plan, review, and apply (interactive):\n")
+	fmt.Fprintf(os.Stderr, "   lockplane apply --target $DATABASE_URL --schema schema/\n")
+	fmt.Fprintf(os.Stderr, "   (Introspects target, generates plan, shows it, asks for confirmation)\n\n")
+	fmt.Fprintf(os.Stderr, "2. Apply a pre-generated plan:\n")
+	fmt.Fprintf(os.Stderr, "   lockplane apply plan.json --target $DATABASE_URL\n")
+	fmt.Fprintf(os.Stderr, "   (Loads plan from file and applies it)\n\n")
+	fmt.Fprintf(os.Stderr, "3. Plan and apply without confirmation:\n")
+	fmt.Fprintf(os.Stderr, "   lockplane apply --auto-approve --target $DATABASE_URL --schema schema/\n")
+	fmt.Fprintf(os.Stderr, "   (Introspects target, generates plan, applies immediately)\n\n")
+	fmt.Fprintf(os.Stderr, "Options:\n")
+	fmt.Fprintf(os.Stderr, "  --target <url>         Target database URL (or use DATABASE_URL env var)\n")
+	fmt.Fprintf(os.Stderr, "  --schema <path>        Desired schema file/directory (required for plan generation)\n")
+	fmt.Fprintf(os.Stderr, "  --auto-approve         Skip interactive approval\n")
+	fmt.Fprintf(os.Stderr, "  --skip-shadow          Skip shadow DB validation (not recommended)\n")
+	fmt.Fprintf(os.Stderr, "  --shadow-db <url>      Shadow database URL (or use SHADOW_DATABASE_URL env var)\n\n")
+	fmt.Fprintf(os.Stderr, "Examples:\n")
+	fmt.Fprintf(os.Stderr, "  lockplane apply --target $DATABASE_URL --schema schema/\n")
+	fmt.Fprintf(os.Stderr, "  lockplane apply plan.json --target $DATABASE_URL\n")
+	fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --target $DATABASE_URL --schema schema/\n")
+}
+
 func printHelp() {
 	fmt.Print(`Lockplane - Safe, AI-friendly schema management for Postgres and SQLite
 
@@ -828,14 +847,14 @@ EXAMPLES:
   # Generate plan comparing two live databases
   lockplane plan --from $DATABASE_URL --to postgres://user:pass@localhost/db2 > migration.json
 
-  # Apply migration (tests on shadow DB first, then applies to main DB)
-  lockplane apply --plan migration.json
+  # Apply migration interactively (plan, review, confirm)
+  lockplane apply --target $DATABASE_URL --schema schema/
 
-  # Auto-approve: generate plan and apply in one command with files
-  lockplane apply --auto-approve --from current.json --to schema/ --validate
+  # Apply a pre-generated plan
+  lockplane apply plan.json --target $DATABASE_URL
 
-  # Auto-approve: generate plan from database and apply to target schema
-  lockplane apply --auto-approve --from $DATABASE_URL --to schema/ --validate
+  # Auto-approve: plan and apply without confirmation
+  lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
 
   # Generate rollback plan
   lockplane rollback --plan migration.json --from current.json > rollback.json

@@ -149,11 +149,10 @@ export DATABASE_URL=":memory:"
 Now, we can generate a migration plan to apply our schema to our database with the following command:
 
 ```bash
-lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
 ```
 
-This will apply the schema to your database, validating it on a shadow database
-first.
+This will introspect the target database, generate a migration plan, and apply it immediately (with shadow database validation).
 
 ## 5. 🔍 Making a change
 
@@ -172,7 +171,7 @@ CREATE TABLE users (
 Now to apply the change, we can run the following command:
 
 ```bash
-lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
 ```
 
 And that's it! You've successfully made a change to your schema and applied it to your database.
@@ -201,11 +200,11 @@ Lockplane uses database connections in two ways:
    # Via environment variables (recommended for safety)
    export DATABASE_URL="postgresql://localhost:5432/myapp"
    export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
-   lockplane apply --plan migration.json
+   lockplane apply migration.json
 
    # Or via command-line flags
-   lockplane apply --plan migration.json \
-     --db "postgresql://localhost:5432/myapp" \
+   lockplane apply migration.json \
+     --target "postgresql://localhost:5432/myapp" \
      --shadow-db "postgresql://localhost:5433/myapp_shadow"
    ```
 
@@ -400,12 +399,11 @@ lockplane plan \
   --to schema.lp.sql \
   --validate > migration.json
 
-# Auto-approve with database connection string
+# Auto-approve: plan and apply directly to database
 lockplane apply \
   --auto-approve \
-  --from $DATABASE_URL \
-  --to schema/ \
-  --validate
+  --target $DATABASE_URL \
+  --schema schema/
 
 # Generate rollback using live database state
 lockplane rollback \
@@ -444,19 +442,16 @@ lockplane plan --from current.json --to schema.lp.sql --validate > migration.jso
 cat migration.json
 
 # 5. Apply the migration (validates on shadow DB first)
-lockplane apply --plan migration.json
+lockplane apply migration.json
 ```
 
 **One-step approach (auto-approve):**
 ```bash
-# 1. Introspect current database state
-lockplane introspect > current.json
-
-# 2. Update your desired schema
+# 1. Update your desired schema
 vim schema.lp.sql  # Your single source of truth
 
-# 3. Generate and apply in one command (validates on shadow DB first)
-lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
+# 2. Plan and apply in one command (validates on shadow DB first)
+lockplane apply --auto-approve --target $DATABASE_URL --schema schema.lp.sql
 ```
 
 ### Example
@@ -674,7 +669,7 @@ The plan includes the hash of `current.json`:
 
 When you apply the plan:
 ```bash
-lockplane apply --plan migration.json
+lockplane apply migration.json
 ```
 
 Lockplane:
@@ -699,7 +694,7 @@ Current database hash: b7c8...5e9f1
 To fix this:
   1. Introspect the current database: lockplane introspect > current.json
   2. Generate a new plan: lockplane plan --from current.json --to desired.lp.sql
-  3. Apply the new plan: lockplane apply --plan migration.json
+  3. Apply the new plan: lockplane apply migration.json
 ```
 
 ### Using the Executor
