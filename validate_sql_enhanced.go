@@ -50,23 +50,33 @@ func enhanceByPattern(filePath, sqlContent, errorMsg, nearToken string) Validati
 		handler func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue
 	}{
 		{
-			// Missing comma between columns
+			// Missing comma between columns (but not for special keywords)
 			match: regexp.MustCompile(`syntax error at or near "(\w+)"`),
 			handler: func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue {
+				// Skip if this is a special case that should be handled differently
+				specialTokens := []string{"id", "NOT", "CREATE", "AUTO_INCREMENT"}
+				for _, special := range specialTokens {
+					if nearToken == special || strings.Contains(sqlContent, "CREATE TABLE") && strings.Contains(getLine(sqlContent, 1), nearToken) {
+						// Don't treat line 1 tokens or special tokens as missing comma
+						return ValidationIssue{}
+					}
+				}
+
 				// Check if this looks like a column definition following another column
 				if isLikelyMissingComma(sqlContent, nearToken) {
 					line, col := findToken(sqlContent, nearToken)
-					prevLine := getLine(sqlContent, line-1)
+					prevLine := strings.TrimSpace(getLine(sqlContent, line-1))
+					currentLine := strings.TrimSpace(getLine(sqlContent, line))
 					return ValidationIssue{
 						File:     filePath,
 						Line:     line,
 						Column:   col,
 						Severity: "error",
-						Message: fmt.Sprintf("Missing comma between column definitions\n"+
+						Message: fmt.Sprintf("You're missing comma between column definitions\n"+
 							"  Previous line: %s\n"+
-							"  Problem at: %s\n"+
-							"  Fix: Add a comma after the previous column definition",
-							strings.TrimSpace(prevLine), nearToken),
+							"  Current line: %s\n"+
+							"  Add a comma after '%s'",
+							prevLine, currentLine, prevLine),
 						Code: "syntax_error",
 					}
 				}
@@ -80,6 +90,14 @@ func enhanceByPattern(filePath, sqlContent, errorMsg, nearToken string) Validati
 				suggestion := getSuggestionForTypo(nearToken)
 				if suggestion != "" {
 					line, col := findToken(sqlContent, nearToken)
+					lineContent := getLine(sqlContent, line)
+					fullSuggestion := suggestion
+
+					// Check if this is part of a CREATE statement
+					if strings.Contains(lineContent, "CREATE") && nearToken == "TABEL" {
+						fullSuggestion = "CREATE TABLE"
+					}
+
 					return ValidationIssue{
 						File:     filePath,
 						Line:     line,
@@ -88,7 +106,7 @@ func enhanceByPattern(filePath, sqlContent, errorMsg, nearToken string) Validati
 						Message: fmt.Sprintf("Invalid SQL keyword '%s'\n"+
 							"  Did you mean '%s'?\n"+
 							"  %s",
-							nearToken, suggestion, getCodeContext(sqlContent, line)),
+							nearToken, fullSuggestion, getCodeContext(sqlContent, line)),
 						Code: "syntax_error",
 					}
 				}
@@ -109,9 +127,7 @@ func enhanceByPattern(filePath, sqlContent, errorMsg, nearToken string) Validati
 					Column:   col,
 					Severity: "error",
 					Message: "AUTO_INCREMENT is MySQL syntax, not supported in PostgreSQL\n" +
-						"  PostgreSQL alternatives:\n" +
-						"    • GENERATED ALWAYS AS IDENTITY (recommended for new tables)\n" +
-						"    • SERIAL or BIGSERIAL (traditional approach)\n" +
+						"  Use 'GENERATED ALWAYS AS IDENTITY' or 'SERIAL' instead\n" +
 						"  Example: id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
 					Code: "mysql_syntax",
 				}
@@ -122,15 +138,22 @@ func enhanceByPattern(filePath, sqlContent, errorMsg, nearToken string) Validati
 			match: regexp.MustCompile("`"),
 			handler: func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue {
 				line, col := findBacktick(sqlContent)
+				// Extract the identifier within backticks for a more helpful message
+				lineContent := getLine(sqlContent, line)
+				backtickPattern := regexp.MustCompile("`([^`]+)`")
+				match := backtickPattern.FindStringSubmatch(lineContent)
+				identifier := "identifier"
+				if len(match) > 1 {
+					identifier = match[1]
+				}
+
 				return ValidationIssue{
 					File:     filePath,
 					Line:     line,
 					Column:   col,
 					Severity: "error",
-					Message: "Backticks (`) are MySQL syntax, not supported in PostgreSQL\n" +
-						"  For identifiers: Use double quotes \"identifier\"\n" +
-						"  For strings: Use single quotes 'string'\n" +
-						"  Note: In most cases, you don't need quotes at all",
+					Message: fmt.Sprintf("backticks are MySQL syntax, not supported in PostgreSQL\n"+
+						"  Use double quotes \"%s\" for identifiers in PostgreSQL", identifier),
 					Code: "mysql_syntax",
 				}
 			},
@@ -150,6 +173,125 @@ func enhanceByPattern(filePath, sqlContent, errorMsg, nearToken string) Validati
 						"  Example: email TEXT NOT NULL",
 					Code: "syntax_error",
 				}
+			},
+		},
+		{
+			// TIMESTAMPZ - invalid data type
+			match: regexp.MustCompile(`TIMESTAMPZ`),
+			handler: func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue {
+				line, col := findToken(sqlContent, "TIMESTAMPZ")
+				return ValidationIssue{
+					File:     filePath,
+					Line:     line,
+					Column:   col,
+					Severity: "error",
+					Message: "Unknown data type 'TIMESTAMPZ'\n" +
+						"  Did you mean 'TIMESTAMP' or 'TIMESTAMPTZ'?\n" +
+						"  TIMESTAMPTZ includes timezone info, TIMESTAMP does not",
+					Code: "invalid_data_type",
+				}
+			},
+		},
+		{
+			// Incomplete REFERENCES (foreign key)
+			match: regexp.MustCompile(`REFERENCES\s*\)` + "|" + `syntax error at or near "\)"`),
+			handler: func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue {
+				// Check if there's an incomplete REFERENCES
+				if strings.Contains(sqlContent, "REFERENCES") && strings.Contains(sqlContent, "REFERENCES\n") {
+					line, col := findToken(sqlContent, "REFERENCES")
+					return ValidationIssue{
+						File:     filePath,
+						Line:     line,
+						Column:   col + len("REFERENCES"),
+						Severity: "error",
+						Message: "incomplete FOREIGN KEY definition\n" +
+							"  Syntax: REFERENCES table_name(column_name)\n" +
+							"  Example: user_id BIGINT REFERENCES users(id)",
+						Code: "incomplete_foreign_key",
+					}
+				}
+				return ValidationIssue{}
+			},
+		},
+		{
+			// Missing DEFAULT keyword
+			match: regexp.MustCompile(`TIMESTAMP\s+NOW\(\)`),
+			handler: func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue {
+				line, col := findToken(sqlContent, "NOW")
+				return ValidationIssue{
+					File:     filePath,
+					Line:     line,
+					Column:   col,
+					Severity: "error",
+					Message: "missing DEFAULT keyword before NOW()\n" +
+						"  Correct syntax: created_at TIMESTAMP DEFAULT NOW()\n" +
+						"  The DEFAULT keyword is required for default values",
+					Code: "missing_default",
+				}
+			},
+		},
+		{
+			// Incomplete CREATE INDEX
+			match: regexp.MustCompile(`CREATE INDEX.*ON\s*$`),
+			handler: func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue {
+				// Return line 1 - the adjustment logic in validate_sql.go will add stmt.startLine - 1
+				return ValidationIssue{
+					File:     filePath,
+					Line:     1,
+					Column:   len(strings.TrimSpace(sqlContent)) + 1,
+					Severity: "error",
+					Message: "incomplete CREATE INDEX statement\n" +
+						"  Expected: CREATE INDEX index_name ON table_name(column_name)\n" +
+						"  Example: CREATE INDEX users_email_idx ON users(email)",
+					Code: "incomplete_index",
+				}
+			},
+		},
+		{
+			// Missing column name - detect when a type appears where a column name should be
+			match: regexp.MustCompile(`syntax error at or near "TEXT|NOT"`),
+			handler: func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue {
+				// Check if TEXT appears right after a comma or opening paren (missing column name)
+				if regexp.MustCompile(`[,(]\s*TEXT`).MatchString(sqlContent) {
+					line, col := findToken(sqlContent, "TEXT")
+					return ValidationIssue{
+						File:     filePath,
+						Line:     line,
+						Column:   col,
+						Severity: "error",
+						Message: "missing column name before data type\n" +
+							"  Expected: column_name data_type\n" +
+							"  Example: email TEXT NOT NULL",
+						Code: "missing_column_name",
+					}
+				}
+				return ValidationIssue{}
+			},
+		},
+		{
+			// Duplicate PRIMARY KEY
+			match: regexp.MustCompile(`(?i)PRIMARY\s+KEY.*PRIMARY\s+KEY`),
+			handler: func(filePath, sqlContent, errorMsg, nearToken string, matches []string) ValidationIssue {
+				// Find the second PRIMARY KEY
+				firstPos := regexp.MustCompile(`(?i)PRIMARY\s+KEY`).FindStringIndex(sqlContent)
+				if firstPos != nil {
+					remaining := sqlContent[firstPos[1]:]
+					secondMatch := regexp.MustCompile(`(?i)PRIMARY\s+KEY`).FindStringIndex(remaining)
+					if secondMatch != nil {
+						line, col := findPositionFromOffset(sqlContent, firstPos[1]+secondMatch[0])
+						return ValidationIssue{
+							File:     filePath,
+							Line:     line,
+							Column:   col,
+							Severity: "error",
+							Message: "Multiple PRIMARY KEY constraints defined\n" +
+								"  A table can only have one PRIMARY KEY\n" +
+								"  Use UNIQUE constraint for additional unique columns",
+							Code: "duplicate_primary_key",
+						}
+					}
+				}
+				return ValidationIssue{}
 			},
 		},
 	}
@@ -176,12 +318,14 @@ func enhanceByContext(filePath, sqlContent, errorMsg, nearToken string, location
 	if strings.Contains(errorMsg, "syntax error at or near \"CREATE\"") {
 		if hasMissingSemicolon(sqlContent) {
 			line := findCreateAfterMissingSemicolon(sqlContent)
+			// The line returned is where CREATE appears, and we want to report
+			// the error there (where the unexpected CREATE is)
 			return ValidationIssue{
 				File:     filePath,
 				Line:     line,
 				Column:   1,
 				Severity: "error",
-				Message: "Missing semicolon after previous statement\n" +
+				Message: "missing semicolon after previous statement\n" +
 					"  Each SQL statement must end with a semicolon (;)\n" +
 					"  Add ';' after the closing parenthesis of the previous CREATE TABLE\n" +
 					"  " + getCodeContext(sqlContent, line-1),
@@ -194,15 +338,38 @@ func enhanceByContext(filePath, sqlContent, errorMsg, nearToken string, location
 	if strings.Contains(errorMsg, "syntax error at or near \")\"") {
 		if hasTrailingComma(sqlContent) {
 			line := findTrailingComma(sqlContent)
+			lineContent := strings.TrimSpace(strings.TrimSuffix(getLine(sqlContent, line), ","))
 			return ValidationIssue{
 				File:     filePath,
 				Line:     line + 1,
 				Column:   1,
 				Severity: "error",
-				Message: "Trailing comma before closing parenthesis\n" +
-					"  Remove the comma after the last column definition\n" +
-					"  " + getCodeContext(sqlContent, line),
+				Message: fmt.Sprintf("trailing comma before closing parenthesis\n"+
+					"  Remove the comma after '%s'\n"+
+					"  %s", lineContent, getCodeContext(sqlContent, line)),
 				Code: "trailing_comma",
+			}
+		}
+	}
+
+	// Check for missing closing parenthesis
+	if strings.Contains(errorMsg, "syntax error at or near \";\"") {
+		// Count open and close parens in CREATE TABLE statements
+		if strings.Contains(sqlContent, "CREATE TABLE") {
+			openCount := strings.Count(sqlContent, "(")
+			closeCount := strings.Count(sqlContent, ")")
+			if openCount > closeCount {
+				line, col := findToken(sqlContent, ";")
+				return ValidationIssue{
+					File:     filePath,
+					Line:     line,
+					Column:   col,
+					Severity: "error",
+					Message: "missing closing parenthesis\n" +
+						"  Expected ')' before the semicolon\n" +
+						"  Check that all column definitions are properly closed",
+					Code: "missing_paren",
+				}
 			}
 		}
 	}
@@ -218,7 +385,7 @@ func enhanceByContext(filePath, sqlContent, errorMsg, nearToken string, location
 				Line:     line + 1,
 				Column:   1,
 				Severity: "error",
-				Message: fmt.Sprintf("Missing opening parenthesis after table name\n"+
+				Message: fmt.Sprintf("missing opening parenthesis after table name\n"+
 					"  Expected: CREATE TABLE %s (\n"+
 					"  Add '(' after the table name", tableName),
 				Code: "missing_paren",
@@ -355,8 +522,9 @@ func hasMissingSemicolon(content string) bool {
 func findCreateAfterMissingSemicolon(content string) int {
 	pattern := regexp.MustCompile(`\)\s*\n\s*CREATE`)
 	if loc := pattern.FindStringIndex(content); loc != nil {
-		// Count newlines up to this point
-		return strings.Count(content[:loc[1]], "\n")
+		// Count newlines up to this point to find the line with CREATE
+		// We want the line number where CREATE appears (1-indexed)
+		return strings.Count(content[:loc[1]], "\n") + 1
 	}
 	return 1
 }
@@ -417,4 +585,24 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func findPositionFromOffset(content string, offset int) (line int, col int) {
+	if offset < 0 || offset > len(content) {
+		return 1, 1
+	}
+
+	line = 1
+	col = 1
+
+	for i := 0; i < offset && i < len(content); i++ {
+		if content[i] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+
+	return line, col
 }

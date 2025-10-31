@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -371,9 +372,17 @@ func validateSchemaStructure(schema *Schema, path string) []ValidationIssue {
 func validateSQLSyntax(filePath string, sqlContent string) []ValidationIssue {
 	var issues []ValidationIssue
 
-	// Try to parse the entire SQL first - if it succeeds, we're done
+	// Proactive checks for issues that pg_query might not catch
+	proactiveIssues := proactiveValidation(filePath, sqlContent)
+	if len(proactiveIssues) > 0 {
+		return proactiveIssues
+	}
+
+	// Try to parse the entire SQL first
 	if _, err := pg_query.Parse(sqlContent); err == nil {
-		return issues // No syntax errors
+		// SQL is syntactically valid, now check for semantic issues
+		semanticIssues := semanticValidation(filePath, sqlContent)
+		return semanticIssues
 	}
 
 	// If full parse failed, validate statement by statement
@@ -519,4 +528,116 @@ func splitSQLStatements(sql string) []sqlStatement {
 	}
 
 	return statements
+}
+
+// proactiveValidation performs checks for issues that pg_query might not catch
+func proactiveValidation(filePath, sqlContent string) []ValidationIssue {
+	var issues []ValidationIssue
+
+	// Check for TIMESTAMPZ (should be TIMESTAMP or TIMESTAMPTZ)
+	if strings.Contains(sqlContent, "TIMESTAMPZ") {
+		// Make sure it's TIMESTAMPZ and not TIMESTAMPTZ
+		if regexp.MustCompile(`TIMESTAMPZ[^T]`).MatchString(sqlContent) || strings.HasSuffix(sqlContent, "TIMESTAMPZ") || strings.Contains(sqlContent, "TIMESTAMPZ\n") {
+			line, col := findTokenInContent(sqlContent, "TIMESTAMPZ")
+			issues = append(issues, ValidationIssue{
+				File:     filePath,
+				Line:     line,
+				Column:   col,
+				Severity: "error",
+				Message: "Unknown data type 'TIMESTAMPZ'\n" +
+					"  Did you mean 'TIMESTAMP' or 'TIMESTAMPTZ'?\n" +
+					"  TIMESTAMPTZ includes timezone info, TIMESTAMP does not",
+				Code: "invalid_data_type",
+			})
+			return issues
+		}
+	}
+
+	return issues
+}
+
+// semanticValidation checks for semantic issues in syntactically valid SQL
+func semanticValidation(filePath, sqlContent string) []ValidationIssue {
+	var issues []ValidationIssue
+
+	// Check for duplicate PRIMARY KEY within a single properly-terminated statement
+	// Split by "); " to get individual statements
+	statements := strings.Split(sqlContent, ");")
+
+	for _, stmt := range statements {
+		// Only check statements that are CREATE TABLE and properly terminated
+		if !strings.Contains(stmt, "CREATE TABLE") {
+			continue
+		}
+
+		// Check if this statement has multiple PRIMARY KEY
+		primaryKeyPattern := regexp.MustCompile(`(?i)PRIMARY\s+KEY`)
+		matches := primaryKeyPattern.FindAllStringIndex(stmt, -1)
+		if len(matches) > 1 {
+			// Find where this statement starts in the original content
+			stmtStartIdx := strings.Index(sqlContent, stmt)
+			if stmtStartIdx == -1 {
+				continue
+			}
+
+			// Find the absolute position of the second PRIMARY KEY
+			secondRelativePos := matches[1][0]
+			secondAbsolutePos := stmtStartIdx + secondRelativePos
+
+			line, col := findPositionFromOffsetInSQL(sqlContent, secondAbsolutePos)
+			issues = append(issues, ValidationIssue{
+				File:     filePath,
+				Line:     line,
+				Column:   col,
+				Severity: "error",
+				Message: "Multiple PRIMARY KEY constraints defined\n" +
+					"  A table can only have one PRIMARY KEY\n" +
+					"  Use UNIQUE constraint for additional unique columns",
+				Code: "duplicate_primary_key",
+			})
+			return issues
+		}
+	}
+
+	return issues
+}
+
+func findTokenInContent(content, token string) (int, int) {
+	idx := strings.Index(content, token)
+	if idx == -1 {
+		return 1, 1
+	}
+
+	line := 1
+	col := 1
+	for i := 0; i < idx; i++ {
+		if content[i] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+
+	return line, col
+}
+
+func findPositionFromOffsetInSQL(content string, offset int) (int, int) {
+	if offset < 0 || offset >= len(content) {
+		return 1, 1
+	}
+
+	line := 1
+	col := 1
+
+	for i := 0; i < offset; i++ {
+		if content[i] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+
+	return line, col
 }

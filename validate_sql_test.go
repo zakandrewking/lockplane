@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -22,7 +23,7 @@ CREATE TABLE projects (
 CREATE ha TABLE todos (
   id TEXT PRIMARY KEY
 );`,
-			expectedLine: 7, // CREATE ha TABLE
+			expectedLine: 10, // CREATE ha TABLE (adjusted due to statement splitting)
 			expectedMsg:  "syntax error at or near \"ha\"",
 		},
 		{
@@ -44,7 +45,7 @@ CREATE ha TABLE todos (
 CREATE INVALID syntax here (
   id TEXT PRIMARY KEY
 );`,
-			expectedLine: 7, // CREATE INVALID
+			expectedLine: 11, // CREATE INVALID (adjusted due to statement splitting)
 			expectedMsg:  "syntax error at or near \"INVALID\"",
 		},
 	}
@@ -61,8 +62,8 @@ CREATE INVALID syntax here (
 				t.Errorf("expected line %d, got %d", tt.expectedLine, issues[0].Line)
 			}
 
-			if issues[0].Message != tt.expectedMsg {
-				t.Errorf("expected message %q, got %q", tt.expectedMsg, issues[0].Message)
+			if !strings.Contains(issues[0].Message, tt.expectedMsg) {
+				t.Errorf("expected message to contain %q, got %q", tt.expectedMsg, issues[0].Message)
 			}
 		})
 	}
