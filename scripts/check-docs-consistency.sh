@@ -37,23 +37,24 @@ report_success() {
     echo -e "${GREEN}✓ $1${NC}"
 }
 
-# 1. Check that all main commands are documented
-echo "📋 Checking main commands are documented..."
+# 1. Check that commands are documented appropriately per file
+echo "📋 Checking commands are documented..."
 
-COMMANDS="introspect diff plan apply rollback convert validate version help"
-
-for cmd in $COMMANDS; do
-    # Check README
+# README should have main workflow commands (simplified docs focus on basic workflow)
+README_COMMANDS="introspect plan apply rollback convert validate version"
+for cmd in $README_COMMANDS; do
     if ! grep -q "lockplane $cmd" "$PROJECT_ROOT/README.md"; then
         report_issue "Command '$cmd' not mentioned in README.md"
     fi
+done
 
-    # Check llms.txt
+# llms.txt and SKILL.md should have the simplified workflow (validate + apply only)
+SIMPLE_COMMANDS="validate apply"
+for cmd in $SIMPLE_COMMANDS; do
     if ! grep -q "lockplane $cmd" "$PROJECT_ROOT/llms.txt"; then
         report_issue "Command '$cmd' not mentioned in llms.txt"
     fi
 
-    # Check Claude skill
     if [ -f "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md" ]; then
         if ! grep -q "lockplane $cmd" "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md"; then
             report_issue "Command '$cmd' not mentioned in claude-plugin/skills/lockplane/SKILL.md"
@@ -61,23 +62,44 @@ for cmd in $COMMANDS; do
     fi
 done
 
-report_success "Main commands checked"
+# Verify that advanced commands (introspect, plan, etc.) are NOT in skill files
+ADVANCED_COMMANDS="introspect plan rollback convert diff"
+for cmd in $ADVANCED_COMMANDS; do
+    if grep -q "lockplane $cmd" "$PROJECT_ROOT/llms.txt" 2>/dev/null; then
+        report_warning "Advanced command '$cmd' found in llms.txt (should be removed for simplicity)"
+    fi
+
+    if [ -f "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md" ]; then
+        if grep -q "lockplane $cmd" "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md" 2>/dev/null; then
+            report_warning "Advanced command '$cmd' found in SKILL.md (should be removed for simplicity)"
+        fi
+    fi
+done
+
+report_success "Commands checked"
 echo ""
 
 # 2. Check that validate subcommands are documented
 echo "📋 Checking validate subcommands..."
 
-VALIDATE_CMDS="schema sql plan"
-
-for subcmd in $VALIDATE_CMDS; do
+# README has all validate subcommands
+README_VALIDATE_CMDS="schema sql plan"
+for subcmd in $README_VALIDATE_CMDS; do
     if ! grep -q "validate $subcmd" "$PROJECT_ROOT/README.md"; then
         report_issue "Subcommand 'validate $subcmd' not mentioned in README.md"
     fi
-
-    if ! grep -q "validate $subcmd" "$PROJECT_ROOT/llms.txt"; then
-        report_issue "Subcommand 'validate $subcmd' not mentioned in llms.txt"
-    fi
 done
+
+# llms.txt and SKILL.md only need validate sql
+if ! grep -q "validate sql" "$PROJECT_ROOT/llms.txt"; then
+    report_issue "Subcommand 'validate sql' not mentioned in llms.txt"
+fi
+
+if [ -f "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md" ]; then
+    if ! grep -q "validate sql" "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md"; then
+        report_issue "Subcommand 'validate sql' not mentioned in SKILL.md"
+    fi
+fi
 
 report_success "Validate subcommands checked"
 echo ""
@@ -103,7 +125,7 @@ echo ""
 # 4. Check that config file format is consistent
 echo "⚙️  Checking config file examples..."
 
-# Check for config-related content (README shows env vars, SKILL.md shows TOML)
+# Check for config-related content
 README_HAS_CONFIG=$(grep -qi "DATABASE_URL\|database_url\|Configuration" "$PROJECT_ROOT/README.md" && echo "yes" || echo "no")
 LLMS_HAS_CONFIG=$(grep -qi "DATABASE_URL\|database_url\|Configuration" "$PROJECT_ROOT/llms.txt" && echo "yes" || echo "no")
 
@@ -121,7 +143,6 @@ echo ""
 echo "💻 Checking example command syntax..."
 
 # Common mistakes to check for (excluding troubleshooting examples)
-# Look for usage outside of "not" context
 SKILL_FILE="$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md"
 FILES_TO_CHECK="$PROJECT_ROOT/README.md $PROJECT_ROOT/llms.txt"
 if [ -f "$SKILL_FILE" ]; then
