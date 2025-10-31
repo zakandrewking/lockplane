@@ -404,19 +404,19 @@ func validateSQLSyntax(filePath string, sqlContent string) []ValidationIssue {
 
 		// Try to parse this statement
 		if _, err := pg_query.Parse(stmt.sql); err != nil {
-			// Extract error message
-			errorMsg := err.Error()
-			// Remove "failed to parse SQL: " prefix if present
-			errorMsg = strings.TrimPrefix(errorMsg, "failed to parse SQL: ")
+			// Use enhanced error analysis to provide better messages
+			enhancedIssues := enhanceSQLError(filePath, stmt.sql, err)
 
-			issues = append(issues, ValidationIssue{
-				File:     filePath,
-				Line:     stmt.startLine,
-				Column:   1,
-				Severity: "error",
-				Message:  errorMsg,
-				Code:     "syntax_error",
-			})
+			// Adjust line numbers to account for statement position in full file
+			for i := range enhancedIssues {
+				if enhancedIssues[i].Line > 0 {
+					enhancedIssues[i].Line += stmt.startLine - 1
+				} else {
+					enhancedIssues[i].Line = stmt.startLine
+				}
+			}
+
+			issues = append(issues, enhancedIssues...)
 		}
 	}
 
