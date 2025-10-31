@@ -4,392 +4,119 @@
 
 Lockplane is a declarative schema management tool that tests migrations on a shadow database before applying to production, generates rollback plans automatically, and validates SQL for dangerous patterns.
 
-## How it works
+## Quick Start
 
-Lockplane follows a declarative workflow:
+1. **Define schema** in `.lp.sql` files (standard PostgreSQL DDL)
+2. **Validate**: `lockplane validate sql schema/users.lp.sql`
+3. **Apply**: `lockplane apply --auto-approve --from $DATABASE_URL --to schema/`
 
-1. Define desired schema in `.lp.sql` files (standard PostgreSQL DDL)
-2. Introspect current database state: `lockplane introspect > current.json`
-3. Generate migration plan: `lockplane plan --from current.json --to schema/ --validate > migration.json`
-4. Apply with shadow DB testing: `lockplane apply --plan migration.json`
+## Basic Commands
 
-The key innovation: migrations are tested on a shadow database first, so bad plans never touch production data.
-
-## Core commands
-
-### Introspection
+### Validate SQL schema
 ```bash
-# Get current database schema
+lockplane validate sql schema/users.lp.sql
+```
+
+### Apply schema changes
+```bash
+# Set database connection
+export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
+
+# Apply with shadow DB validation (recommended)
+lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+```
+
+### Introspect existing database
+```bash
 lockplane introspect > current.json
 lockplane introspect --format sql > schema.lp.sql
-lockplane introspect --db postgresql://localhost:5432/myapp > current.json
 ```
 
-### Planning migrations
+### Generate migration plan
 ```bash
-# Generate plan from files
-lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
-
-# Plan from database (auto-introspects)
-lockplane plan --from $DATABASE_URL --to schema/ --validate > migration.json
-
-# Compare two databases
-lockplane plan --from postgres://localhost:5432/db1 --to postgres://localhost:5432/db2
+lockplane plan --from current.json --to schema/ --validate > migration.json
 ```
 
-### Applying migrations
+### Apply migration plan
 ```bash
-# Apply with shadow DB validation (recommended)
-lockplane apply --plan migration.json
-
-# Auto-approve: generate and apply in one step
-lockplane apply --auto-approve --from current.json --to schema/ --validate
-
-# Specify databases explicitly
-lockplane apply --plan migration.json \
-  --db postgresql://localhost:5432/myapp \
-  --shadow-db postgresql://localhost:5433/myapp_shadow
-```
-
-### Validation
-```bash
-# Validate SQL schema (syntax + dangerous patterns)
-lockplane validate sql schema.lp.sql
-
-# JSON output for IDE integration
-lockplane validate sql --format json schema.lp.sql
-
-# Validate JSON schema
-lockplane validate schema schema.json
-
-# Validate migration plan
-lockplane validate plan migration.json
-```
-
-### Schema conversion
-```bash
-# SQL to JSON
-lockplane convert --input schema.lp.sql --output schema.json
-
-# JSON to SQL
-lockplane convert --input schema.json --output schema.lp.sql --to sql
-
-# Directory of SQL files
-lockplane convert --input schema/ --output combined.json
-```
-
-### Rollback planning
-```bash
-# Generate rollback from plan
-lockplane rollback --plan migration.json --from current.json > rollback.json
-
-# Using database connection
-lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
-```
-
-### Diff and comparison
-```bash
-# Show differences between two schemas
-lockplane diff current.json schema.lp.sql
-
-# Compare two database states
-lockplane diff schema1.json schema2.json
-```
-
-### Utility commands
-```bash
-# Show version
-lockplane version
-lockplane --version
-
-# Show help
-lockplane help
-lockplane --help
-```
-
-## Configuration
-
-Create `lockplane.toml` in project root:
-
-```toml
-# Main database connection
-database_url = "postgresql://user:password@localhost:5432/myapp?sslmode=disable"
-
-# Shadow database (for testing)
-shadow_database_url = "postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
-
-# Default schema path
-schema_path = "lockplane/schema/"
-```
-
-Priority order: CLI flags > Environment variables > Config file > Defaults
-
-## Migration plan safety
-
-Every migration plan includes a `source_hash` field - a SHA-256 hash of the source database schema. This ensures plans are applied to the correct database state.
-
-**What it prevents:**
-- Applying plans to the wrong database
-- Applying plans after the database has been modified
-- Applying plans out of order
-
-**How it works:**
-```bash
-# Generate plan (includes hash of current.json)
-lockplane plan --from current.json --to schema.lp.sql > migration.json
-
-# Plan contains source_hash
-cat migration.json
-# {
-#   "source_hash": "a3f2db8c1e4f9b7a...",
-#   "steps": [...]
-# }
-
-# Apply plan (validates hash matches current DB)
 lockplane apply --plan migration.json
 ```
 
-If the hash doesn't match, Lockplane rejects the plan with a clear error message explaining what to do.
-
-## Schema format
+## Schema Format
 
 Lockplane uses standard PostgreSQL DDL in `.lp.sql` files:
 
 ```sql
--- lockplane/schema/users.lp.sql
+-- schema/users.lp.sql
 CREATE TABLE users (
-    id BIGINT PRIMARY KEY,
-    email TEXT NOT NULL,
-    name TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  id BIGINT PRIMARY KEY,
+  email TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE UNIQUE INDEX users_email_idx ON users(email);
 ```
 
-Best practices:
-- Keep schemas in `lockplane/schema/` directory
-- Use `.lp.sql` extension
-- Can split across multiple files (combined in lexicographic order)
-- Use number prefixes for ordering: `001_tables.lp.sql`, `010_indexes.lp.sql`
+**Requirements:**
+- Use standard SQL DDL (CREATE TABLE, CREATE INDEX, ALTER TABLE)
+- No destructive operations (DROP TABLE, DROP COLUMN, TRUNCATE)
+- No non-declarative patterns (IF NOT EXISTS, BEGIN/COMMIT, CREATE OR REPLACE)
+- No transaction control (Lockplane manages transactions)
 
-## Safety validations
+## Safety Features
 
-Lockplane validates SQL and detects dangerous patterns:
+### Source Hash Verification
+Every migration plan includes a `source_hash` - a SHA-256 hash of the source database schema. This prevents:
+- Applying plans to the wrong database
+- Applying plans after the database has changed
+- Applying plans out of order
 
-### Data loss operations (ERROR)
-- `DROP TABLE` - Permanently deletes all data
-- `DROP COLUMN` - Deletes column data irreversibly
-- `TRUNCATE TABLE` - Removes all rows
-- `DELETE FROM table` (no WHERE) - Deletes all rows
+If the hash doesn't match, Lockplane rejects the plan.
 
-### Non-declarative patterns (ERROR)
-- `IF NOT EXISTS` clauses - Makes schema non-deterministic (Lockplane manages existence checks)
-- Transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`) - Lockplane manages transactions automatically
-- `CREATE OR REPLACE` - Use plain `CREATE` statements (Lockplane handles updates via DROP/CREATE)
+### Shadow Database Testing
+Migrations are tested on a shadow database first, so bad plans never touch production data.
 
-### Blocking operations (WARNING)
-- `CREATE INDEX` without `CONCURRENTLY` - Locks table during build
-- `DROP INDEX` without `CONCURRENTLY` - Locks table during drop
+### Dangerous Pattern Detection
+Lockplane validates SQL and detects:
+- **Data loss operations** (ERROR): DROP TABLE, DROP COLUMN, TRUNCATE TABLE
+- **Non-declarative patterns** (ERROR): IF NOT EXISTS, transaction control, CREATE OR REPLACE
+- **Blocking operations** (WARNING): CREATE INDEX without CONCURRENTLY
 
-### Schema structure validation
-- Duplicate column names
-- Missing data types
-- Missing primary keys (warning)
-- Invalid foreign key references
-- Duplicate index names
-- Invalid index column references
+## Configuration
 
-Example validation output:
-
-```
-ERROR: DROP TABLE is destructive and irreversible
-  Found: DROP TABLE users
-  Impact: Permanently deletes all data in 'users' table
-  Recommendation: Use separate DROP migration only after verifying data is safely migrated
-```
-
-## Integration examples
-
-### With Prisma
+Set environment variables:
 ```bash
-# Generate SQL from Prisma schema
-npx prisma migrate diff \
-  --from-empty \
-  --to-schema-datamodel prisma/schema.prisma \
-  --script > schema.lp.sql
-
-# Validate and apply
-lockplane validate sql schema.lp.sql
-lockplane plan --from $DATABASE_URL --to schema.lp.sql --validate
+export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
+export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
 ```
 
-### With Supabase
+Or use CLI flags: `--db` and `--shadow-db`
+
+## Common Workflow
+
 ```bash
-# Introspect Supabase database
-lockplane introspect \
-  --db postgresql://postgres:postgres@127.0.0.1:54322/postgres?sslmode=disable \
-  --format sql > schema.lp.sql
-```
-
-### With SQLAlchemy
-```python
-from sqlalchemy import create_engine
-from myapp.models import Base
-
-# Generate schema on shadow DB
-shadow_engine = create_engine("postgresql://localhost:5433/myapp_shadow")
-Base.metadata.drop_all(shadow_engine)
-Base.metadata.create_all(shadow_engine)
-
-# Then introspect
-# lockplane introspect --db postgresql://localhost:5433/myapp_shadow --format sql > schema.lp.sql
-```
-
-## Common workflows
-
-### Adding a new table
-```bash
-# 1. Add to schema
-cat >> lockplane/schema/002_posts.lp.sql <<EOF
-CREATE TABLE posts (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    title TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+# 1. Create schema file
+cat > schema/users.lp.sql <<EOF
+CREATE TABLE users (
+  id BIGINT PRIMARY KEY,
+  email TEXT NOT NULL
 );
-
-ALTER TABLE posts ADD CONSTRAINT posts_user_id_fkey
-    FOREIGN KEY (user_id) REFERENCES users(id);
 EOF
 
 # 2. Validate
-lockplane validate sql lockplane/schema/
+lockplane validate sql schema/
 
-# 3. Generate and apply
-lockplane apply --auto-approve --from $DATABASE_URL --to lockplane/schema/ --validate
+# 3. Apply
+lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+
+# 4. Make a change (add column)
+# Edit schema/users.lp.sql to add: age INTEGER NOT NULL DEFAULT 0
+
+# 5. Apply again
+lockplane apply --auto-approve --from $DATABASE_URL --to schema/
 ```
-
-### Adding a column safely
-```bash
-# For existing tables, add as nullable first
-# Then backfill data, then add NOT NULL constraint if needed
-
-# Bad (will fail if table has rows):
-ALTER TABLE users ADD COLUMN email TEXT NOT NULL;
-
-# Good:
-ALTER TABLE users ADD COLUMN email TEXT;
-# (then backfill in application code or separate UPDATE)
-# (then ALTER TABLE users ALTER COLUMN email SET NOT NULL;)
-```
-
-### Creating indexes without blocking
-```bash
-# Always use CONCURRENTLY for production databases
-CREATE INDEX CONCURRENTLY users_email_idx ON users(email);
-
-# Lockplane will warn if you forget:
-# WARNING: CREATE INDEX without CONCURRENTLY locks table during build
-```
-
-## Troubleshooting
-
-### "Unknown subcommand" error
-Check command spelling. Subcommands use spaces: `lockplane validate sql` not `lockplane validate-sql`
-
-### "Failed to load schema"
-For files with only DROP statements, validation shows dangerous patterns but skips structure validation (this is expected)
-
-### "Validation failed" on shadow DB
-The shadow DB test failed. Check error message for constraint violations, type mismatches, or missing dependencies. Fix schema/plan and retry.
-
-### Connection refused
-- Ensure database is running: `docker compose ps`
-- Check connection string host/port
-- For local dev, add `?sslmode=disable`
-
-### Index creation too slow
-Use `CREATE INDEX CONCURRENTLY` to avoid locking. Lockplane validates for this.
-
-## Quick setup
-
-```bash
-# 1. Install
-go install github.com/zakandrewking/lockplane@latest
-
-# 2. Initialize Docker Compose with shadow DB
-lockplane init docker-compose
-
-# 3. Start databases
-docker compose up -d
-
-# 4. Create config
-cat > lockplane.toml <<EOF
-database_url = "postgresql://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
-shadow_database_url = "postgresql://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable"
-schema_path = "lockplane/schema/"
-EOF
-
-# 5. Create initial schema
-mkdir -p lockplane/schema
-cat > lockplane/schema/001_initial.lp.sql <<EOF
-CREATE TABLE users (
-    id BIGINT PRIMARY KEY,
-    email TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-EOF
-
-# 6. Introspect current state
-lockplane introspect > current.json
-
-# 7. Apply
-lockplane apply --auto-approve --from current.json --to lockplane/schema/ --validate
-```
-
-## Supported databases
-
-- **PostgreSQL**: Full support for all operations
-- **SQLite**: Supported with limitations on ALTER operations (SQLite doesn't support all ALTER TABLE variants)
-
-## Key features
-
-- **Shadow DB validation**: Test migrations before production
-- **Automatic rollback generation**: Compute reverse operations automatically
-- **Dangerous pattern detection**: Catch data loss, blocking operations, breaking changes
-- **Declarative workflow**: Schema is source of truth, migrations generated on demand
-- **CLI + JSON output**: Works with IDEs and automation
-- **Introspection**: Generate schema from existing databases
-- **Format conversion**: SQL ↔ JSON bidirectional conversion
-
-## When to use Lockplane
-
-Good fit:
-- PostgreSQL or SQLite databases
-- Teams wanting declarative schema management
-- Projects needing migration safety validation
-- AI-assisted development (explainable migrations)
-- Shadow DB testing before production
-
-Not ideal for:
-- Other databases (MySQL, SQL Server, etc.)
-- Projects with complex custom migration logic
-- Teams heavily invested in existing migration tools (though validation still useful)
-
-## Best practices
-
-1. Always use shadow DB validation
-2. Keep schema files in version control
-3. Use `lockplane/schema/` directory structure
-4. Number schema files for explicit ordering
-5. Validate before applying (use `--validate`)
-6. Test locally with Docker Compose first
-7. Review plans before `--auto-approve` in production
-8. Use `CREATE INDEX CONCURRENTLY` for production databases
 
 ---
 
 Project: https://github.com/zakandrewking/lockplane
 Documentation: https://github.com/zakandrewking/lockplane/blob/main/README.md
-Design docs: https://github.com/zakandrewking/lockplane/tree/main/docs

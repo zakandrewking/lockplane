@@ -1,6 +1,6 @@
 {
   "name": "lockplane",
-  "description": "Lockplane database migration expertise - safe, AI-friendly schema management with shadow DB testing",
+  "description": "Safe database schema management - define schemas in .lp.sql files, validate, and apply with shadow DB testing",
   "version": "1.0.0",
   "author": {
     "name": "Lockplane Team",
@@ -15,7 +15,6 @@
     "migrations",
     "schema",
     "postgresql",
-    "ddl",
     "sql"
   ]
 }
