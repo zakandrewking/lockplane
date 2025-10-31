@@ -1,50 +1,35 @@
 # Lockplane
 
-> A Postgres-first control plane for safe, AI-friendly schema management
+> Safe database schema management with shadow DB testing
 
-Lockplane is a declarative schema management tool that tests migrations on a shadow database before applying to production, generates rollback plans automatically, and validates SQL for dangerous patterns.
+Define your database schema in `.lp.sql` files, validate them, and apply changes safely.
 
 ## Quick Start
 
-1. **Define schema** in `.lp.sql` files (standard PostgreSQL DDL)
-2. **Validate**: `lockplane validate sql schema/users.lp.sql`
+1. **Create schema** in `.lp.sql` files (standard PostgreSQL DDL)
+2. **Validate**: `lockplane validate sql schema/`
 3. **Apply**: `lockplane apply --auto-approve --from $DATABASE_URL --to schema/`
 
-## Basic Commands
+## Commands
 
-### Validate SQL schema
+### Validate schema
 ```bash
 lockplane validate sql schema/users.lp.sql
+lockplane validate sql schema/  # validate entire directory
 ```
 
-### Apply schema changes
+### Apply changes
 ```bash
 # Set database connection
 export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
 
-# Apply with shadow DB validation (recommended)
+# Apply changes (tests on shadow DB first)
 lockplane apply --auto-approve --from $DATABASE_URL --to schema/
-```
-
-### Introspect existing database
-```bash
-lockplane introspect > current.json
-lockplane introspect --format sql > schema.lp.sql
-```
-
-### Generate migration plan
-```bash
-lockplane plan --from current.json --to schema/ --validate > migration.json
-```
-
-### Apply migration plan
-```bash
-lockplane apply --plan migration.json
 ```
 
 ## Schema Format
 
-Lockplane uses standard PostgreSQL DDL in `.lp.sql` files:
+Use standard PostgreSQL DDL in `.lp.sql` files:
 
 ```sql
 -- schema/users.lp.sql
@@ -58,41 +43,21 @@ CREATE UNIQUE INDEX users_email_idx ON users(email);
 ```
 
 **Requirements:**
-- Use standard SQL DDL (CREATE TABLE, CREATE INDEX, ALTER TABLE)
+- Standard SQL DDL only (CREATE TABLE, CREATE INDEX, ALTER TABLE)
 - No destructive operations (DROP TABLE, DROP COLUMN, TRUNCATE)
-- No non-declarative patterns (IF NOT EXISTS, BEGIN/COMMIT, CREATE OR REPLACE)
-- No transaction control (Lockplane manages transactions)
+- No IF NOT EXISTS or CREATE OR REPLACE
+- No transaction control (BEGIN/COMMIT/ROLLBACK)
 
 ## Safety Features
 
-### Source Hash Verification
-Every migration plan includes a `source_hash` - a SHA-256 hash of the source database schema. This prevents:
-- Applying plans to the wrong database
-- Applying plans after the database has changed
-- Applying plans out of order
+**Shadow DB Testing**: All migrations are tested on a shadow database first, so bad changes never touch production.
 
-If the hash doesn't match, Lockplane rejects the plan.
+**Dangerous Pattern Detection**: Lockplane validates SQL and rejects:
+- Data loss operations (DROP TABLE, DROP COLUMN, TRUNCATE)
+- Non-declarative patterns (IF NOT EXISTS, transaction control)
+- Warns about blocking operations (CREATE INDEX without CONCURRENTLY)
 
-### Shadow Database Testing
-Migrations are tested on a shadow database first, so bad plans never touch production data.
-
-### Dangerous Pattern Detection
-Lockplane validates SQL and detects:
-- **Data loss operations** (ERROR): DROP TABLE, DROP COLUMN, TRUNCATE TABLE
-- **Non-declarative patterns** (ERROR): IF NOT EXISTS, transaction control, CREATE OR REPLACE
-- **Blocking operations** (WARNING): CREATE INDEX without CONCURRENTLY
-
-## Configuration
-
-Set environment variables:
-```bash
-export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
-export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
-```
-
-Or use CLI flags: `--db` and `--shadow-db`
-
-## Common Workflow
+## Example Workflow
 
 ```bash
 # 1. Create schema file
@@ -116,7 +81,15 @@ lockplane apply --auto-approve --from $DATABASE_URL --to schema/
 lockplane apply --auto-approve --from $DATABASE_URL --to schema/
 ```
 
+## Configuration
+
+```bash
+export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
+export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
+```
+
+Or use CLI flags: `--db` and `--shadow-db`
+
 ---
 
 Project: https://github.com/zakandrewking/lockplane
-Documentation: https://github.com/zakandrewking/lockplane/blob/main/README.md
