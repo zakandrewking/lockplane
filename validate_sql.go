@@ -435,6 +435,7 @@ func splitSQLStatements(sql string) []sqlStatement {
 	var currentStmt strings.Builder
 	currentLine := 1
 	stmtStartLine := 1
+	hasSeenNonWhitespace := false
 
 	inSingleQuote := false
 	inDoubleQuote := false
@@ -493,8 +494,17 @@ func splitSQLStatements(sql string) []sqlStatement {
 				startLine: stmtStartLine,
 			})
 			currentStmt.Reset()
-			stmtStartLine = currentLine
+			hasSeenNonWhitespace = false
+			// Don't set stmtStartLine here - wait until we see actual content
 			continue
+		}
+
+		// Track the first non-whitespace, non-comment character for line number
+		if !hasSeenNonWhitespace && !inLineComment && !inBlockComment {
+			if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
+				stmtStartLine = currentLine
+				hasSeenNonWhitespace = true
+			}
 		}
 
 		currentStmt.WriteRune(ch)
