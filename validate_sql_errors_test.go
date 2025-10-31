@@ -214,8 +214,8 @@ CREATE INDEX users_email ON`,
 			shouldNotSay: "syntax error",
 		},
 		{
-			name: "using backticks instead of quotes",
-			sql: "CREATE TABLE users (\n  `id` BIGINT PRIMARY KEY\n);",
+			name:           "using backticks instead of quotes",
+			sql:            "CREATE TABLE users (\n  `id` BIGINT PRIMARY KEY\n);",
 			expectedLine:   2,
 			expectedColumn: 3, // at backtick
 			shouldContain: []string{
@@ -318,10 +318,10 @@ CREATE TABLE posts (
 // TestCommonMistakesDetection tests detection of common user mistakes
 func TestCommonMistakesDetection(t *testing.T) {
 	tests := []struct {
-		name          string
-		sql           string
-		mistakeType   string
-		helpfulHint   string
+		name        string
+		sql         string
+		mistakeType string
+		helpfulHint string
 	}{
 		{
 			name: "SQLite datetime instead of PostgreSQL",
