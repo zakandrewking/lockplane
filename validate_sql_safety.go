@@ -52,13 +52,52 @@ func getLineNumber(content string, offset int) int {
 		}
 	}
 
-	// If we're at a newline or whitespace, skip forward to find the actual statement start
-	// This handles cases where StmtLocation points to whitespace before the statement
-	for offset < len(content) && (content[offset] == '\n' || content[offset] == ' ' || content[offset] == '\t' || content[offset] == '\r') {
-		if content[offset] == '\n' {
-			lineNum++
+	// Skip forward past whitespace and comments to find the actual statement start
+	// This handles cases where StmtLocation points to whitespace or comments before the statement
+	for offset < len(content) {
+		ch := content[offset]
+
+		// Skip whitespace
+		if ch == '\n' || ch == ' ' || ch == '\t' || ch == '\r' {
+			if ch == '\n' {
+				lineNum++
+			}
+			offset++
+			continue
 		}
-		offset++
+
+		// Skip line comments (--)
+		if offset+1 < len(content) && ch == '-' && content[offset+1] == '-' {
+			// Skip to end of line
+			for offset < len(content) && content[offset] != '\n' {
+				offset++
+			}
+			if offset < len(content) && content[offset] == '\n' {
+				lineNum++
+				offset++
+			}
+			continue
+		}
+
+		// Skip block comments (/* */)
+		if offset+1 < len(content) && ch == '/' && content[offset+1] == '*' {
+			offset += 2
+			// Find end of block comment
+			for offset+1 < len(content) {
+				if content[offset] == '\n' {
+					lineNum++
+				}
+				if content[offset] == '*' && content[offset+1] == '/' {
+					offset += 2
+					break
+				}
+				offset++
+			}
+			continue
+		}
+
+		// Found actual statement content
+		break
 	}
 
 	return lineNum
