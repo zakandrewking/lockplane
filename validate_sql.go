@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -103,54 +104,65 @@ func runValidateSQL(args []string) {
 
 	path := fs.Arg(0)
 
-	// Read the SQL file to do statement-by-statement validation
-	sqlContent, err := os.ReadFile(path)
+	// Check if path is a directory
+	info, err := os.Stat(path)
 	if err != nil {
-		log.Fatalf("Failed to read SQL file: %v", err)
+		log.Fatalf("Failed to access path: %v", err)
 	}
 
-	// First, do statement-by-statement syntax validation
-	syntaxIssues := validateSQLSyntax(path, string(sqlContent))
+	var allIssues []ValidationIssue
 
-	// If there are syntax errors, report them and exit
-	if len(syntaxIssues) > 0 {
-		if *formatFlag == "json" {
-			result := SQLValidationResult{
-				Valid:  false,
-				Issues: syntaxIssues,
-			}
-			jsonBytes, _ := json.MarshalIndent(result, "", "  ")
-			fmt.Println(string(jsonBytes))
-		} else {
-			fmt.Fprintf(os.Stderr, "✗ SQL syntax errors in %s:\n\n", path)
-			for _, issue := range syntaxIssues {
-				fmt.Fprintf(os.Stderr, "  Line %d: %s\n", issue.Line, issue.Message)
-			}
-			fmt.Fprintf(os.Stderr, "\nFound %d syntax error(s). Please fix these before running validation.\n", len(syntaxIssues))
+	if info.IsDir() {
+		// Handle directory: validate all .lp.sql files
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			log.Fatalf("Failed to read directory: %v", err)
 		}
-		os.Exit(1)
+
+		var sqlFiles []string
+		for _, entry := range entries {
+			if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+				continue
+			}
+			if strings.HasSuffix(strings.ToLower(entry.Name()), ".lp.sql") {
+				sqlFiles = append(sqlFiles, entry.Name())
+			}
+		}
+
+		if len(sqlFiles) == 0 {
+			log.Fatalf("No .lp.sql files found in directory: %s", path)
+		}
+
+		// Sort files for consistent ordering
+		var sortedFiles []string
+		copy(sortedFiles, sqlFiles)
+
+		// Validate each file
+		for _, fileName := range sqlFiles {
+			filePath := filepath.Join(path, fileName)
+			fileIssues := validateSQLFile(filePath)
+			allIssues = append(allIssues, fileIssues...)
+		}
+
+		// Also validate schema structure across all files
+		schema, err := LoadSchema(path)
+		if err == nil {
+			structureIssues := validateSchemaStructure(schema, path)
+			allIssues = append(allIssues, structureIssues...)
+		}
+	} else {
+		// Handle single file
+		allIssues = validateSQLFile(path)
+
+		// Also validate schema structure
+		schema, err := LoadSchema(path)
+		if err == nil {
+			structureIssues := validateSchemaStructure(schema, path)
+			allIssues = append(allIssues, structureIssues...)
+		}
 	}
 
-	// Check for dangerous patterns (data loss operations, etc.)
-	dangerousIssues := validateDangerousPatterns(path, string(sqlContent))
-
-	// If syntax is valid, try to load and validate schema structure
-	// Note: Loading may fail for files with only DROP/DELETE statements
-	var structureIssues []ValidationIssue
-	schema, err := LoadSchema(path)
-	if err == nil {
-		// Validate the schema structure (referential integrity, etc.)
-		structureIssues = validateSchemaStructure(schema, path)
-	}
-	// If schema loading failed but we have dangerous issues, that's OK
-	// We'll report the dangerous issues. If no dangerous issues and schema
-	// loading failed, that's a real error.
-	if err != nil && len(dangerousIssues) == 0 {
-		log.Fatalf("Failed to load schema: %v", err)
-	}
-
-	// Combine all issues (dangerous patterns + structure issues)
-	issues := append(dangerousIssues, structureIssues...)
+	issues := allIssues
 
 	// Output results
 	if *formatFlag == "json" {
@@ -184,6 +196,30 @@ func runValidateSQL(args []string) {
 			os.Exit(1)
 		}
 	}
+}
+
+// validateSQLFile validates a single SQL file for syntax and dangerous patterns
+func validateSQLFile(filePath string) []ValidationIssue {
+	sqlContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return []ValidationIssue{{
+			File:     filePath,
+			Line:     1,
+			Column:   1,
+			Severity: "error",
+			Message:  fmt.Sprintf("Failed to read file: %v", err),
+			Code:     "file_read_error",
+		}}
+	}
+
+	// First, do statement-by-statement syntax validation
+	syntaxIssues := validateSQLSyntax(filePath, string(sqlContent))
+
+	// Check for dangerous patterns (data loss operations, etc.)
+	dangerousIssues := validateDangerousPatterns(filePath, string(sqlContent))
+
+	// Combine all issues
+	return append(syntaxIssues, dangerousIssues...)
 }
 
 func validateSchemaStructure(schema *Schema, path string) []ValidationIssue {
