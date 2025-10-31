@@ -328,19 +328,19 @@ func isLikelyMissingComma(content, nearToken string) bool {
 
 func getSuggestionForTypo(word string) string {
 	typos := map[string]string{
-		"TABEL":       "TABLE",
-		"TALBE":       "TABLE",
-		"PRIMAY":      "PRIMARY",
-		"PRIMERY":     "PRIMARY",
-		"FORIEGN":     "FOREIGN",
-		"FOREGIN":     "FOREIGN",
-		"REFERNCES":   "REFERENCES",
-		"TIMESTAMPZ":  "TIMESTAMPTZ or TIMESTAMP",
-		"NOTNULL":     "NOT NULL",
-		"INTEGR":      "INTEGER",
-		"DEFALT":      "DEFAULT",
-		"UNQUE":       "UNIQUE",
-		"UNIUQE":      "UNIQUE",
+		"TABEL":      "TABLE",
+		"TALBE":      "TABLE",
+		"PRIMAY":     "PRIMARY",
+		"PRIMERY":    "PRIMARY",
+		"FORIEGN":    "FOREIGN",
+		"FOREGIN":    "FOREIGN",
+		"REFERNCES":  "REFERENCES",
+		"TIMESTAMPZ": "TIMESTAMPTZ or TIMESTAMP",
+		"NOTNULL":    "NOT NULL",
+		"INTEGR":     "INTEGER",
+		"DEFALT":     "DEFAULT",
+		"UNQUE":      "UNIQUE",
+		"UNIUQE":     "UNIQUE",
 	}
 
 	return typos[word]

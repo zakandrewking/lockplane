@@ -13,9 +13,9 @@ func TestPositionFromOffset(t *testing.T) {
 		wantLine int
 		wantChar int
 	}{
-		{0, 0, 0},                    // Start of file
-		{5, 0, 5},                    // End of first line
-		{7, 1, 0},                    // Start of second line
+		{0, 0, 0},                        // Start of file
+		{5, 0, 5},                        // End of first line
+		{7, 1, 0},                        // Start of second line
 		{len(content), 2, len("line 3")}, // End of file
 	}
 
