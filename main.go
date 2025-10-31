@@ -486,7 +486,13 @@ func runApply(args []string) {
 	// Auto-approve mode: generate plan in-memory from schemas
 	if *autoApprove {
 		if *fromSchema == "" || *toSchema == "" {
-			log.Fatalf("Usage: lockplane apply --auto-approve --from <before.json|db-url> --to <after.json|db-url> [--validate] [--skip-shadow]")
+			fmt.Fprintf(os.Stderr, "Error: --auto-approve requires both --from and --to arguments\n\n")
+			fmt.Fprintf(os.Stderr, "Usage:\n")
+			fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --from <before.json|db-url> --to <after.json|db-url> [--validate] [--skip-shadow]\n\n")
+			fmt.Fprintf(os.Stderr, "Examples:\n")
+			fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --from $DATABASE_URL --to schema/\n")
+			fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --from current.json --to schema/ --validate\n")
+			os.Exit(1)
 		}
 
 		// Load schemas (supports files, directories, or database connection strings)
@@ -563,7 +569,17 @@ func runApply(args []string) {
 	} else {
 		// Traditional mode: load plan from file
 		if *planPath == "" {
-			log.Fatalf("Usage: lockplane apply --plan <migration.json> [--skip-shadow]\n       lockplane apply --auto-approve --from <before.json> --to <after.json> [--validate] [--skip-shadow]")
+			fmt.Fprintf(os.Stderr, "Error: Missing required arguments\n\n")
+			fmt.Fprintf(os.Stderr, "Usage: lockplane apply [options]\n\n")
+			fmt.Fprintf(os.Stderr, "Two main ways to apply migrations:\n\n")
+			fmt.Fprintf(os.Stderr, "1. Apply from a migration plan file:\n")
+			fmt.Fprintf(os.Stderr, "   lockplane apply --plan <migration.json> [--skip-shadow]\n\n")
+			fmt.Fprintf(os.Stderr, "2. Auto-approve: generate and apply in one step:\n")
+			fmt.Fprintf(os.Stderr, "   lockplane apply --auto-approve --from <before.json|db-url> --to <after.json|db-url> [--validate] [--skip-shadow]\n\n")
+			fmt.Fprintf(os.Stderr, "Examples:\n")
+			fmt.Fprintf(os.Stderr, "  lockplane apply --plan migration.json\n")
+			fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --from $DATABASE_URL --to schema/\n")
+			os.Exit(1)
 		}
 
 		// Load the migration plan
