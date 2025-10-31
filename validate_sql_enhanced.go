@@ -353,12 +353,31 @@ func enhanceByContext(filePath, sqlContent, errorMsg, nearToken string, location
 	}
 
 	// Check for missing closing parenthesis
-	if strings.Contains(errorMsg, "syntax error at or near \";\"") {
+	if strings.Contains(errorMsg, "syntax error at or near \";\"") ||
+		strings.Contains(errorMsg, "syntax error at or near \"CREATE\"") {
 		// Count open and close parens in CREATE TABLE statements
 		if strings.Contains(sqlContent, "CREATE TABLE") {
 			openCount := strings.Count(sqlContent, "(")
 			closeCount := strings.Count(sqlContent, ")")
 			if openCount > closeCount {
+				// Find the line where we have unclosed parentheses
+				// by tracking balance as we go through the content
+				problemLine := findUnclosedParenLine(sqlContent)
+				if problemLine > 0 {
+					return ValidationIssue{
+						File:     filePath,
+						Line:     problemLine,
+						Column:   1,
+						Severity: "error",
+						Message: "You're missing closing parenthesis in CREATE TABLE statement\n" +
+							"  Expected ')' before the semicolon\n" +
+							"  Check DEFAULT clauses and nested expressions\n" +
+							"  " + getCodeContext(sqlContent, problemLine),
+						Code: "missing_paren",
+					}
+				}
+
+				// Fallback to old behavior
 				line, col := findToken(sqlContent, ";")
 				return ValidationIssue{
 					File:     filePath,
@@ -605,4 +624,72 @@ func findPositionFromOffset(content string, offset int) (line int, col int) {
 	}
 
 	return line, col
+}
+
+// findUnclosedParenLine finds the line where parentheses become unbalanced
+// This helps identify the actual line with the problem, not where the parser gave up
+func findUnclosedParenLine(content string) int {
+	lines := strings.Split(content, "\n")
+	balance := 0
+	lastLineWithNetPositive := 0
+	seenFirstCreate := false
+
+	for i, line := range lines {
+		lineNum := i + 1
+
+		// Skip comment lines
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+
+		// Track if we've seen a CREATE TABLE
+		hasCreateTable := strings.Contains(line, "CREATE TABLE")
+		if hasCreateTable && !seenFirstCreate {
+			seenFirstCreate = true
+		}
+
+		// Count parentheses in this line
+		openCount := 0
+		closeCount := 0
+		for _, ch := range line {
+			if ch == '(' {
+				balance++
+				openCount++
+			} else if ch == ')' {
+				balance--
+				closeCount++
+			}
+		}
+
+		// Track the last line that added net positive parens (more open than close)
+		// This is likely where the problem is
+		netChange := openCount - closeCount
+		if netChange > 0 {
+			lastLineWithNetPositive = lineNum
+		}
+
+		// If we hit a semicolon with unclosed parens, we've found the statement with the problem
+		if strings.Contains(line, ";") && balance > 0 {
+			// If the only line with net positive is the CREATE TABLE itself, or only 1 unclosed paren,
+			// report at the semicolon. Otherwise, report where the extras were added.
+			if lastLineWithNetPositive > 0 && balance > 1 {
+				// Multiple unclosed parens, likely from a DEFAULT clause or nested expression
+				return lastLineWithNetPositive
+			}
+			// Just missing the closing paren for CREATE TABLE, report at semicolon
+			return lineNum
+		}
+
+		// If we hit a SECOND CREATE TABLE with open parens, problem is in previous statement
+		if hasCreateTable && seenFirstCreate && balance > 0 && lastLineWithNetPositive > 0 {
+			// But only if this isn't the first CREATE TABLE we're tracking
+			if lastLineWithNetPositive < lineNum {
+				return lastLineWithNetPositive
+			}
+		}
+	}
+
+	// Return the last line that added unclosed parens
+	return lastLineWithNetPositive
 }

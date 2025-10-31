@@ -122,7 +122,9 @@ Lockplane supports both PostgreSQL and SQLite. Choose the option that matches yo
 
 #### Option A: PostgreSQL
 
-If you have a PostgreSQL database running on localhost:5432 called `myapp`, set the connection string environment variable. Replace `user` and `password` with your actual database credentials:
+If you have a PostgreSQL database running on localhost:5432 called `myapp`, set
+the connection string environment variable. Replace `user` and `password` with
+your actual database credentials:
 
 ```bash
 export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
