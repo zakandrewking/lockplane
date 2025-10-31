@@ -20,24 +20,48 @@ func validateDangerousPatterns(filePath string, sqlContent string) []ValidationI
 	}
 
 	// Walk through all statements
-	currentLine := 1
 	for _, stmt := range tree.Stmts {
 		if stmt.Stmt == nil {
 			continue
 		}
 
-		stmtIssues := detectDataLossOperations(filePath, stmt.Stmt, currentLine)
+		// Convert byte offset to line number
+		lineNum := getLineNumber(sqlContent, int(stmt.StmtLocation))
+
+		stmtIssues := detectDataLossOperations(filePath, stmt.Stmt, lineNum)
 		issues = append(issues, stmtIssues...)
 
-		nonDeclarativeIssues := detectNonDeclarativePatterns(filePath, stmt.Stmt, currentLine)
+		nonDeclarativeIssues := detectNonDeclarativePatterns(filePath, stmt.Stmt, lineNum)
 		issues = append(issues, nonDeclarativeIssues...)
-
-		// Update line counter (approximate - we'd need full source locations for precision)
-		// For now, we'll use the statement's position
-		currentLine++
 	}
 
 	return issues
+}
+
+// getLineNumber converts a byte offset into a line number (1-based)
+func getLineNumber(content string, offset int) int {
+	if offset < 0 || offset > len(content) {
+		return 1
+	}
+
+	// Count newlines up to the offset
+	lineNum := 1
+	for i := 0; i < offset && i < len(content); i++ {
+		if content[i] == '\n' {
+			lineNum++
+		}
+	}
+
+	// If we're at a newline or whitespace, skip forward to find the actual statement start
+	// This handles cases where StmtLocation points to whitespace before the statement
+	for offset < len(content) && (content[offset] == '\n' || content[offset] == ' ' || content[offset] == '\t' || content[offset] == '\r') {
+		if content[offset] == '\n' {
+			lineNum++
+		}
+		offset++
+	}
+
+	return lineNum
 }
 
 // detectDataLossOperations detects operations that irreversibly delete data
