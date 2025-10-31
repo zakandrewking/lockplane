@@ -7,9 +7,11 @@ A control plane for safe, AI-friendly schema management. Works with PostgreSQL a
 
 ## Why Lockplane?
 
-**Shadow DB validation catches problems before production.** Most tools roll back after failure. Lockplane tests migrations on a shadow database first, so bad plans never touch your real data.
+**Shadow DB validation catches problems before production.** Lockplane tests
+migrations on a shadow database first, so bad plans never touch your real data.
 
-**Every change is explainable.** See exactly what SQL runs, in what order, with clear descriptions.
+**Every change is explainable.** See exactly what SQL runs, in what order, with
+clear descriptions.
 
 **Rollbacks are generated and validated, not manually written.** For every
 forward migration, Lockplane computes the reverse operation and validates it
@@ -38,7 +40,7 @@ Get started by following these steps:
 
 For more options, see the [Installation Guide](docs/installation.md).
 
-## 2. 🤖 Use with AI Assistants
+## 2. 🤖 Optional: Use with AI Assistants
 
 **Claude Code Users**: There's a Lockplane plugin that provides expert knowledge
 about Lockplane commands, workflows, and best practices!
@@ -62,13 +64,14 @@ comprehensive Lockplane context.
 
 ## 3. 🚀 Create your first schema
 
-With Lockplane, you define your desired database with special SQL files that end
-in `.lp.sql`. These files contain normal valid SQL (supporting either PostgreSQL
-or SQLite dialects), but with an extra level of strictness to guarantee that
-your schema is safe to use.
+With Lockplane, you describe your desired database schema with special SQL files
+that end in `.lp.sql`. These files contain normal valid SQL DDL (supporting
+either PostgreSQL or SQLite dialects), but with an extra level of strictness to
+guarantee that your schema is safe to use.
 
 Let's get started with an example. Create a new directory called `schema/` at
-the root of your project, and create a new file called `users.lp.sql` inside it:
+the root of your project, and create a new file called `users.lp.sql`. Add the
+following SQL to the file:
 
 ```sql
 CREATE TABLE users (
@@ -99,11 +102,11 @@ statements that are not "declarative". For example, you cannot use `DROP TABLE`
 or `DROP COLUMN` statements -- statements like this make sense when you are
 interacting with a live database, but for schema definition we want to focus on
 creating a structure. Later, we'll see how lockplane can drop tables and columns
-for you when needed.
+when needed.
 
 For more information on `.lp.sql` files, run `lockplane validate sql --help`.
 
-4. 📜 Run your first migration
+## 4. 📜 Run your first migration
 
 Now that we have a schema, we can generate a migration plan to apply it to our
 database.
@@ -111,105 +114,48 @@ database.
 NOTE: If you do not have a database yet, you can use the `lockplane init` command to
 create a new database for you. For more information, run `lockplane init --help`.
 
-
-
-## Quick Start
-
-### The Lockplane Workflow
-
-Lockplane follows a simple, declarative workflow:
-
-1. **Define your desired schema** - Use SQL DDL (`.lp.sql`), JSON, or generate from your ORM
-2. **Generate migration plan** - Lockplane calculates forward/reverse SQL
-3. **Validate safety** - Ensures operations are safe and reversible
-4. **Apply to database** - Execute with shadow DB validation
-
-### Prerequisites
-
-- Lockplane CLI (see Installation above)
-- Docker & Docker Compose (for local Postgres)
-
-### Setup
-
-1. Prepare your Docker Compose file for Lockplane:
+Let's assume your postgres database is running on localhost:5432 and is called
+`myapp`. You can set an environment variable for your database connection string
+by running the following command. Replace `user` and `password` with your actual
+database credentials.
 
 ```bash
-lockplane init docker-compose
+export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
 ```
 
-This finds your `docker-compose.yml`, clones your primary Postgres service, and adds a `shadow` service on port `5433`.
+NOTE: You must add `?sslmode=disable` to the connection string for local
+development.
 
-2. Start Postgres:
+Now, we can generate a migration plan to apply our schema to our database with the following command:
 
 ```bash
-docker compose up -d
+lockplane apply --auto-approve --from $DATABASE_URL --to schema/
 ```
 
-### Example: Your First Migration
+This will apply the schema to your database, validating it on a shadow database
+first.
 
-1. **Introspect current state** (empty database):
-```bash
-lockplane introspect > current.json
-cat current.json
-# Shows: {"tables": []}
-```
+## 5. 🔍 Making a change
 
-2. **Define your desired schema** (`schema.lp.sql`):
+Now, let's make a change to our schema. Let's add a new column to the `users`
+table called `age`. Update your `users.lp.sql` file to add the new column:
+
 ```sql
 CREATE TABLE users (
   id BIGINT PRIMARY KEY,
   email TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  age INTEGER NOT NULL DEFAULT 0
 );
 ```
 
-3. **Generate and validate migration plan**:
+Now to apply the change, we can run the following command:
+
 ```bash
-lockplane plan --from current.json --to schema.lp.sql --validate
+lockplane apply --auto-approve --from $DATABASE_URL --to schema/
 ```
 
-Output:
-```
-=== Validation Results ===
-
-✓ Validation 1: PASS
-  - Table creation is always safe
-  - Reversible: DROP TABLE users
-
-✓ All operations are reversible
-✓ All validations passed
-
-{
-  "steps": [
-    {
-      "description": "Create table users",
-      "sql": "CREATE TABLE users (id integer NOT NULL, email text NOT NULL)"
-    }
-  ]
-}
-```
-
-4. **Apply the migration**:
-
-You have two options:
-
-**Option A: Two-step (traditional)**
-```bash
-# Save the plan to a file first (from step 3)
-lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
-# Then apply it
-lockplane apply --plan migration.json
-```
-
-**Option B: One-step (auto-approve)**
-```bash
-# Generate and apply in a single command
-lockplane apply --auto-approve --from current.json --to schema.lp.sql --validate
-```
-
-Both options automatically test on shadow DB first, then apply to main DB if successful.
-
-That's it! Your schema is now your single source of truth. Change it, generate a new plan, validate, and apply.
+And that's it! You've successfully made a change to your schema and applied it to your database.
 
 ## Configuration
 
@@ -596,7 +542,7 @@ Lockplane validates that migrations are safe and reversible **before** they run:
 
 ```bash
 # Validate a migration plan
-lockplane plan --from current.json --to schema.lp.sql --validate
+lockplane plan --from current.json --to schema.lp.sql
 ```
 
 **Example: Safe migration** (nullable column):
@@ -633,83 +579,6 @@ The plan generator handles:
 - ✅ **Modify column types, nullability, defaults**
 - ✅ **Add/remove indexes**
 - ✅ **Safe operation ordering** (adds before drops, tables before indexes)
-
-### CLI Commands
-
-```bash
-# Compare two schemas (see diff)
-lockplane diff before.json after.lp.sql
-
-# Generate migration plan (with validation)
-lockplane plan --from before.json --to after.lp.sql --validate
-
-# Apply migration (two-step approach)
-lockplane apply --plan migration.json
-
-# Apply migration (one-step auto-approve approach)
-lockplane apply --auto-approve --from before.json --to after.lp.sql --validate
-
-# Generate rollback plan
-lockplane rollback --plan forward.json --from before.json
-```
-
-## Automatic Rollback Generation
-
-Lockplane can automatically generate rollback plans that reverse forward migrations.
-
-### How It Works
-
-Given a forward migration plan and the original schema state, Lockplane generates the exact reverse operations needed to undo the migration:
-
-```bash
-# 1. Generate forward migration
-lockplane plan --from current.json --to schema.lp.sql > forward.json
-
-# 2. Generate rollback migration
-lockplane rollback --plan forward.json --from current.json > rollback.json
-```
-
-### Example
-
-**Forward migration** (before → after):
-```json
-{
-  "steps": [
-    {
-      "description": "Create table posts",
-      "sql": "CREATE TABLE posts (id integer NOT NULL, title text NOT NULL)"
-    },
-    {
-      "description": "Add column age to table users",
-      "sql": "ALTER TABLE users ADD COLUMN age integer"
-    },
-    {
-      "description": "Create index idx_users_email",
-      "sql": "CREATE UNIQUE INDEX idx_users_email ON users (email)"
-    }
-  ]
-}
-```
-
-**Generated rollback** (after → before):
-```json
-{
-  "steps": [
-    {
-      "description": "Rollback: Drop index idx_users_email",
-      "sql": "DROP INDEX idx_users_email"
-    },
-    {
-      "description": "Rollback: Drop column age from table users",
-      "sql": "ALTER TABLE users DROP COLUMN age"
-    },
-    {
-      "description": "Rollback: Drop table posts",
-      "sql": "DROP TABLE posts CASCADE"
-    }
-  ]
-}
-```
 
 ### Supported Rollback Operations
 
@@ -836,91 +705,3 @@ if result.Success {
     fmt.Printf("Failed: %v\n", result.Errors)
 }
 ```
-
-### Testing Migrations
-
-Run the test suite to see the executor in action:
-
-```bash
-go test -v -run TestApplyPlan
-```
-
-### Environment Variables
-
-- `DATABASE_URL` - Main Postgres connection string (default: `postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable`)
-- `SHADOW_DATABASE_URL` - Shadow DB for dry-run validation (default: `postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable`)
-
-## Project Status
-
-Currently implementing M1 (DSL & Planner). See `0001-design.md` for full design.
-
-### Core Features
-
-**Schema Management**
-- ✅ Schema introspection (reads Postgres catalog) - _3 tests_
-- ✅ JSON Schema definition with validation - _2 tests_
-- ✅ Diff engine (compares schemas) - _7 tests_
-- ✅ Foreign key support - _2 tests_
-
-**Migration Planning**
-- ✅ Automatic plan generator (generates SQL from diffs) - _11 tests_
-- ✅ Automatic rollback generator (reverse migrations) - _10 tests_
-- ✅ Migration validation (safety checks) - _12 tests_
-  - ✅ NOT NULL without DEFAULT detection
-  - ✅ Foreign key validation
-  - ✅ Reversibility verification
-  - ⚠️ Column type changes (partial validation)
-  - ❌ Data preservation checks (planned)
-  - ❌ Index operation validation (planned)
-
-**Migration Execution**
-- ✅ Transactional executor - _4 tests_
-- ✅ Shadow DB validation (dry-run testing) - _tested_
-- ✅ Error tracking with step-level failures
-- ❌ Durable execution (timeouts, retries, progress tracking)
-- ❌ Advisory locks during apply
-- ❌ Two-phase confirmation for destructive operations
-
-**CLI Commands**
-- ✅ `introspect` - Export current schema to JSON
-- ✅ `diff` - Compare two schema files
-- ✅ `plan` - Generate migration plan with validation
-- ✅ `rollback` - Generate reverse migration
-- ✅ `apply` - Execute migration plan
-- ✅ `validate` - Validate schema or plan files
-- ✅ `init` - Setup Docker Compose with shadow DB - _3 tests_
-- ✅ `version` - Show version info
-
-**Supported Operations**
-- ✅ Create/drop tables
-- ✅ Add/drop columns (with validation)
-- ✅ Modify column types, nullability, defaults
-- ✅ Add/drop indexes (unique and non-unique)
-- ✅ Add/drop foreign keys
-- ❌ Sequences and serial columns (partial)
-- ❌ Check constraints
-- ❌ Triggers and functions
-- ❌ Row-level security (RLS) policies
-- ❌ Partitioned tables
-
-**Database Support**
-- ✅ PostgreSQL (full support)
-- ✅ SQLite (introspection, diff, plan, apply)
-- ❌ MySQL/MariaDB
-- ❌ CockroachDB
-
-**Infrastructure & Integration**
-- ✅ Docker Compose setup (main + shadow DB)
-- ❌ MCP server interface for AI agents
-- ❌ Catalog hash computation and ledger
-- ❌ pgroll integration for zero-downtime migrations
-- ❌ Prisma schema converter
-- ❌ Alembic migration converter
-
-**Authorization (Future)**
-- ❌ Lockplane Auth - Single authorization spec that compiles to:
-  - Postgres RLS (Row-Level Security) policies
-  - Firestore security rules
-  - Other database authorization systems
-
-**Test Coverage:** 53 tests across all core features
