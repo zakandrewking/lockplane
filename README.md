@@ -97,6 +97,8 @@ you'll see a message like this:
 ✓ Validation 1: PASS
 ```
 
+NOTE: We also provide a VSCode extension that will validate your schema files for you when you save them! See [vscode-lockplane/README.md](vscode-lockplane/README.md) for more information.
+
 Lockplane schema files cannot contain any dangerous SQL statements, or any
 statements that are not "declarative". For example, you cannot use `DROP TABLE`
 or `DROP COLUMN` statements -- statements like this make sense when you are
