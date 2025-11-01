@@ -318,10 +318,9 @@ func (p *ErrorRecoveryParser) progressiveParse(sql string) {
 	statements := splitStatements(sql)
 
 	for _, stmt := range statements {
-		if _, err := pg_query.Parse(stmt.sql); err == nil {
-			// This statement is valid - we can use it
-			// (Future: build partial AST from valid statements)
-		}
+		// Try to parse each statement
+		_, _ = pg_query.Parse(stmt.sql)
+		// Future: build partial AST from valid statements
 	}
 }
 

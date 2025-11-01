@@ -653,10 +653,11 @@ func findUnclosedParenLine(content string) int {
 		openCount := 0
 		closeCount := 0
 		for _, ch := range line {
-			if ch == '(' {
+			switch ch {
+			case '(':
 				balance++
 				openCount++
-			} else if ch == ')' {
+			case ')':
 				balance--
 				closeCount++
 			}

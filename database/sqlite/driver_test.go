@@ -11,6 +11,7 @@ func TestNewDriver(t *testing.T) {
 
 	if driver == nil {
 		t.Fatal("Expected non-nil driver")
+		return
 	}
 
 	if driver.Introspector == nil {

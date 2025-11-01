@@ -571,7 +571,11 @@ func runApply(args []string) {
 			fmt.Fprintf(os.Stderr, "  Enter a value: ")
 
 			var response string
-			fmt.Scanln(&response)
+			_, err := fmt.Scanln(&response)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "\nApply cancelled.\n")
+				os.Exit(0)
+			}
 
 			if response != "yes" {
 				fmt.Fprintf(os.Stderr, "\nApply cancelled.\n")

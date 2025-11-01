@@ -107,6 +107,7 @@ func TestIntrospector_GetColumns(t *testing.T) {
 	idCol := findColumn(columns, "id")
 	if idCol == nil {
 		t.Fatal("Expected to find 'id' column")
+		return
 	}
 	if idCol.Type != "integer" {
 		t.Errorf("Expected id type 'integer', got '%s'", idCol.Type)
@@ -122,6 +123,7 @@ func TestIntrospector_GetColumns(t *testing.T) {
 	nameCol := findColumn(columns, "name")
 	if nameCol == nil {
 		t.Fatal("Expected to find 'name' column")
+		return
 	}
 	if nameCol.Type != "text" {
 		t.Errorf("Expected name type 'text', got '%s'", nameCol.Type)
@@ -134,6 +136,7 @@ func TestIntrospector_GetColumns(t *testing.T) {
 	ageCol := findColumn(columns, "age")
 	if ageCol == nil {
 		t.Fatal("Expected to find 'age' column")
+		return
 	}
 	if !ageCol.Nullable {
 		t.Error("Expected age to be nullable")
@@ -143,6 +146,7 @@ func TestIntrospector_GetColumns(t *testing.T) {
 	createdCol := findColumn(columns, "created_at")
 	if createdCol == nil {
 		t.Fatal("Expected to find 'created_at' column")
+		return
 	}
 	if createdCol.Default == nil {
 		t.Error("Expected created_at to have a default value")
@@ -288,6 +292,7 @@ func TestIntrospector_IntrospectSchema(t *testing.T) {
 
 	if schema == nil {
 		t.Fatal("Expected non-nil schema")
+		return
 	}
 
 	// Should have at least our test table

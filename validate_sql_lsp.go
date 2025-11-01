@@ -4,38 +4,6 @@ import (
 	"github.com/lockplane/lockplane/diagnostic"
 )
 
-// validateSQLWithDiagnostics uses the new LSP-style diagnostic system
-func validateSQLWithDiagnostics(filePath string, sqlContent string) []ValidationIssue {
-	// Create collector
-	collector := diagnostic.NewCollector(filePath, sqlContent)
-
-	// Create error recovery parser
-	parser := diagnostic.NewErrorRecoveryParser(collector)
-
-	// Try to parse - this will populate diagnostics even on failure
-	parser.Parse(sqlContent)
-
-	// Convert diagnostics to legacy format for compatibility
-	diagnostics := collector.All()
-	return convertDiagnosticsToIssues(diagnostics, filePath)
-}
-
-// convertDiagnosticsToIssues converts new diagnostics to old ValidationIssue format
-func convertDiagnosticsToIssues(diagnostics []diagnostic.Diagnostic, filePath string) []ValidationIssue {
-	issues := make([]ValidationIssue, len(diagnostics))
-	for i, d := range diagnostics {
-		issues[i] = ValidationIssue{
-			File:     filePath,
-			Line:     d.Range.Start.Line + 1,      // Convert to 1-indexed
-			Column:   d.Range.Start.Character + 1, // Convert to 1-indexed
-			Severity: d.Severity.String(),
-			Message:  d.Message,
-			Code:     d.Code,
-		}
-	}
-	return issues
-}
-
 // ValidateSQLFile validates a SQL file and returns diagnostics
 // This is the new API that other tools (like LSP server) can use
 func ValidateSQLFile(filePath string, sqlContent string) *diagnostic.Collector {

@@ -101,6 +101,7 @@ CREATE TABLE users (
 	}
 	if usersTable == nil {
 		t.Fatalf("expected users table in parsed schema")
+		return
 	}
 	if len(usersTable.ForeignKeys) != 1 {
 		t.Fatalf("expected 1 foreign key, got %d", len(usersTable.ForeignKeys))

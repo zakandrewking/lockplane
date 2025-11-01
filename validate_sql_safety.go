@@ -267,13 +267,6 @@ func extractRangeVarName(rangeVar *pg_query.RangeVar) string {
 	return rangeVar.Relname
 }
 
-func getCascadeWarning(cascade string) string {
-	if cascade != "" {
-		return "\n                  CASCADE will also drop all dependent objects (foreign keys, views, etc.)"
-	}
-	return ""
-}
-
 // detectNonDeclarativePatterns detects SQL patterns that shouldn't be in declarative schema files
 func detectNonDeclarativePatterns(filePath string, stmt *pg_query.Node, line int) []ValidationIssue {
 	var issues []ValidationIssue
