@@ -8,44 +8,38 @@ With SQLAlchemy, your ORM models are the source of truth. Lockplane helps you sa
 
 ## Prerequisites
 
-Before you begin, configure your database connections. You have three options:
+- SQLAlchemy application connected to PostgreSQL
+- Lockplane CLI installed locally
+- Access to both your primary database and a shadow database (for validation)
 
-**Option 1: Configuration File (Recommended)**
+### Configure Lockplane environments
 
-Create `lockplane.toml` in your project root:
+Create or update `lockplane.toml` in your project root:
 
 ```toml
-# lockplane.toml
-database_url = "postgresql://user:password@localhost:5432/myapp?sslmode=disable"
-shadow_database_url = "postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
+default_environment = "local"
+
+[environments.local]
+description = "Local SQLAlchemy development database"
 schema_path = "lockplane/schema/"
 ```
 
-> **Important:** Add `?sslmode=disable` for local development databases. Remove it for production databases with SSL enabled.
+### Provide connection secrets
 
-**Option 2: Environment Variables**
-
-```bash
-# Production database (where migrations will be applied)
-export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
-
-# Shadow database (for testing migrations safely before applying to production)
-export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
-```
-
-Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, or `.env` file) to make them persistent.
-
-**Option 3: CLI Flags**
+Store credentials in `.env.local` (keep this out of version control):
 
 ```bash
-lockplane apply migration.json \
-  --target "postgresql://localhost:5432/myapp?sslmode=disable" \
-  --shadow-db "postgresql://localhost:5433/myapp_shadow?sslmode=disable"
+cat <<'EOF' > .env.local
+DATABASE_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
+SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+EOF
 ```
 
-**Priority Order:** CLI flags > Environment variables > Config file > Defaults
+Lockplane reads `.env.<name>` automatically based on the environment you select with `--target-environment`, `--from-environment`, or `--source-environment`.
 
-**Important:** The `apply` command uses these settings to know where to execute migrations. Commands like `plan`, `diff`, and `introspect` can accept connection strings as arguments.
+### CLI overrides
+
+When you need an ad-hoc connection (e.g., pointing at staging), use `--target` / `--shadow-db` / `--from` with full connection strings to override the environment values.
 
 ## Workflow
 
@@ -111,8 +105,8 @@ python generate_schema.py
 Now use Lockplane CLI to introspect the shadow database:
 
 ```bash
-# Export the schema to JSON (using SHADOW_DATABASE_URL from environment)
-lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
+# Export the schema to JSON (using the shadow database from the environment)
+lockplane introspect --source-environment local --shadow > desired.json
 
 # Or specify the connection string directly
 lockplane introspect --db postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow > desired.json
@@ -165,7 +159,7 @@ print("Generated desired.lp.sql from SQLAlchemy models")
 Then use Lockplane to diff:
 
 ```bash
-lockplane diff $DATABASE_URL desired.lp.sql
+lockplane diff --before-environment local desired.lp.sql
 ```
 
 ## Step 2: Generate Migration Plan
@@ -174,10 +168,10 @@ Now you can generate a migration plan directly from your database:
 
 ```bash
 # Generate a safe migration plan with validation (using database connection string)
-lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
+lockplane plan --from-environment local --to desired.json --validate > migration.json
 
 # Or if you generated SQL DDL:
-lockplane plan --from $DATABASE_URL --to desired.lp.sql --validate > migration.json
+lockplane plan --from-environment local --to desired.lp.sql --validate > migration.json
 ```
 
 > **💡 Tip:** Lockplane automatically introspects your database when you provide a connection string, so you don't need to run `lockplane introspect` first!
@@ -233,10 +227,10 @@ For development environments, you can skip the intermediate plan file:
 python generate_schema.py
 
 # 2. Introspect to JSON
-lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
+lockplane introspect --source-environment local --shadow > desired.json
 
 # 3. Apply in one command (directly from your actual database)
-lockplane apply --auto-approve --target $DATABASE_URL --schema desired.json --validate
+lockplane apply --auto-approve --target-environment local --schema desired.json --validate
 ```
 
 ## Rollback Plan
@@ -245,7 +239,7 @@ Always generate a rollback before applying to production:
 
 ```bash
 # Generate rollback plan (using database connection string)
-lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
+lockplane rollback --plan migration.json --from-environment local > rollback.json
 
 # If something goes wrong, apply the rollback
 lockplane apply rollback.json
@@ -286,23 +280,23 @@ jobs:
       - name: Set up PostgreSQL
         uses: ikalnytskyi/action-setup-postgres@v4
 
+      - name: Write Lockplane environment
+        run: |
+          cat <<'EOF' > .env.local
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          SHADOW_DATABASE_URL=${{ secrets.SHADOW_DATABASE_URL }}
+          EOF
+
       - name: Generate desired schema from SQLAlchemy models
-        env:
-          SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
         run: |
           python generate_schema.py
-          ./lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
+          ./lockplane introspect --source-environment local --shadow > desired.json
 
       - name: Generate migration plan
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
-        run: ./lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
+        run: ./lockplane plan --from-environment local --to desired.json --validate > migration.json
 
       - name: Generate rollback plan
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: ./lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
+        run: ./lockplane rollback --plan migration.json --from-environment local > rollback.json
 
       - name: Upload rollback plan
         uses: actions/upload-artifact@v3
@@ -311,25 +305,17 @@ jobs:
           path: rollback.json
 
       - name: Apply migration
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
-        run: ./lockplane apply migration.json
+        run: ./lockplane apply migration.json --target-environment local
 ```
 
 ## Tips and Best Practices
 
 ### 1. Always Use a Shadow Database
 
-Lockplane's `apply` command uses environment variables to know where to execute migrations:
+Lockplane's `apply` command reads from the active environment. Keep `.env.local` up to date:
 
 ```bash
-# Set these before running apply
-export DATABASE_URL="postgresql://localhost:5432/myapp"
-export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
-
-# Then apply uses these automatically
-lockplane apply migration.json
+lockplane apply migration.json --target-environment local
 ```
 
 The shadow database is tested first - if the migration fails there, your production database is never touched.
@@ -355,13 +341,13 @@ In your local development workflow:
 
 # Regenerate desired schema (using shadow database)
 python generate_schema.py
-lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
+lockplane introspect --source-environment local --shadow > desired.json
 
 # See what changed (directly from your database)
-lockplane diff $DATABASE_URL desired.json
+lockplane diff --before-environment local desired.json
 
 # Apply changes locally
-lockplane apply --auto-approve --target $DATABASE_URL --schema desired.json
+lockplane apply --auto-approve --target-environment local --schema desired.json
 ```
 
 ### 4. Alembic Migration
@@ -371,10 +357,10 @@ If you're currently using Alembic, you can migrate to Lockplane easily:
 ```bash
 # Generate desired state from SQLAlchemy models (using shadow database)
 python generate_schema.py
-lockplane introspect --db "$SHADOW_DATABASE_URL" > desired.json
+lockplane introspect --source-environment local --shadow > desired.json
 
 # Use Lockplane for future migrations (directly from your database)
-lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
+lockplane plan --from-environment local --to desired.json --validate > migration.json
 ```
 
 See also: [Migrating from Alembic](alembic.md)
@@ -442,7 +428,7 @@ lockplane introspect
 Your migration might contain unsafe operations. Check the error message:
 
 ```bash
-lockplane plan --from $DATABASE_URL --to desired.json --validate
+lockplane plan --from-environment local --to desired.json --validate
 ```
 
 Common issues:

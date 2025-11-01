@@ -182,8 +182,10 @@ func runIntrospect(args []string) {
 	}
 
 	fs := flag.NewFlagSet("introspect", flag.ExitOnError)
-	dbURL := fs.String("db", "", "Database connection string (overrides env var and config file)")
+	dbURL := fs.String("db", "", "Database connection string (overrides environment selection)")
 	format := fs.String("format", "json", "Output format: json or sql")
+	sourceEnv := fs.String("source-environment", "", "Named environment to introspect (defaults to config default)")
+	useShadow := fs.Bool("shadow", false, "Use the shadow database URL for the selected environment")
 
 	// Custom usage function
 	fs.Usage = func() {
@@ -193,9 +195,8 @@ func runIntrospect(args []string) {
 		fs.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nConfiguration Priority:\n")
 		fmt.Fprintf(os.Stderr, "  1. --db flag (highest)\n")
-		fmt.Fprintf(os.Stderr, "  2. DATABASE_URL environment variable\n")
-		fmt.Fprintf(os.Stderr, "  3. database_url in lockplane.toml\n")
-		fmt.Fprintf(os.Stderr, "  4. Default value (lowest)\n\n")
+		fmt.Fprintf(os.Stderr, "  2. --source-environment or default environment from lockplane.toml\n")
+		fmt.Fprintf(os.Stderr, "  3. Built-in defaults (postgres on localhost)\n\n")
 		fmt.Fprintf(os.Stderr, "Examples:\n")
 		fmt.Fprintf(os.Stderr, "  # Introspect to JSON (default)\n")
 		fmt.Fprintf(os.Stderr, "  lockplane introspect > schema.json\n\n")
@@ -211,8 +212,31 @@ func runIntrospect(args []string) {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
 
-	// Priority: --db flag > DATABASE_URL env var > config file > default
-	connStr := GetDatabaseURL(*dbURL, config, "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	connStr := strings.TrimSpace(*dbURL)
+	var resolvedEnv *ResolvedEnvironment
+	if connStr == "" {
+		resolvedEnv, err = ResolveEnvironment(config, *sourceEnv)
+		if err != nil {
+			log.Fatalf("Failed to resolve source environment: %v", err)
+		}
+		connStr = resolvedEnv.DatabaseURL
+		if *useShadow {
+			connStr = resolvedEnv.ShadowDatabaseURL
+			if connStr == "" {
+				log.Fatalf("Environment %q does not define a shadow database URL", resolvedEnv.Name)
+			}
+		}
+	}
+
+	if connStr == "" {
+		envName := defaultEnvironmentName
+		if resolvedEnv != nil {
+			envName = resolvedEnv.Name
+		} else if config != nil && config.DefaultEnvironment != "" {
+			envName = config.DefaultEnvironment
+		}
+		log.Fatalf("No database connection configured. Provide --db or configure environment %q in lockplane.toml / .env.%s.", envName, envName)
+	}
 
 	// Detect database driver from connection string
 	driver, err := newDriverFromConnString(connStr)
@@ -292,25 +316,53 @@ func runIntrospect(args []string) {
 }
 
 func runDiff(args []string) {
+	config, err := LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load config file: %v", err)
+	}
+
 	fs := flag.NewFlagSet("diff", flag.ExitOnError)
+	beforeEnv := fs.String("before-environment", "", "Environment providing the before-state database connection")
+	afterEnv := fs.String("after-environment", "", "Environment providing the after-state database connection")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
 
-	if fs.NArg() != 2 {
-		log.Fatalf("Usage: lockplane diff <before> <after>")
+	var beforeArg, afterArg string
+	if fs.NArg() > 0 {
+		beforeArg = fs.Arg(0)
+	}
+	if fs.NArg() > 1 {
+		afterArg = fs.Arg(1)
 	}
 
-	beforePath := fs.Arg(0)
-	afterPath := fs.Arg(1)
+	if beforeArg == "" {
+		env, err := ResolveEnvironment(config, *beforeEnv)
+		if err != nil {
+			log.Fatalf("Failed to resolve before environment: %v", err)
+		}
+		beforeArg = env.DatabaseURL
+	}
+
+	if afterArg == "" {
+		env, err := ResolveEnvironment(config, *afterEnv)
+		if err != nil {
+			log.Fatalf("Failed to resolve after environment: %v", err)
+		}
+		afterArg = env.DatabaseURL
+	}
+
+	if beforeArg == "" || afterArg == "" {
+		log.Fatalf("Usage: lockplane diff <before> <after>\n       lockplane diff --before-environment <name> --after-environment <name>")
+	}
 
 	// Load schemas
-	before, err := LoadSchema(beforePath)
+	before, err := LoadSchemaOrIntrospect(beforeArg)
 	if err != nil {
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
 
-	after, err := LoadSchema(afterPath)
+	after, err := LoadSchemaOrIntrospect(afterArg)
 	if err != nil {
 		log.Fatalf("Failed to load after schema: %v", err)
 	}
@@ -328,12 +380,50 @@ func runDiff(args []string) {
 }
 
 func runPlan(args []string) {
+	config, err := LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load config file: %v", err)
+	}
+
 	fs := flag.NewFlagSet("plan", flag.ExitOnError)
 	fromSchema := fs.String("from", "", "Source schema path (file or directory)")
 	toSchema := fs.String("to", "", "Target schema path (file or directory)")
+	fromEnvironment := fs.String("from-environment", "", "Environment providing the source database connection")
+	toEnvironment := fs.String("to-environment", "", "Environment providing the target database connection")
 	validate := fs.Bool("validate", false, "Validate migration safety and reversibility")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	fromInput := strings.TrimSpace(*fromSchema)
+	toInput := strings.TrimSpace(*toSchema)
+
+	if fromInput == "" {
+		resolvedFrom, err := ResolveEnvironment(config, *fromEnvironment)
+		if err != nil {
+			log.Fatalf("Failed to resolve source environment: %v", err)
+		}
+		fromInput = resolvedFrom.DatabaseURL
+		if fromInput == "" {
+			fmt.Fprintf(os.Stderr, "Error: environment %q does not define a source database. Provide --from or configure .env.%s.\n", resolvedFrom.Name, resolvedFrom.Name)
+			os.Exit(1)
+		}
+	}
+
+	if toInput == "" {
+		resolvedTo, err := ResolveEnvironment(config, *toEnvironment)
+		if err != nil {
+			log.Fatalf("Failed to resolve target environment: %v", err)
+		}
+		toInput = resolvedTo.DatabaseURL
+		if toInput == "" {
+			fmt.Fprintf(os.Stderr, "Error: environment %q does not define a target database. Provide --to or configure .env.%s.\n", resolvedTo.Name, resolvedTo.Name)
+			os.Exit(1)
+		}
+	}
+
+	if fromInput == "" || toInput == "" {
+		log.Fatalf("Usage: lockplane plan --from <before.json|db> --to <after.json|db> [--validate]\n\n       lockplane plan --from-environment <name> --to <schema.json>\n       lockplane plan --from <schema.json> --to-environment <name>")
 	}
 
 	// Generate diff first
@@ -341,23 +431,18 @@ func runPlan(args []string) {
 	var before *Schema
 	var after *Schema
 
-	if *fromSchema != "" && *toSchema != "" {
-		// Generate diff from two schemas (supports files, directories, or database connection strings)
-		var err error
-		before, err = LoadSchemaOrIntrospect(*fromSchema)
-		if err != nil {
-			log.Fatalf("Failed to load from schema: %v", err)
-		}
-
-		after, err = LoadSchemaOrIntrospect(*toSchema)
-		if err != nil {
-			log.Fatalf("Failed to load to schema: %v", err)
-		}
-
-		diff = DiffSchemas(before, after)
-	} else {
-		log.Fatalf("Usage: lockplane plan --from <before.json|db-url> --to <after.json|db-url> [--validate]")
+	var loadErr error
+	before, loadErr = LoadSchemaOrIntrospect(fromInput)
+	if loadErr != nil {
+		log.Fatalf("Failed to load from schema: %v", loadErr)
 	}
+
+	after, loadErr = LoadSchemaOrIntrospect(toInput)
+	if loadErr != nil {
+		log.Fatalf("Failed to load to schema: %v", loadErr)
+	}
+
+	diff = DiffSchemas(before, after)
 
 	// Validate the diff if requested
 	if *validate {
@@ -423,15 +508,38 @@ func runPlan(args []string) {
 }
 
 func runRollback(args []string) {
+	config, err := LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load config file: %v", err)
+	}
+
 	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
 	planPath := fs.String("plan", "", "Forward migration plan file")
 	fromSchema := fs.String("from", "", "Source schema path (before state)")
+	fromEnvironment := fs.String("from-environment", "", "Environment providing the before-state database connection")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
 
-	if *planPath == "" || *fromSchema == "" {
-		log.Fatalf("Usage: lockplane rollback --plan <forward.json> --from <before.json|db-url>")
+	if *planPath == "" {
+		log.Fatalf("Usage: lockplane rollback --plan <forward.json> --from <before.json|db> [--from-environment <name>]")
+	}
+
+	sourceInput := strings.TrimSpace(*fromSchema)
+	if sourceInput == "" {
+		resolved, err := ResolveEnvironment(config, *fromEnvironment)
+		if err != nil {
+			log.Fatalf("Failed to resolve source environment: %v", err)
+		}
+		sourceInput = resolved.DatabaseURL
+		if sourceInput == "" {
+			fmt.Fprintf(os.Stderr, "Error: environment %q does not define a database connection. Provide --from or configure .env.%s.\n", resolved.Name, resolved.Name)
+			os.Exit(1)
+		}
+	}
+
+	if sourceInput == "" {
+		log.Fatalf("Usage: lockplane rollback --plan <forward.json> --from <before.json|db> [--from-environment <name>]")
 	}
 
 	// Load the forward plan
@@ -441,7 +549,7 @@ func runRollback(args []string) {
 	}
 
 	// Load the before schema (supports files, directories, or database connection strings)
-	beforeSchema, err := LoadSchemaOrIntrospect(*fromSchema)
+	beforeSchema, err := LoadSchemaOrIntrospect(sourceInput)
 	if err != nil {
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
@@ -469,11 +577,13 @@ func runApply(args []string) {
 	}
 
 	fs := flag.NewFlagSet("apply", flag.ExitOnError)
-	target := fs.String("target", "", "Target database URL to apply migration to")
+	target := fs.String("target", "", "Target database URL to apply migration to (overrides environment settings)")
+	targetEnvironment := fs.String("target-environment", "", "Named environment providing the target database connection (defaults to lockplane.toml)")
 	schema := fs.String("schema", "", "Desired schema file/directory (required for plan generation)")
 	autoApprove := fs.Bool("auto-approve", false, "Skip interactive approval of migration plan")
 	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
-	shadowDBURL := fs.String("shadow-db", "", "Shadow database connection string (overrides env var and config file)")
+	shadowDBURL := fs.String("shadow-db", "", "Shadow database connection string (overrides environment settings)")
+	shadowEnvironment := fs.String("shadow-environment", "", "Named environment providing the shadow database connection (defaults to target environment)")
 
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
@@ -482,21 +592,29 @@ func runApply(args []string) {
 	// Get positional arguments (for plan file)
 	positionalArgs := fs.Args()
 
-	// Check if flag values look like other flags (happens when env var is empty)
-	if *target != "" && strings.HasPrefix(*target, "--") {
-		fmt.Fprintf(os.Stderr, "Error: --target flag has invalid value %q\n\n", *target)
-		fmt.Fprintf(os.Stderr, "This usually means the database URL environment variable is empty.\n")
-		fmt.Fprintf(os.Stderr, "Either set the environment variable or provide the URL directly:\n\n")
-		fmt.Fprintf(os.Stderr, "  export TURSO_DATABASE_URL='libsql://...'\n")
-		fmt.Fprintf(os.Stderr, "  lockplane apply --target \"$TURSO_DATABASE_URL\" --schema schema/\n\n")
-		fmt.Fprintf(os.Stderr, "Or:\n\n")
-		fmt.Fprintf(os.Stderr, "  lockplane apply --target 'libsql://...' --schema schema/\n\n")
+	if value := strings.TrimSpace(*target); value != "" && strings.HasPrefix(value, "--") {
+		fmt.Fprintf(os.Stderr, "Error: --target flag is missing its value. Provide a database URL or remove the flag to use --target-environment.\n\n")
 		os.Exit(1)
 	}
 
-	if *schema != "" && strings.HasPrefix(*schema, "--") {
-		fmt.Fprintf(os.Stderr, "Error: --schema flag has invalid value %q\n\n", *schema)
-		fmt.Fprintf(os.Stderr, "Check that previous flags have valid values.\n\n")
+	if value := strings.TrimSpace(*schema); value != "" && strings.HasPrefix(value, "--") {
+		fmt.Fprintf(os.Stderr, "Error: --schema flag has invalid value %q\n\n", value)
+		fmt.Fprintf(os.Stderr, "Check that the preceding flag has its argument.\n\n")
+		os.Exit(1)
+	}
+
+	resolvedTarget, err := ResolveEnvironment(config, *targetEnvironment)
+	if err != nil {
+		log.Fatalf("Failed to resolve target environment: %v", err)
+	}
+
+	targetConnStr := strings.TrimSpace(*target)
+	if targetConnStr == "" {
+		targetConnStr = resolvedTarget.DatabaseURL
+	}
+	if targetConnStr == "" {
+		fmt.Fprintf(os.Stderr, "Error: no target database configured.\n\n")
+		fmt.Fprintf(os.Stderr, "Provide --target or configure environment %q via lockplane.toml/.env.%s.\n", resolvedTarget.Name, resolvedTarget.Name)
 		os.Exit(1)
 	}
 
@@ -511,10 +629,10 @@ func runApply(args []string) {
 		if strings.HasSuffix(planFile, ".sql") || strings.HasSuffix(planFile, ".lp.sql") {
 			fmt.Fprintf(os.Stderr, "Error: '%s' appears to be a schema file, not a migration plan.\n\n", planFile)
 			fmt.Fprintf(os.Stderr, "Did you mean to use --schema?\n\n")
-			fmt.Fprintf(os.Stderr, "  lockplane apply --target $DATABASE_URL --schema %s\n\n", planFile)
+			fmt.Fprintf(os.Stderr, "  lockplane apply --target-environment %s --schema %s\n\n", resolvedTarget.Name, planFile)
 			fmt.Fprintf(os.Stderr, "Or to generate and save a plan first:\n\n")
-			fmt.Fprintf(os.Stderr, "  lockplane plan --from $DATABASE_URL --to %s --output plan.json\n", planFile)
-			fmt.Fprintf(os.Stderr, "  lockplane apply plan.json --target $DATABASE_URL\n\n")
+			fmt.Fprintf(os.Stderr, "  lockplane plan --from-environment %s --to %s --output plan.json\n", resolvedTarget.Name, planFile)
+			fmt.Fprintf(os.Stderr, "  lockplane apply plan.json --target-environment %s\n\n", resolvedTarget.Name)
 			os.Exit(1)
 		}
 
@@ -534,36 +652,27 @@ func runApply(args []string) {
 		fmt.Fprintf(os.Stderr, "📋 Loaded migration plan with %d steps from %s\n", len(plan.Steps), planFile)
 	} else {
 		// Generate plan mode - require --schema
-		if *schema == "" {
-			printApplyUsage()
-			os.Exit(1)
+		schemaPath := strings.TrimSpace(*schema)
+		if schemaPath == "" {
+			schemaPath = GetSchemaPath("", config, resolvedTarget, "")
 		}
-
-		// Get target database URL
-		// Priority: --target flag > DATABASE_URL env var > config file
-		targetURL := *target
-		if targetURL == "" {
-			targetURL = os.Getenv("DATABASE_URL")
-			if targetURL == "" {
-				targetURL = GetDatabaseURL("", config, "")
-			}
-		}
-		if targetURL == "" {
-			fmt.Fprintf(os.Stderr, "Error: --target required (or set DATABASE_URL environment variable)\n\n")
+		if schemaPath == "" {
+			fmt.Fprintf(os.Stderr, "Error: --schema required when generating a plan.\n\n")
+			fmt.Fprintf(os.Stderr, "Set schema_path in lockplane.toml or provide the flag explicitly.\n\n")
 			printApplyUsage()
 			os.Exit(1)
 		}
 
 		// Introspect target database (this is the "from" state)
-		fmt.Fprintf(os.Stderr, "🔍 Introspecting target database...\n")
-		before, err := LoadSchemaOrIntrospect(targetURL)
+		fmt.Fprintf(os.Stderr, "🔍 Introspecting target database (%s)...\n", resolvedTarget.Name)
+		before, err := LoadSchemaOrIntrospect(targetConnStr)
 		if err != nil {
 			log.Fatalf("Failed to introspect target database: %v", err)
 		}
 
 		// Load desired schema (this is the "to" state)
-		fmt.Fprintf(os.Stderr, "📖 Loading desired schema from %s...\n", *schema)
-		after, err := LoadSchemaOrIntrospect(*schema)
+		fmt.Fprintf(os.Stderr, "📖 Loading desired schema from %s...\n", schemaPath)
+		after, err := LoadSchemaOrIntrospect(schemaPath)
 		if err != nil {
 			log.Fatalf("Failed to load schema: %v", err)
 		}
@@ -622,35 +731,44 @@ func runApply(args []string) {
 	}
 
 	// Connect to main database
-	// Priority: --target flag > DATABASE_URL env var > config file > default
-	mainConnStr := *target
-	if mainConnStr == "" {
-		mainConnStr = GetDatabaseURL("", config, "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
-	}
-
 	// Detect database driver from connection string
-	mainDriver, err := newDriverFromConnString(mainConnStr)
+	mainDriver, err := newDriverFromConnString(targetConnStr)
 	if err != nil {
 		log.Fatalf("Failed to create database driver: %v", err)
 	}
 
 	mainDriverName := getSQLDriverName(mainDriver.Name())
-	mainDB, err := sql.Open(mainDriverName, mainConnStr)
+	mainDB, err := sql.Open(mainDriverName, targetConnStr)
 	if err != nil {
-		log.Fatalf("Failed to connect to main database: %v", err)
+		log.Fatalf("Failed to connect to target database: %v", err)
 	}
 	defer func() { _ = mainDB.Close() }()
 
 	ctx := context.Background()
 	if err := mainDB.PingContext(ctx); err != nil {
-		log.Fatalf("Failed to ping main database: %v", err)
+		log.Fatalf("Failed to ping target database: %v", err)
 	}
 
 	// Connect to shadow database if not skipped
 	var shadowDB *sql.DB
 	if !*skipShadow {
-		// Priority: --shadow-db flag > SHADOW_DATABASE_URL env var > config file > default
-		shadowConnStr := GetShadowDatabaseURL(*shadowDBURL, config, "postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable")
+		shadowConnStr := strings.TrimSpace(*shadowDBURL)
+		if shadowConnStr == "" {
+			shadowEnvName := strings.TrimSpace(*shadowEnvironment)
+			if shadowEnvName == "" {
+				shadowEnvName = resolvedTarget.Name
+			}
+			resolvedShadow, err := ResolveEnvironment(config, shadowEnvName)
+			if err != nil {
+				log.Fatalf("Failed to resolve shadow environment: %v", err)
+			}
+			shadowConnStr = resolvedShadow.ShadowDatabaseURL
+			if shadowConnStr == "" {
+				fmt.Fprintf(os.Stderr, "Error: no shadow database configured for environment %q.\n", resolvedShadow.Name)
+				fmt.Fprintf(os.Stderr, "Add SHADOW_DATABASE_URL to .env.%s or provide --shadow-db.\n", resolvedShadow.Name)
+				os.Exit(1)
+			}
+		}
 
 		// Detect shadow database driver
 		shadowDriver, err := newDriverFromConnString(shadowConnStr)
@@ -822,36 +940,33 @@ func runValidateSchema(args []string) {
 	fmt.Fprintf(os.Stderr, "✓ Schema JSON is valid: %s\n", path)
 }
 
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
 func printApplyUsage() {
 	fmt.Fprintf(os.Stderr, "Error: Missing required arguments\n\n")
 	fmt.Fprintf(os.Stderr, "Usage: lockplane apply [plan.json] [options]\n\n")
 	fmt.Fprintf(os.Stderr, "Three ways to use lockplane apply:\n\n")
 	fmt.Fprintf(os.Stderr, "1. Plan, review, and apply (interactive):\n")
-	fmt.Fprintf(os.Stderr, "   lockplane apply --target $DATABASE_URL --schema schema/\n")
+	fmt.Fprintf(os.Stderr, "   lockplane apply --target-environment local --schema schema/\n")
 	fmt.Fprintf(os.Stderr, "   (Introspects target, generates plan, shows it, asks for confirmation)\n\n")
 	fmt.Fprintf(os.Stderr, "2. Apply a pre-generated plan:\n")
-	fmt.Fprintf(os.Stderr, "   lockplane apply plan.json --target $DATABASE_URL\n")
+	fmt.Fprintf(os.Stderr, "   lockplane apply plan.json --target-environment local\n")
 	fmt.Fprintf(os.Stderr, "   (Loads plan from file and applies it)\n\n")
 	fmt.Fprintf(os.Stderr, "3. Plan and apply without confirmation:\n")
-	fmt.Fprintf(os.Stderr, "   lockplane apply --auto-approve --target $DATABASE_URL --schema schema/\n")
+	fmt.Fprintf(os.Stderr, "   lockplane apply --auto-approve --target-environment local --schema schema/\n")
 	fmt.Fprintf(os.Stderr, "   (Introspects target, generates plan, applies immediately)\n\n")
 	fmt.Fprintf(os.Stderr, "Options:\n")
-	fmt.Fprintf(os.Stderr, "  --target <url>         Target database URL (or use DATABASE_URL env var)\n")
+	fmt.Fprintf(os.Stderr, "  --target <url>         Target database URL (overrides environment settings)\n")
+	fmt.Fprintf(os.Stderr, "  --target-environment <name>\n")
+	fmt.Fprintf(os.Stderr, "                         Environment providing the target database connection\n")
 	fmt.Fprintf(os.Stderr, "  --schema <path>        Desired schema file/directory (required for plan generation)\n")
 	fmt.Fprintf(os.Stderr, "  --auto-approve         Skip interactive approval\n")
 	fmt.Fprintf(os.Stderr, "  --skip-shadow          Skip shadow DB validation (not recommended)\n")
-	fmt.Fprintf(os.Stderr, "  --shadow-db <url>      Shadow database URL (or use SHADOW_DATABASE_URL env var)\n\n")
+	fmt.Fprintf(os.Stderr, "  --shadow-db <url>      Shadow database URL (overrides environment settings)\n")
+	fmt.Fprintf(os.Stderr, "  --shadow-environment <name>\n")
+	fmt.Fprintf(os.Stderr, "                         Environment providing the shadow database connection\n\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
-	fmt.Fprintf(os.Stderr, "  lockplane apply --target $DATABASE_URL --schema schema/\n")
-	fmt.Fprintf(os.Stderr, "  lockplane apply plan.json --target $DATABASE_URL\n")
-	fmt.Fprintf(os.Stderr, "  lockplane apply --auto-approve --target $DATABASE_URL --schema schema/\n")
+	fmt.Fprintf(os.Stderr, "  lockplane apply --target-environment local --schema schema/\n")
+	fmt.Fprintf(os.Stderr, "  lockplane apply plan.json --target-environment local\n")
+	fmt.Fprintf(os.Stderr, "  lockplane apply --target mydriver://user:pass@host/db --schema schema/\n")
 }
 
 func printHelp() {
@@ -885,22 +1000,25 @@ EXAMPLES:
   lockplane plan --from postgres://user:pass@localhost/db1 --to schema/ --validate > migration.json
 
   # Generate plan comparing two live databases
-  lockplane plan --from $DATABASE_URL --to postgres://user:pass@localhost/db2 > migration.json
+  lockplane plan --from postgres://user:pass@localhost/db1 --to postgres://user:pass@localhost/db2 > migration.json
+
+  # Generate plan using named environments
+  lockplane plan --from-environment local --to-environment staging --validate > migration.json
 
   # Apply migration interactively (plan, review, confirm)
-  lockplane apply --target $DATABASE_URL --schema schema/
+  lockplane apply --target-environment local --schema schema/
 
   # Apply a pre-generated plan
-  lockplane apply plan.json --target $DATABASE_URL
+  lockplane apply plan.json --target-environment local
 
   # Auto-approve: plan and apply without confirmation
-  lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
+  lockplane apply --auto-approve --target-environment local --schema schema/
 
   # Generate rollback plan
   lockplane rollback --plan migration.json --from current.json > rollback.json
 
   # Generate rollback using database connection string
-  lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
+  lockplane rollback --plan migration.json --from-environment local > rollback.json
 
   # Validate SQL schema file
   lockplane validate sql schema.lp.sql
@@ -920,15 +1038,22 @@ EXAMPLES:
   # Convert JSON to SQL DDL
   lockplane convert --input schema.json --output schema.lp.sql --to sql
 
-ENVIRONMENT:
-  DATABASE_URL            Database connection string for main database
-                          Postgres: postgres://user:pass@localhost:5432/dbname?sslmode=disable
-                          SQLite: file:path/to/database.db or :memory:
-                          (default: postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable)
+ENVIRONMENTS:
+  Configure environments in lockplane.toml (default environment: "local").
+  Each environment can define connection strings inline or load them from .env.<name> files
+  containing DATABASE_URL and SHADOW_DATABASE_URL entries.
 
-  SHADOW_DATABASE_URL     Database connection string for shadow database
-                          Same format as DATABASE_URL
-                          (default: postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable)
+  Example:
+    default_environment = "local"
+
+    [environments.local]
+      description = "Local development"
+
+  Use --target-environment, --from-environment, and --source-environment flags to select the
+  environment when running commands. Without configuration, Lockplane falls back to the bundled
+  defaults:
+    Database: postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable
+    Shadow:   postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable
 
 SUPPORTED DATABASES:
   - PostgreSQL (full support)

@@ -11,12 +11,29 @@ import (
 	"github.com/lockplane/lockplane/database/postgres"
 )
 
+func resolveTestEnvironment(t *testing.T) *ResolvedEnvironment {
+	t.Helper()
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	env, err := ResolveEnvironment(config, "")
+	if err != nil {
+		t.Fatalf("Failed to resolve default environment: %v", err)
+	}
+
+	return env
+}
+
 // goldenTest runs a test case using fixture files
 func goldenTest(t *testing.T, fixtureName string) {
 	t.Helper()
 
 	// Connect to test database
-	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	env := resolveTestEnvironment(t)
+	connStr := env.DatabaseURL
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
@@ -226,7 +243,8 @@ func TestIndexesSchema(t *testing.T) {
 // Executor tests
 
 func TestApplyPlan_CreateTable(t *testing.T) {
-	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	env := resolveTestEnvironment(t)
+	connStr := env.DatabaseURL
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
@@ -278,8 +296,9 @@ func TestApplyPlan_CreateTable(t *testing.T) {
 }
 
 func TestApplyPlan_WithShadowDB(t *testing.T) {
-	mainConnStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
-	shadowConnStr := getEnv("SHADOW_DATABASE_URL", "postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable")
+	env := resolveTestEnvironment(t)
+	mainConnStr := env.DatabaseURL
+	shadowConnStr := env.ShadowDatabaseURL
 
 	mainDB, err := sql.Open("postgres", mainConnStr)
 	if err != nil {
@@ -348,7 +367,8 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 }
 
 func TestApplyPlan_InvalidSQL(t *testing.T) {
-	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	env := resolveTestEnvironment(t)
+	connStr := env.DatabaseURL
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
@@ -383,7 +403,8 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 }
 
 func TestApplyPlan_AddColumn(t *testing.T) {
-	connStr := getEnv("DATABASE_URL", "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable")
+	env := resolveTestEnvironment(t)
+	connStr := env.DatabaseURL
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)

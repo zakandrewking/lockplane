@@ -121,9 +121,9 @@ docker compose up -d
 # Tests will skip if database is unavailable (safe in CI)
 ```
 
-Environment variables:
-- `DATABASE_URL` - Main Postgres connection (default: `postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable`)
-- `SHADOW_DATABASE_URL` - Shadow DB for validation (default: `postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable`)
+Environment configuration:
+- The default environment resolves to `postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable`.
+- Override credentials by editing `.env.local` or by passing `--target`/`--shadow-db` in tests instead of exporting shell variables.
 
 ### Test-Driven Development
 

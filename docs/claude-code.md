@@ -97,64 +97,28 @@ volumes:
 
 ### Configuring Database Connections
 
-Lockplane needs to know how to connect to your databases. You have three options:
-
-**Option 1: Configuration File (Recommended)**
-
-Create a `lockplane.toml` file in your project root:
+Lockplane resolves connections from named environments. Add the defaults you want to share:
 
 ```toml
-# lockplane.toml
-database_url = "postgresql://lockplane:lockplane@localhost:5432/notesapp?sslmode=disable"
-shadow_database_url = "postgresql://lockplane:lockplane@localhost:5433/notesapp_shadow?sslmode=disable"
+default_environment = "local"
+
+[environments.local]
+description = "Local notesapp database"
 schema_path = "lockplane/schema/"
 ```
 
-> **Important:** Always add `?sslmode=disable` for local development databases (Docker Compose, Supabase local, etc.). Without it, you'll get SSL connection errors.
-
-Lockplane will automatically find and use this configuration file.
-
-**Option 2: Environment Variables**
+Store the actual credentials in `.env.local`:
 
 ```bash
-# Main database (where migrations are applied)
-export DATABASE_URL="postgresql://lockplane:lockplane@localhost:5432/notesapp?sslmode=disable"
-
-# Shadow database (for testing migrations before applying)
-export SHADOW_DATABASE_URL="postgresql://lockplane:lockplane@localhost:5433/notesapp_shadow?sslmode=disable"
+cat <<'EOF' > .env.local
+DATABASE_URL=postgresql://lockplane:lockplane@localhost:5432/notesapp?sslmode=disable
+SHADOW_DATABASE_URL=postgresql://lockplane:lockplane@localhost:5433/notesapp_shadow?sslmode=disable
+EOF
 ```
 
-> **Important:** The `?sslmode=disable` parameter is required for local development. Remove it for production databases with SSL enabled.
+Lockplane automatically loads `.env.<name>` when you pass `--target-environment`, `--from-environment`, or `--source-environment`. Override temporarily with `--target`, `--shadow-db`, or `--from` if you need to point at a different database (staging, production, etc.).
 
-Add these to your shell profile (`~/.bashrc` or `~/.zshrc`) to make them persist.
-
-**Option 3: CLI Flags**
-
-```bash
-lockplane apply migration.json \
-  --target "postgresql://localhost:5432/notesapp" \
-  --shadow-db "postgresql://localhost:5433/notesapp_shadow"
-```
-
-**Priority Order:**
-1. CLI flags (highest priority)
-2. Environment variables
-3. Config file (`lockplane.toml`)
-4. Default values (lowest priority)
-
-**Two ways Lockplane uses database connections:**
-
-1. **Reading schemas** (`--from` / `--to` flags) - You can pass connection strings directly:
-   ```bash
-   # Introspect current production state
-   lockplane plan --from postgresql://localhost:5432/myapp --to lockplane/schema/
-   ```
-
-2. **Applying migrations** (`apply` command) - Uses the priority order above:
-   ```bash
-   # Apply uses config file, env vars, or flags (in priority order)
-   lockplane apply migration.json
-   ```
+> **Heads up:** Keep `.env.local` out of version control. Commit `lockplane.toml` (with sanitized defaults) and share a `.env.local.example` instead.
 
 **Your schema source of truth** - Create directory `lockplane/schema/` (recommended):
 
@@ -249,7 +213,7 @@ lockplane plan --from current.json --to schema.lp.sql --validate > migration.jso
 
 > **💡 Tip:** You can skip the introspect step by using a database connection string directly:
 > ```bash
-> lockplane plan --from $DATABASE_URL --to schema.lp.sql --validate > migration.json
+> lockplane plan --from-environment local --to schema.lp.sql --validate > migration.json
 > ```
 > Lockplane will automatically introspect the database when it detects a connection string.
 
@@ -301,13 +265,13 @@ You have two options:
 lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 
 # Apply it (uses DATABASE_URL and SHADOW_DATABASE_URL from environment)
-lockplane apply migration.json
+lockplane apply migration.json --target-environment local
 ```
 
 **Option B: One-step (auto-approve)**
 ```bash
 # Generate and apply in a single command (uses DATABASE_URL from environment)
-lockplane apply --auto-approve --target $DATABASE_URL --schema schema.lp.sql --validate
+lockplane apply --auto-approve --target-environment local --schema schema.lp.sql --validate
 ```
 
 **What happens in both cases:**
@@ -411,12 +375,12 @@ lockplane plan --from current.json --to schema.lp.sql --validate > add_tags.json
 # Review the plan
 cat add_tags.json
 # Apply it
-lockplane apply add_tags.json
+lockplane apply add_tags.json --target-environment local
 ```
 
 **Option B: One-step (auto-approve)**
 ```bash
-lockplane apply --auto-approve --target $DATABASE_URL --schema schema.lp.sql --validate
+lockplane apply --auto-approve --target-environment local --schema schema.lp.sql --validate
 ```
 
 Lockplane generates:
@@ -531,7 +495,7 @@ services:
 3. Generate migration plan: `lockplane plan --from current.json --to schema/ --validate`
 4. Apply migrations to staging DB:
    ```bash
-   lockplane apply migration.json
+   lockplane apply migration.json --target-environment local
    ```
 5. Deploy new app code
 6. Verify with smoke tests
@@ -565,7 +529,7 @@ services:
 pg_dump notesapp > backup_$(date +%Y%m%d).sql
 
 # 2. Apply migrations (skip shadow DB in production)
-lockplane apply migration.json --skip-shadow
+lockplane apply migration.json --target-environment local --skip-shadow
 
 # 3. Deploy new app code
 docker compose up -d app
@@ -666,7 +630,7 @@ lockplane plan --from current.json --to schema/ --validate > add_profiles.json
 cat add_profiles.json
 
 # 6. Apply it
-lockplane apply add_profiles.json
+lockplane apply add_profiles.json --target-environment local
 ```
 
 **One-step auto-approve approach:**
@@ -681,7 +645,7 @@ lockplane introspect > current.json
 # (adds columns to users table)
 
 # 4. Generate and apply in one command
-lockplane apply --auto-approve --target $DATABASE_URL --schema schema/ --validate
+lockplane apply --auto-approve --target-environment local --schema schema/ --validate
 ```
 
 **Reviewing a pull request:**

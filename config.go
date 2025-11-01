@@ -7,25 +7,41 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// Config represents the lockplane.toml configuration file
-type Config struct {
+const (
+	defaultEnvironmentName   = "local"
+	defaultDatabaseURL       = "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
+	defaultShadowDatabaseURL = "postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable"
+)
+
+// EnvironmentConfig describes a single named environment from lockplane.toml.
+type EnvironmentConfig struct {
+	Description       string `toml:"description"`
 	DatabaseURL       string `toml:"database_url"`
 	ShadowDatabaseURL string `toml:"shadow_database_url"`
 	SchemaPath        string `toml:"schema_path"`
 }
 
-// LoadConfig loads the lockplane.toml file from the current directory or any parent directory
+// Config represents the lockplane.toml configuration file.
+type Config struct {
+	DefaultEnvironment string                       `toml:"default_environment"`
+	SchemaPath         string                       `toml:"schema_path"`
+	DatabaseURL        string                       `toml:"database_url"`        // legacy fallback
+	ShadowDatabaseURL  string                       `toml:"shadow_database_url"` // legacy fallback
+	Environments       map[string]EnvironmentConfig `toml:"environments"`
+	configDir          string                       `toml:"-"`
+}
+
+// LoadConfig loads the lockplane.toml file from the current directory or any parent directory.
 func LoadConfig() (*Config, error) {
-	// Start from current directory and walk up to find lockplane.toml
-	dir, err := os.Getwd()
+	startDir, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
 
+	dir := startDir
 	for {
 		configPath := filepath.Join(dir, "lockplane.toml")
 		if _, err := os.Stat(configPath); err == nil {
-			// Found config file, load it
 			data, err := os.ReadFile(configPath)
 			if err != nil {
 				return nil, err
@@ -36,54 +52,41 @@ func LoadConfig() (*Config, error) {
 				return nil, err
 			}
 
+			config.configDir = dir
 			return &config, nil
 		}
 
-		// Move up one directory
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			// Reached root, no config file found
 			break
 		}
 		dir = parent
 	}
 
-	// No config file found, return empty config
-	return &Config{}, nil
+	return &Config{configDir: startDir}, nil
 }
 
-// GetDatabaseURL returns the database URL with priority: explicit value > env var > config > default
-func GetDatabaseURL(explicitValue string, config *Config, defaultValue string) string {
+// ConfigDir returns the directory containing the resolved lockplane.toml (or the working directory if none exists).
+func (c *Config) ConfigDir() string {
+	if c == nil {
+		return ""
+	}
+	if c.configDir != "" {
+		return c.configDir
+	}
+	if dir, err := os.Getwd(); err == nil {
+		return dir
+	}
+	return ""
+}
+
+// GetSchemaPath returns the schema path with priority: explicit value > environment config > global config > default.
+func GetSchemaPath(explicitValue string, config *Config, env *ResolvedEnvironment, defaultValue string) string {
 	if explicitValue != "" {
 		return explicitValue
 	}
-	if envValue := os.Getenv("DATABASE_URL"); envValue != "" {
-		return envValue
-	}
-	if config != nil && config.DatabaseURL != "" {
-		return config.DatabaseURL
-	}
-	return defaultValue
-}
-
-// GetShadowDatabaseURL returns the shadow database URL with priority: explicit value > env var > config > default
-func GetShadowDatabaseURL(explicitValue string, config *Config, defaultValue string) string {
-	if explicitValue != "" {
-		return explicitValue
-	}
-	if envValue := os.Getenv("SHADOW_DATABASE_URL"); envValue != "" {
-		return envValue
-	}
-	if config != nil && config.ShadowDatabaseURL != "" {
-		return config.ShadowDatabaseURL
-	}
-	return defaultValue
-}
-
-// GetSchemaPath returns the schema path with priority: explicit value > config > default
-func GetSchemaPath(explicitValue string, config *Config, defaultValue string) string {
-	if explicitValue != "" {
-		return explicitValue
+	if env != nil && env.SchemaPath != "" {
+		return env.SchemaPath
 	}
 	if config != nil && config.SchemaPath != "" {
 		return config.SchemaPath

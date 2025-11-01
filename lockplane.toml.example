@@ -1,46 +1,35 @@
 # Lockplane Configuration File
 #
-# This file allows you to configure Lockplane without using environment variables
-# or CLI flags. Place this file as `lockplane.toml` in your project root.
+# Define named environments and shared settings for your project. Lockplane looks for
+# this file (lockplane.toml) in the current directory or any parent directory. Each
+# environment can inline database URLs here or load them from matching .env.<name> files.
 #
 # Priority order (highest to lowest):
-#   1. CLI flags (--db, --shadow-db)
-#   2. Environment variables (DATABASE_URL, SHADOW_DATABASE_URL)
-#   3. This config file
-#   4. Default values
-#
-# To use this file, copy it to `lockplane.toml` and uncomment the options you need.
+#   1. CLI flags (--target, --target-environment, --from, --from-environment, etc.)
+#   2. Named environments from this file (including .env.<name> overlays)
+#   3. Built-in defaults (local Postgres on ports 5432/5433)
 
-# Main database connection string
-# Used by: apply, introspect (with --db flag)
-# IMPORTANT: Add "?sslmode=disable" for local development (Docker, Supabase local, etc.)
-#            Remove it for production databases with SSL enabled
-# database_url = "postgresql://user:password@localhost:5432/myapp?sslmode=disable"
+# Name of the environment to use when no flag is provided.
+default_environment = "local"
 
-# Shadow database connection string (for testing migrations before applying)
-# Used by: apply command
-# IMPORTANT: Add "?sslmode=disable" for local development
-# shadow_database_url = "postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
-
-# Default path to schema files (recommended: lockplane/schema/)
-# Can be a single .lp.sql file or a directory containing .lp.sql files
-# Used by: plan, diff, convert (when not specified via CLI)
-# RECOMMENDED: Use "lockplane/schema/" for clear project organization
+# Default schema path used when --schema is omitted in plan/apply commands.
+# This can point to a directory of .lp.sql files or a single schema file.
 # schema_path = "lockplane/schema/"
 
-# Example configurations for different environments:
+[environments.local]
+description = "Local development using the default docker-compose databases"
+database_url = "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
+shadow_database_url = "postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable"
 
-# Local development with Lockplane defaults:
-# database_url = "postgresql://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
-# shadow_database_url = "postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable"
-# schema_path = "lockplane/schema/"
+# Example: defer secrets to .env.staging while keeping metadata here.
+[environments.staging]
+description = "Managed staging database (credentials in .env.staging)"
+# When database_url / shadow_database_url are omitted, Lockplane reads them from .env.staging:
+#   DATABASE_URL=postgres://user:password@staging-host:5432/app?sslmode=require
+#   SHADOW_DATABASE_URL=postgres://user:password@staging-host:5433/app_shadow?sslmode=require
 
-# Supabase local development:
-# database_url = "postgresql://postgres:postgres@127.0.0.1:54322/postgres?sslmode=disable"
-# shadow_database_url = "postgresql://postgres:postgres@127.0.0.1:54323/postgres?sslmode=disable"
-# schema_path = "supabase/migrations"
-
-# SQLite:
-# database_url = "sqlite://./myapp.db"
-# shadow_database_url = "sqlite://./myapp_shadow.db"
-# schema_path = "db/schema.lp.sql"
+# Example SQLite environment (inline URL only, no .env file needed):
+#[environments.sqlite]
+#description = "Local SQLite prototype"
+#database_url = "sqlite://./myapp.db"
+#shadow_database_url = "sqlite://./myapp_shadow.db"

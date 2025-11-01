@@ -9,6 +9,20 @@ Alembic (SQLAlchemy's migration tool) excels at Python-based migrations. Lockpla
 - Lockplane CLI installed
 - Access to your Postgres database for both tools
 
+Create an Alembic-friendly environment in `lockplane.toml` and credentials file:
+
+```toml
+[environments.alembic]
+description = "Alembic-managed Postgres"
+```
+
+```bash
+cat <<'EOF' > .env.alembic
+DATABASE_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
+SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+EOF
+```
+
 ## Hybrid Workflow Overview
 
 1. **Track schema declaratively with Lockplane**
@@ -29,7 +43,7 @@ Alembic (SQLAlchemy's migration tool) excels at Python-based migrations. Lockpla
 ```bash
 alembic init migrations
 ```
-Configure `sqlalchemy.url` in `alembic.ini` to match the `DATABASE_URL` you use for Lockplane.
+Configure `sqlalchemy.url` in `alembic.ini` to match the `DATABASE_URL` stored in `.env.alembic`.
 
 ### 2. Define desired schema
 Update `schema.lp.sql` to express the new state. Validate immediately:
@@ -40,7 +54,7 @@ lockplane validate schema schema.lp.sql
 ### 3. Generate a plan and review
 ```bash
 # Lockplane will automatically introspect your current database state
-lockplane plan --from $DATABASE_URL --to schema.lp.sql --validate > migration.json
+lockplane plan --from-environment alembic --to schema.lp.sql --validate > migration.json
 ```
 
 > **💡 Tip:** You don't need to run `lockplane introspect` first—Lockplane automatically introspects your database when you provide a connection string!
@@ -49,7 +63,7 @@ lockplane plan --from $DATABASE_URL --to schema.lp.sql --validate > migration.js
 - `migration.json` contains ordered `steps` with SQL.
 - Optionally generate a rollback:
   ```bash
-  lockplane rollback --plan migration.json --from $DATABASE_URL > rollback.json
+  lockplane rollback --plan migration.json --from-environment alembic > rollback.json
   ```
 
 ### 4. Author Alembic revision using Lockplane SQL
@@ -78,9 +92,9 @@ def downgrade():
 Use `op.create_table`/`op.add_column` where convenient; Lockplane SQL serves as a verified template.
 
 ### 5. Test against a shadow database
-Set `SHADOW_DATABASE_URL` to your staging database or an ephemeral container and run:
+Ensure `.env.alembic` points to your staging database (for the shadow URL) and run:
 ```bash
-lockplane apply migration.json --skip-shadow
+lockplane apply migration.json --target-environment alembic --skip-shadow
 ```
 - Or, run `lockplane apply` without `--skip-shadow` to let it dry-run on the shadow, then perform `alembic upgrade head` once confident.
 
@@ -95,7 +109,7 @@ lockplane apply migration.json --skip-shadow
 - Use Makefile targets:
   ```makefile
   lockplane-plan:
-	lockplane plan --from $$DATABASE_URL --to schema.lp.sql --validate > migration.json
+	lockplane plan --from-environment alembic --to schema.lp.sql --validate > migration.json
 
   alembic-upgrade:
   	alembic upgrade head

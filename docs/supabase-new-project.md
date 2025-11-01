@@ -14,9 +14,20 @@ Start your new Supabase project with declarative schema control from day one.
 
 In the Supabase dashboard, go to *Project Settings → Database* and copy the connection string.
 
+Define a Supabase environment in `lockplane.toml`:
+
+```toml
+[environments.supabase]
+description = "Supabase production"
+```
+
+Create `.env.supabase` (ignored by Git) with the credentials you copied:
+
 ```bash
-export DATABASE_URL='postgres://postgres:<password>@<host>:5432/postgres'
-export SHADOW_DATABASE_URL='postgres://postgres:<password>@<host>:6543/postgres'
+cat <<'EOF' > .env.supabase
+DATABASE_URL=postgres://postgres:<password>@<host>:5432/postgres
+SHADOW_DATABASE_URL=postgres://postgres:<password>@<host>:6543/postgres
+EOF
 ```
 
 Since Supabase blocks direct database creation, point the shadow URL at a separate Supabase project or a local Postgres container. For local testing: `docker compose up supabase-shadow` using the sample `docker-compose.yml` in this repo.
@@ -50,8 +61,8 @@ lockplane validate schema desired.json
 ### 3. Generate Your First Migration
 
 ```bash
-# Since this is a new project with no tables, you can use --from with the database URL
-lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
+# Since this is a new project with no tables, you can read from the Supabase environment
+lockplane plan --from-environment supabase --to desired.json --validate > migration.json
 ```
 
 > **💡 Tip:** Lockplane automatically introspects your database when you provide a connection string. For a brand new project, the introspection will return an empty schema.
@@ -61,7 +72,7 @@ The validation report highlights risky operations. Review and fix before proceed
 ### 4. Apply
 
 ```bash
-lockplane apply migration.json
+lockplane apply migration.json --target-environment supabase
 ```
 
 This runs on the shadow database first, then applies to production.
@@ -74,5 +85,5 @@ This runs on the shadow database first, then applies to production.
 
 ## Troubleshooting
 
-- **SSL errors:** add `?sslmode=require` to `DATABASE_URL`
+- **SSL errors:** append `?sslmode=require` to the URLs in `.env.supabase`
 - **Shadow environment issues:** reset between runs with `supabase db reset` or `docker compose down -v`

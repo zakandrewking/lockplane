@@ -8,7 +8,7 @@ Define your database schema in `.lp.sql` files, validate them, and apply changes
 
 1. **Create schema** in `.lp.sql` files (standard PostgreSQL DDL)
 2. **Validate**: `lockplane validate sql schema/`
-3. **Apply**: `lockplane apply --auto-approve --from $DATABASE_URL --to schema/`
+3. **Apply**: `lockplane apply --auto-approve --target-environment local --schema schema/`
 
 ## Commands
 
@@ -20,11 +20,8 @@ lockplane validate sql schema/  # validate entire directory
 
 ### Apply changes
 ```bash
-# Set database connection
-export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
-
-# Apply changes (tests on shadow DB first)
-lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+# Configure environments in lockplane.toml and .env.<name>
+lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 
 ## Schema Format
@@ -72,23 +69,33 @@ EOF
 lockplane validate sql schema/
 
 # 3. Apply
-lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+lockplane apply --auto-approve --target-environment local --schema schema/
 
 # 4. Make a change (add column)
 # Edit schema/users.lp.sql to add: age INTEGER NOT NULL DEFAULT 0
 
 # 5. Apply again
-lockplane apply --auto-approve --from $DATABASE_URL --to schema/
+lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 
 ## Configuration
 
-```bash
-export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
-export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
+Define environments in lockplane.toml and keep credentials in `.env.<name>` files:
+
+```toml
+default_environment = "local"
+
+[environments.local]
+description = "Local development"
 ```
 
-Or use CLI flags: `--db` and `--shadow-db`
+```bash
+# .env.local
+DATABASE_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
+SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+```
+
+Override with CLI flags `--target`, `--shadow-db`, `--from`, and `--from-environment` when needed.
 
 ---
 

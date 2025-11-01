@@ -15,9 +15,18 @@ Add declarative schema control, safety checks, and reversible migrations to your
 
 In the Supabase dashboard, go to *Project Settings → Database* and copy the connection string.
 
+Add a Supabase environment to `lockplane.toml` and store credentials in `.env.supabase`:
+
+```toml
+[environments.supabase]
+description = "Supabase production"
+```
+
 ```bash
-export DATABASE_URL='postgres://postgres:<password>@<host>:5432/postgres'
-export SHADOW_DATABASE_URL='postgres://postgres:<password>@<host>:6543/postgres'
+cat <<'EOF' > .env.supabase
+DATABASE_URL=postgres://postgres:<password>@<host>:5432/postgres
+SHADOW_DATABASE_URL=postgres://postgres:<password>@<host>:6543/postgres
+EOF
 ```
 
 Since Supabase blocks direct database creation, point the shadow URL at a separate Supabase project or a local Postgres container. For local testing: `docker compose up supabase-shadow` using the sample `docker-compose.yml` in this repo.
@@ -43,7 +52,7 @@ Generate a migration plan directly from your database:
 
 ```bash
 # Lockplane will automatically introspect your current state
-lockplane plan --from $DATABASE_URL --to desired.json --validate > migration.json
+lockplane plan --from-environment supabase --to desired.json --validate > migration.json
 ```
 
 > **💡 Tip:** You don't need to run `lockplane introspect` first—Lockplane automatically introspects your database when you provide a connection string!
@@ -55,7 +64,7 @@ The validation report highlights risky operations (e.g., adding NOT NULL columns
 Dry-run the migration on your shadow database:
 
 ```bash
-lockplane apply migration.json
+lockplane apply migration.json --target-environment supabase
 ```
 
 Lockplane applies to the shadow database first for safety.
@@ -64,7 +73,7 @@ Lockplane applies to the shadow database first for safety.
 
 **Option A: Direct apply**
 ```bash
-lockplane apply migration.json --target production
+lockplane apply migration.json --target-environment supabase
 ```
 
 **Option B: Via Supabase CLI**
@@ -86,6 +95,6 @@ This keeps Supabase migration history aligned with Lockplane's declarative schem
 
 ## Troubleshooting
 
-- **SSL errors:** add `?sslmode=require` to `DATABASE_URL`
+- **SSL errors:** add `?sslmode=require` to the URLs in `.env.supabase`
 - **Function/trigger differences:** Supabase migrations create additional objects. Ignore them in Lockplane by scoping JSON to the tables you manage, or extend the schema definition
 - **Shadow environment mismatches:** reset between runs with `supabase db reset` or `docker compose down -v` for local mirrors

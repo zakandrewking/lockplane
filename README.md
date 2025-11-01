@@ -116,40 +116,51 @@ database.
 NOTE: If you do not have a database yet, you can use the `lockplane init` command to
 create a new database for you. For more information, run `lockplane init --help`.
 
-### Choose your database
+### Configure your database environment
 
-Lockplane supports both PostgreSQL and SQLite. Choose the option that matches your setup:
+Lockplane reads connection strings from named environments. Create a
+`lockplane.toml` file in your project root (or use the sample at
+`lockplane.toml.example`) and define a default environment:
 
-#### Option A: PostgreSQL
+```toml
+default_environment = "local"
 
-If you have a PostgreSQL database running on localhost:5432 called `myapp`, set
-the connection string environment variable. Replace `user` and `password` with
-your actual database credentials:
-
-```bash
-export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
+[environments.local]
+description = "Local development database"
+schema_path = "schema/"
 ```
 
-NOTE: You must add `?sslmode=disable` to the connection string for local development.
+Next, provide the actual credentials in `.env.local` (ignored by Git by default).
 
-#### Option B: SQLite
-
-If you're using SQLite, you can point to a file or use an in-memory database:
+#### Example: PostgreSQL
 
 ```bash
+cat <<'EOF' > .env.local
+DATABASE_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
+SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+EOF
+```
+
+#### Example: SQLite
+
+```bash
+cat <<'EOF' > .env.local
 # Use a file-based SQLite database
-export DATABASE_URL="myapp.db"
-
-# Or use an in-memory database (useful for testing)
-export DATABASE_URL=":memory:"
+DATABASE_URL=sqlite://./myapp.db
+SHADOW_DATABASE_URL=sqlite://./myapp_shadow.db
+EOF
 ```
+
+Lockplane automatically loads `.env.<name>` for the selected environment (for the
+default environment, `.env.local`). You can still override any value with CLI flags
+such as `--target` or `--shadow-db` when needed.
 
 ### Apply the migration
 
 Now, we can generate a migration plan to apply our schema to our database with the following command:
 
 ```bash
-lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
+lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 
 This will introspect the target database, generate a migration plan, and apply it immediately (with shadow database validation).
@@ -171,42 +182,66 @@ CREATE TABLE users (
 Now to apply the change, we can run the following command:
 
 ```bash
-lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
+lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 
 And that's it! You've successfully made a change to your schema and applied it to your database.
 
+## 6. ✅ Final environment check
+
+Before handing the project to teammates or automations:
+
+- Commit `lockplane.toml` with the environments you expect everyone to use.
+- Keep sensitive credentials in `.env.<name>` files (add them to `.gitignore`) and share sanitized samples such as `.env.local.example`.
+- Record which environment maps to each deployed database (local, staging, production) so the `--*-environment` flags stay meaningful.
+- When automating (CI, release pipelines), copy the appropriate `.env.<name>` file onto the runner or provide explicit `--target` / `--from` flags.
+
+Lockplane always prefers explicit CLI values, so you can temporarily override connections without touching the shared environment files.
+
 ## Configuration
 
-Lockplane can be configured via environment variables or command-line flags. Flags take precedence over environment variables.
+Lockplane resolves configuration in this order:
+1. Explicit CLI flags (`--target`, `--target-environment`, `--from`, `--from-environment`, etc.)
+2. Named environments from `lockplane.toml` (plus `.env.<name>` overlays)
+3. Built-in defaults for local development
 
-| Setting | Environment Variable | CLI Flag | Used By | Default |
-|---------|---------------------|----------|---------|---------|
-| Main database URL | `DATABASE_URL` | `--db` | `apply` | `postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable` |
-| Shadow database URL | `SHADOW_DATABASE_URL` | `--shadow-db` | `apply` | `postgres://lockplane:lockplane@localhost:5433/lockplane?sslmode=disable` |
+### `lockplane.toml`
 
-### Database Connection Strings
+Use this file to define environments shared across your team:
 
-Lockplane uses database connections in two ways:
+```toml
+default_environment = "local"
+schema_path = "schema/"
 
-1. **Reading schemas** - Commands like `plan`, `diff`, `introspect`, and `rollback` accept connection strings as arguments to `--from` and `--to`:
-   ```bash
-   # Read current schema directly from database
-   lockplane plan --from postgresql://localhost:5432/myapp --to schema.json
-   ```
+[environments.local]
+description = "Local development"
 
-2. **Applying migrations** - The `apply` command uses connection strings to know where to execute:
-   ```bash
-   # Via environment variables (recommended for safety)
-   export DATABASE_URL="postgresql://localhost:5432/myapp"
-   export SHADOW_DATABASE_URL="postgresql://localhost:5433/myapp_shadow"
-   lockplane apply migration.json
+[environments.staging]
+description = "Managed staging database"
+# Values pulled from .env.staging
+```
 
-   # Or via command-line flags
-   lockplane apply migration.json \
-     --target "postgresql://localhost:5432/myapp" \
-     --shadow-db "postgresql://localhost:5433/myapp_shadow"
-   ```
+### `.env.<environment>` files
+
+Store credentials in `.env.local`, `.env.staging`, etc. Lockplane reads these files
+automatically based on the selected environment. Each file should define:
+
+```
+DATABASE_URL=postgresql://user:password@host:5432/db?sslmode=disable
+SHADOW_DATABASE_URL=postgresql://user:password@host:5433/db_shadow?sslmode=disable
+```
+
+### CLI overrides
+
+Flags override any configured environment:
+
+```bash
+# Override target connection once-off
+lockplane apply plan.json \
+  --target-environment staging \
+  --target "postgresql://override@host/db" \
+  --shadow-db "postgresql://override@host/db_shadow"
+```
 
 **Supported database formats:**
 - PostgreSQL: `postgres://` or `postgresql://`
@@ -395,20 +430,20 @@ lockplane plan \
 
 # Compare live database to schema file
 lockplane plan \
-  --from $DATABASE_URL \
+  --from-environment local \
   --to schema.lp.sql \
   --validate > migration.json
 
 # Auto-approve: plan and apply directly to database
 lockplane apply \
   --auto-approve \
-  --target $DATABASE_URL \
+  --target-environment local \
   --schema schema/
 
 # Generate rollback using live database state
 lockplane rollback \
   --plan migration.json \
-  --from $DATABASE_URL > rollback.json
+  --from-environment local > rollback.json
 ```
 
 This is especially useful for:

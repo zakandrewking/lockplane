@@ -15,7 +15,7 @@ Lockplane tests migrations on a shadow database before applying to production, v
 
 1. **Create schema** - Write `.lp.sql` files with CREATE TABLE statements
 2. **Validate** - `lockplane validate sql schema/`
-3. **Apply** - `lockplane apply --auto-approve --target $DATABASE_URL --schema schema/`
+3. **Apply** - `lockplane apply --auto-approve --target-environment local --schema schema/`
 
 ## Commands
 
@@ -27,21 +27,28 @@ lockplane validate sql schema/  # validate entire directory
 
 ### Apply changes
 ```bash
-# Set database connection
-export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
-
-# Apply changes (tests on shadow DB first)
-lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
+# Environments are defined in lockplane.toml and .env.<name>
+lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 
 ## Configuration
 
-```bash
-export DATABASE_URL="postgresql://user:password@localhost:5432/myapp?sslmode=disable"
-export SHADOW_DATABASE_URL="postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable"
+Define environments in lockplane.toml and keep credentials in `.env.<name>` files:
+
+```toml
+default_environment = "local"
+
+[environments.local]
+description = "Local development"
 ```
 
-Or use CLI flags: `--target` and `--shadow-db`
+```bash
+# .env.local
+DATABASE_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
+SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+```
+
+Override with CLI flags (`--target`, `--shadow-db`) when needed.
 
 ## Schema Format
 
@@ -98,7 +105,7 @@ CREATE TABLE users (
 Then validate and apply:
 ```bash
 lockplane validate sql schema/users.lp.sql
-lockplane apply --auto-approve --target $DATABASE_URL --schema schema/
+lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 
 Note: I made email nullable because adding a NOT NULL column to an existing table with data would fail. To make it NOT NULL:
