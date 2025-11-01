@@ -59,7 +59,7 @@ aux_links:
 aux_links_new_tab: true
 
 # Footer content
-footer_content: "Copyright &copy; 2024-2025 Zak King. Distributed under the <a href=\"https://github.com/zakandrewking/lockplane/blob/main/LICENSE\">MIT License</a>."
+footer_content: "Copyright &copy; 2024-2025 Zak King. Distributed under the <a href=\"https://github.com/zakandrewking/lockplane/blob/main/LICENSE\">Apache 2.0 License</a>."
 
 # Footer "Edit this page on GitHub" link
 gh_edit_link: true
