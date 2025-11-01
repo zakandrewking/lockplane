@@ -1,0 +1,155 @@
+# Site settings
+title: Lockplane Documentation
+description: Safe, AI-friendly schema management for PostgreSQL and SQLite
+url: https://zakandrewking.github.io
+baseurl: /lockplane
+repository: zakandrewking/lockplane
+
+# Theme configuration
+remote_theme: just-the-docs/just-the-docs
+
+# Plugins
+plugins:
+  - jekyll-remote-theme
+  - jekyll-readme-index
+  - jekyll-relative-links
+  - jekyll-titles-from-headings
+  - jekyll-seo-tag
+
+# Use README.md as the home page
+readme_index:
+  enabled: true
+  remove_originals: false
+
+# Auto-use the first H1 on each page as its title
+titles_from_headings:
+  enabled: true
+  strip_title: true
+  collections: true
+
+# Relative links configuration
+relative_links:
+  enabled: true
+  collections: true
+
+# Just the Docs theme configuration
+# Color scheme: supports "dark", "light", or custom
+color_scheme: light
+
+# Search
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+# Heading anchors
+heading_anchors: true
+
+# Aux links for the upper right navigation
+aux_links:
+  "Lockplane on GitHub":
+    - "https://github.com/zakandrewking/lockplane"
+
+# Makes Aux links open in a new tab
+aux_links_new_tab: true
+
+# Footer content
+footer_content: "Copyright &copy; 2024-2025 Zak King. Distributed under the <a href=\"https://github.com/zakandrewking/lockplane/blob/main/LICENSE\">MIT License</a>."
+
+# Footer "Edit this page on GitHub" link
+gh_edit_link: true
+gh_edit_link_text: "Edit this page on GitHub"
+gh_edit_repository: "https://github.com/zakandrewking/lockplane"
+gh_edit_branch: "main"
+gh_edit_view_mode: "tree"
+
+# Enable/disable the navigation
+nav_enabled: true
+
+# Sort order for navigation
+nav_sort: case_insensitive
+
+# External navigation links
+nav_external_links:
+  - title: Install
+    url: https://github.com/zakandrewking/lockplane#installation
+  - title: Releases
+    url: https://github.com/zakandrewking/lockplane/releases
+
+# Back to top link
+back_to_top: true
+back_to_top_text: "Back to top"
+
+# Code snippet configuration
+# Enable copy button on code blocks
+enable_copy_code_button: true
+
+# Callouts configuration (for tips, warnings, etc.)
+callouts_level: loud
+callouts:
+  highlight:
+    color: yellow
+  important:
+    title: Important
+    color: blue
+  new:
+    title: New
+    color: green
+  note:
+    title: Note
+    color: purple
+  warning:
+    title: Warning
+    color: red
+
+# Collections (for organizing docs)
+collections:
+  docs:
+    permalink: "/:collection/:path/"
+    output: true
+
+# Default front matter values
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: "docs"
+      type: "docs"
+    values:
+      layout: "default"
+
+# Exclude from processing
+exclude:
+  - node_modules/
+  - vendor/
+  - .github/
+  - .gitignore
+  - Gemfile
+  - Gemfile.lock
+  - go.mod
+  - go.sum
+  - "*.go"
+  - testdata/
+  - scenarios/
+  - vscode-lockplane/
+  - dist/
+  - .golangci.yml
+  - .claude/
+
+# Kramdown settings
+kramdown:
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
+
+# Compression
+sass:
+  style: compressed
