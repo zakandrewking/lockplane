@@ -76,8 +76,6 @@ nav_sort: case_insensitive
 
 # External navigation links
 nav_external_links:
-  - title: Install
-    url: https://github.com/zakandrewking/lockplane#installation
   - title: Releases
     url: https://github.com/zakandrewking/lockplane/releases
 
@@ -120,59 +118,8 @@ defaults:
 
 # Only include README.md and docs/ directory
 include:
-  - README.md
-  - docs/
-
-# Exclude everything else from processing
-exclude:
-  # Dependencies and build
-  - node_modules/
-  - vendor/
-  - .github/
-  - Gemfile
-  - Gemfile.lock
-  - go.mod
-  - go.sum
-  - dist/
-
-  # Source code directories
-  - cmd/
-  - database/
-  - diagnostic/
-
-  # Config and internal docs
-  - .gitignore
-  - .golangci.yml
-  - .claude/
-  - devdocs/
-  - AGENTS.md
-  - CLAUDE.md
-  - RELEASE.md
-
-  # Examples and tests
-  - examples/
-  - testdata/
-  - scenarios/
-  - scripts/
-
-  # Extensions and plugins
-  - claude-plugin/
-  - vscode-lockplane/
-
-  # Schema files
-  - schema-json/
-
-  # File patterns to exclude everywhere
-  - "**/*.go"
-  - "**/*.txt"
-  - "**/*.json"
-  - "**/*.yml"
-  - "**/*.yaml"
-  - "**/*.sql"
-  - "**/*.sh"
-  - "**/*.toml"
-  - "**/LICENSE"
-  - "**/.DS_Store"
+  - ./README.md
+  - ./docs/
 
 # Kramdown settings
 kramdown:
