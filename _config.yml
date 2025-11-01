@@ -16,10 +16,10 @@ plugins:
   - jekyll-titles-from-headings
   - jekyll-seo-tag
 
-# Use README.md as the home page
+# Use README.md as the home page (no nav link, just index)
 readme_index:
   enabled: true
-  remove_originals: false
+  remove_originals: true
 
 # Auto-use the first H1 on each page as its title
 titles_from_headings:
@@ -114,16 +114,9 @@ defaults:
     values:
       layout: "default"
   - scope:
-      path: "README.md"
-    values:
-      layout: "default"
-      title: "Home"
-      nav_order: 1
-  - scope:
       path: "docs"
     values:
       layout: "default"
-      nav_order: 2
 
 # Only include README.md and docs/ directory
 include:
@@ -132,36 +125,54 @@ include:
 
 # Exclude everything else from processing
 exclude:
+  # Dependencies and build
   - node_modules/
   - vendor/
   - .github/
-  - .gitignore
   - Gemfile
   - Gemfile.lock
   - go.mod
   - go.sum
-  - "*.go"
-  - testdata/
-  - scenarios/
-  - vscode-lockplane/
   - dist/
-  - .golangci.yml
-  - .claude/
-  - claude-plugin/
-  - devdocs/
-  - examples/
-  - schema-json/
+
+  # Source code directories
+  - cmd/
   - database/
   - diagnostic/
+
+  # Config and internal docs
+  - .gitignore
+  - .golangci.yml
+  - .claude/
+  - devdocs/
   - AGENTS.md
   - CLAUDE.md
   - RELEASE.md
-  - "*.txt"
-  - "*.json"
-  - "*.yml"
-  - "*.yaml"
-  - "*.sql"
-  - "*.sh"
+
+  # Examples and tests
+  - examples/
+  - testdata/
+  - scenarios/
+  - scripts/
+
+  # Extensions and plugins
+  - claude-plugin/
+  - vscode-lockplane/
+
+  # Schema files
+  - schema-json/
+
+  # File patterns to exclude everywhere
+  - "**/*.go"
+  - "**/*.txt"
+  - "**/*.json"
+  - "**/*.yml"
+  - "**/*.yaml"
+  - "**/*.sql"
+  - "**/*.sh"
+  - "**/*.toml"
+  - "**/LICENSE"
+  - "**/.DS_Store"
 
 # Kramdown settings
 kramdown:
