@@ -6,8 +6,8 @@
 
 ## 2. New Configuration Model
 - Evolve `Config` to include a `default_environment` (defaulting to `local`) and `[environments.<name>]` definitions.
-- Each environment references a `.env.<name>` file (implicit default naming, with optional `env_file` override) and may inline URL values for non-dotenv use cases.
-- Introduce a global `--env` flag respected by all CLI commands, with precedence and defaults aligned with the TOML configuration.
+- Each environment references a `.env.<name>` file by convention and may inline URL values for non-dotenv use cases.
+- Define command-specific environment selection flags (e.g., `--target-environment` for apply) that map to named environments in the TOML file.
 
 ## 3. Environment Loading Utilities
 - Implement helpers to locate `lockplane.toml`, resolve the selected environment, and read the associated `.env.<name>` file (via `github.com/joho/godotenv` or similar) to extract connection details.
@@ -15,7 +15,7 @@
 - Provide precise error messages for missing environments, absent `.env` files, or incomplete key data.
 
 ## 4. CLI Command Updates
-- Thread the new environment resolution through every `run*` handler and drop the `getEnv` helper.
+- Thread the new environment resolution through every `run*` handler, introducing `--target-environment` for apply/plan/rollback and a counterpart (e.g., `--source-environment`) for introspect/diff, while dropping the legacy `getEnv` helper.
 - Update usage text, help output, and error messages to guide users toward environment-based configuration rather than shell exports.
 - Ensure schema path handling remains consistent with the new environment model.
 
