@@ -27,6 +27,7 @@
 ## 6. Documentation Updates
 - Rewrite `README.md`, `docs/getting_started.md`, and relevant docs in `docs/` to describe the environment workflow and `.env.<name>` files.
 - Update `lockplane.toml.example` and other samples to demonstrate the new structure.
+- Add a final step to the README checklist explaining why environments matter and how to configure them, giving newcomers actionable guidance.
 - Refresh agent-focused guides (`AGENTS.md`, Claude skill files, `llms.txt`) so assistants stop recommending direct env var usage.
 - Remove references to `DATABASE_URL` / `SHADOW_DATABASE_URL` from docs and plugin collateral.
 
