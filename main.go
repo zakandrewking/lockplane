@@ -488,6 +488,23 @@ func runApply(args []string) {
 	if len(positionalArgs) > 0 {
 		planFile = positionalArgs[0]
 
+		// Check if user accidentally passed a schema file instead of a plan file
+		if strings.HasSuffix(planFile, ".sql") || strings.HasSuffix(planFile, ".lp.sql") {
+			fmt.Fprintf(os.Stderr, "Error: '%s' appears to be a schema file, not a migration plan.\n\n", planFile)
+			fmt.Fprintf(os.Stderr, "Did you mean to use --schema?\n\n")
+			fmt.Fprintf(os.Stderr, "  lockplane apply --target $DATABASE_URL --schema %s\n\n", planFile)
+			fmt.Fprintf(os.Stderr, "Or to generate and save a plan first:\n\n")
+			fmt.Fprintf(os.Stderr, "  lockplane plan --from $DATABASE_URL --to %s --output plan.json\n", planFile)
+			fmt.Fprintf(os.Stderr, "  lockplane apply plan.json --target $DATABASE_URL\n\n")
+			os.Exit(1)
+		}
+
+		// Warn if --schema was also provided (might be confusing)
+		if *schema != "" {
+			fmt.Fprintf(os.Stderr, "Warning: Ignoring --schema flag when applying a pre-generated plan file\n")
+			fmt.Fprintf(os.Stderr, "         The plan file (%s) already contains the migration steps\n\n", planFile)
+		}
+
 		// Load plan from file
 		loadedPlan, err := LoadJSONPlan(planFile)
 		if err != nil {
