@@ -474,12 +474,31 @@ func runApply(args []string) {
 	autoApprove := fs.Bool("auto-approve", false, "Skip interactive approval of migration plan")
 	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
 	shadowDBURL := fs.String("shadow-db", "", "Shadow database connection string (overrides env var and config file)")
+
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
 
 	// Get positional arguments (for plan file)
 	positionalArgs := fs.Args()
+
+	// Check if flag values look like other flags (happens when env var is empty)
+	if *target != "" && strings.HasPrefix(*target, "--") {
+		fmt.Fprintf(os.Stderr, "Error: --target flag has invalid value %q\n\n", *target)
+		fmt.Fprintf(os.Stderr, "This usually means the database URL environment variable is empty.\n")
+		fmt.Fprintf(os.Stderr, "Either set the environment variable or provide the URL directly:\n\n")
+		fmt.Fprintf(os.Stderr, "  export TURSO_DATABASE_URL='libsql://...'\n")
+		fmt.Fprintf(os.Stderr, "  lockplane apply --target \"$TURSO_DATABASE_URL\" --schema schema/\n\n")
+		fmt.Fprintf(os.Stderr, "Or:\n\n")
+		fmt.Fprintf(os.Stderr, "  lockplane apply --target 'libsql://...' --schema schema/\n\n")
+		os.Exit(1)
+	}
+
+	if *schema != "" && strings.HasPrefix(*schema, "--") {
+		fmt.Fprintf(os.Stderr, "Error: --schema flag has invalid value %q\n\n", *schema)
+		fmt.Fprintf(os.Stderr, "Check that previous flags have valid values.\n\n")
+		os.Exit(1)
+	}
 
 	var plan *Plan
 	var planFile string
