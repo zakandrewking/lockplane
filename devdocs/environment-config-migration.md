@@ -33,5 +33,5 @@
 
 ## 7. Verification & Workflow
 - [x] After implementation, run `go fmt ./...`, `go vet ./...`, `go test -v ./...`, and `go build .`.
-- [ ] Follow the project checklist for git operations: review `git status`, inspect diffs, stage, commit with the prescribed format, and push.
+- [x] Follow the project checklist for git operations: review `git status`, inspect diffs, stage, commit with the prescribed format, and push.
 - [ ] Summarize the completed work and remaining considerations for future iterations.
