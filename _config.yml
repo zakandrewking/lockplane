@@ -107,26 +107,30 @@ callouts:
     title: Warning
     color: red
 
-# Collections (for organizing docs)
-collections:
-  docs:
-    permalink: "/:collection/:path/"
-    output: true
-
 # Default front matter values
 defaults:
   - scope:
       path: ""
-      type: "pages"
     values:
       layout: "default"
   - scope:
-      path: "docs"
-      type: "docs"
+      path: "README.md"
     values:
       layout: "default"
+      title: "Home"
+      nav_order: 1
+  - scope:
+      path: "docs"
+    values:
+      layout: "default"
+      nav_order: 2
 
-# Exclude from processing
+# Only include README.md and docs/ directory
+include:
+  - README.md
+  - docs/
+
+# Exclude everything else from processing
 exclude:
   - node_modules/
   - vendor/
@@ -143,6 +147,21 @@ exclude:
   - dist/
   - .golangci.yml
   - .claude/
+  - claude-plugin/
+  - devdocs/
+  - examples/
+  - schema-json/
+  - database/
+  - diagnostic/
+  - AGENTS.md
+  - CLAUDE.md
+  - RELEASE.md
+  - "*.txt"
+  - "*.json"
+  - "*.yml"
+  - "*.yaml"
+  - "*.sql"
+  - "*.sh"
 
 # Kramdown settings
 kramdown:
