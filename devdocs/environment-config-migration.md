@@ -22,7 +22,7 @@
 ## 5. Testing Strategy
 - [x] Refactor existing tests that depended on environment variables to use temporary `.env.<name>` files or inline environment definitions.
 - [x] Add unit tests covering environment selection, defaulting behavior, missing file handling, and conflict cases between flags and environments.
-- [ ] Review fixtures to ensure they align with the new configuration approach.
+- [x] Review fixtures to ensure they align with the new configuration approach (no updates required).
 
 ## 6. Documentation Updates
 - [x] Rewrite `README.md`, `docs/getting_started.md`, and relevant docs in `docs/` to describe the environment workflow and `.env.<name>` files.
