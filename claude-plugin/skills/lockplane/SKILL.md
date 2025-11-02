@@ -9,7 +9,7 @@ Help users manage database schemas safely using Lockplane.
 
 ## What is Lockplane?
 
-Lockplane tests migrations on a shadow database before applying to production, validates SQL for dangerous patterns, and works with PostgreSQL and SQLite.
+Lockplane tests migrations on a shadow database before applying to production, validates SQL for dangerous patterns, and works with PostgreSQL, SQLite, and Turso.
 
 ## Core Workflow
 
@@ -43,10 +43,16 @@ description = "Local development"
 ```
 
 ```bash
-# .env.local
+# .env.local - PostgreSQL
 DATABASE_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
 SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+
+# Or for Turso:
+# DATABASE_URL=libsql://mydb-user.turso.io?authToken=eyJhbGc...
+# SHADOW_DATABASE_URL=libsql://mydb-shadow-user.turso.io?authToken=eyJhbGc...
 ```
+
+**Supported databases:** PostgreSQL, SQLite, Turso/libSQL
 
 Override with CLI flags (`--target`, `--shadow-db`) when needed.
 

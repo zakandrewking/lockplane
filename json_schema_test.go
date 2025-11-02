@@ -305,6 +305,22 @@ func TestIsConnectionString(t *testing.T) {
 			input:    ":memory:",
 			expected: true,
 		},
+		// Turso/libSQL connection strings
+		{
+			name:     "libsql URL",
+			input:    "libsql://mydb-user.turso.io",
+			expected: true,
+		},
+		{
+			name:     "libsql URL with auth token",
+			input:    "libsql://mydb-user.turso.io?authToken=eyJhbGc...",
+			expected: true,
+		},
+		{
+			name:     "libsql URL uppercase",
+			input:    "LIBSQL://MYDB-USER.TURSO.IO",
+			expected: true,
+		},
 		// File paths that should NOT be connection strings
 		{
 			name:     "JSON file",

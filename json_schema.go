@@ -20,6 +20,7 @@ func isConnectionString(s string) bool {
 	// Check for common connection string prefixes
 	if strings.HasPrefix(lower, "postgres://") ||
 		strings.HasPrefix(lower, "postgresql://") ||
+		strings.HasPrefix(lower, "libsql://") ||
 		strings.HasPrefix(lower, "sqlite://") ||
 		strings.HasPrefix(lower, "file:") {
 		return true

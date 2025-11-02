@@ -463,3 +463,84 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 		t.Error("Expected age column to exist")
 	}
 }
+
+func TestDetectDriver(t *testing.T) {
+	tests := []struct {
+		name     string
+		connStr  string
+		expected string
+	}{
+		// PostgreSQL
+		{
+			name:     "postgres URL",
+			connStr:  "postgres://user:pass@localhost:5432/dbname",
+			expected: "postgres",
+		},
+		{
+			name:     "postgresql URL",
+			connStr:  "postgresql://user:pass@localhost:5432/dbname",
+			expected: "postgres",
+		},
+		{
+			name:     "postgres uppercase",
+			connStr:  "POSTGRES://USER:PASS@LOCALHOST:5432/DBNAME",
+			expected: "postgres",
+		},
+		// libSQL/Turso
+		{
+			name:     "libsql URL",
+			connStr:  "libsql://mydb-user.turso.io",
+			expected: "libsql",
+		},
+		{
+			name:     "libsql with auth token",
+			connStr:  "libsql://mydb-user.turso.io?authToken=eyJhbGc...",
+			expected: "libsql",
+		},
+		{
+			name:     "libsql uppercase",
+			connStr:  "LIBSQL://MYDB-USER.TURSO.IO",
+			expected: "libsql",
+		},
+		// SQLite
+		{
+			name:     "sqlite URL",
+			connStr:  "sqlite://path/to/database.db",
+			expected: "sqlite",
+		},
+		{
+			name:     "file URL",
+			connStr:  "file:path/to/database.db",
+			expected: "sqlite",
+		},
+		{
+			name:     "db file",
+			connStr:  "test.db",
+			expected: "sqlite",
+		},
+		{
+			name:     "sqlite file",
+			connStr:  "test.sqlite",
+			expected: "sqlite",
+		},
+		{
+			name:     "sqlite3 file",
+			connStr:  "test.sqlite3",
+			expected: "sqlite",
+		},
+		{
+			name:     "in-memory",
+			connStr:  ":memory:",
+			expected: "sqlite",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detectDriver(tt.connStr)
+			if result != tt.expected {
+				t.Errorf("detectDriver(%q) = %q, want %q", tt.connStr, result, tt.expected)
+			}
+		})
+	}
+}

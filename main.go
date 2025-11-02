@@ -15,6 +15,7 @@ import (
 	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/database/postgres"
 	"github.com/lockplane/lockplane/database/sqlite"
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
 )
 
@@ -90,6 +91,10 @@ func detectDriver(connString string) string {
 		return "postgres"
 	}
 
+	if strings.HasPrefix(connString, "libsql://") {
+		return "libsql"
+	}
+
 	if strings.HasPrefix(connString, "sqlite://") ||
 		strings.HasPrefix(connString, "file:") ||
 		strings.HasSuffix(connString, ".db") ||
@@ -110,6 +115,9 @@ func newDriver(driverName string) (database.Driver, error) {
 		return postgres.NewDriver(), nil
 	case "sqlite", "sqlite3":
 		return sqlite.NewDriver(), nil
+	case "libsql":
+		// Turso/libSQL is SQLite-compatible, use SQLite driver for introspection and SQL generation
+		return sqlite.NewDriver(), nil
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", driverName)
 	}
@@ -128,6 +136,8 @@ func getSQLDriverName(driverType string) string {
 		return "postgres"
 	case "sqlite", "sqlite3":
 		return "sqlite"
+	case "libsql":
+		return "libsql"
 	default:
 		return driverType
 	}

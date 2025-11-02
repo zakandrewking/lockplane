@@ -3,7 +3,7 @@
 
 # Lockplane
 
-A control plane for safe, AI-friendly schema management. Works with PostgreSQL and SQLite.
+A control plane for safe, AI-friendly schema management. Works with PostgreSQL, SQLite, and Turso.
 
 ## Why Lockplane?
 
@@ -151,6 +151,16 @@ SHADOW_DATABASE_URL=sqlite://./myapp_shadow.db
 EOF
 ```
 
+#### Example: Turso
+
+```bash
+cat <<'EOF' > .env.local
+# Use Turso remote SQLite databases
+DATABASE_URL=libsql://mydb-user.turso.io?authToken=eyJhbGc...
+SHADOW_DATABASE_URL=libsql://mydb-shadow-user.turso.io?authToken=eyJhbGc...
+EOF
+```
+
 Lockplane automatically loads `.env.<name>` for the selected environment (for the
 default environment, `.env.local`). You can still override any value with CLI flags
 such as `--target` or `--shadow-db` when needed.
@@ -246,6 +256,7 @@ lockplane apply plan.json \
 **Supported database formats:**
 - PostgreSQL: `postgres://` or `postgresql://`
 - SQLite: `file:path/to/db.sqlite`, `path/to/db.db`, or `:memory:`
+- Turso/libSQL: `libsql://[DATABASE].turso.io?authToken=[TOKEN]`
 
 ## Schema Definition Formats
 

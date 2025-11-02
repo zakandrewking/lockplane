@@ -33,3 +33,10 @@ description = "Managed staging database (credentials in .env.staging)"
 #description = "Local SQLite prototype"
 #database_url = "sqlite://./myapp.db"
 #shadow_database_url = "sqlite://./myapp_shadow.db"
+
+# Example Turso environment (credentials in .env.turso):
+#[environments.turso]
+#description = "Turso distributed SQLite (credentials in .env.turso)"
+# .env.turso should contain:
+#   DATABASE_URL=libsql://mydb-user.turso.io?authToken=eyJhbGc...
+#   SHADOW_DATABASE_URL=libsql://mydb-shadow-user.turso.io?authToken=eyJhbGc...
