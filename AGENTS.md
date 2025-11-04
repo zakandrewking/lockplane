@@ -1,6 +1,6 @@
-# Claude Code Instructions for Lockplane
+# AI Agent Instructions for Lockplane
 
-This file contains project-specific instructions for AI assistants working on Lockplane.
+This file contains project-specific instructions for any AI assistant working on Lockplane.
 
 ## Project Overview
 
@@ -27,6 +27,7 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
 - [ ] Verify tests pass
 - [ ] Build the project: `go build .`
 - [ ] Verify build succeeds
+- [ ] Install the binary: `go install .`
 
 ### Phase 3: Documentation (CRITICAL - DO NOT SKIP)
 - [ ] Update `printHelp()` in `main.go` if CLI changed
@@ -69,7 +70,7 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
 - `rollback.go` - Rollback plan generation
 - `diff.go` - Schema diffing logic
 - `json_schema.go` - JSON schema loading and validation
-- `init.go` - Docker Compose setup
+- `init_command.go` - Project initialization wizard
 - `docs/` - Documentation files
 - `examples/` - Example schemas and plans
 - `testdata/` - Test fixtures
