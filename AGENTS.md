@@ -38,6 +38,8 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
 - [ ] Update any other relevant docs in `docs/` directory
 
 ### Phase 4: Git (CRITICAL - ALWAYS COMMIT AND PUSH)
+> **AI agents must perform these steps themselves.** Never leave staged-but-uncommitted
+> work for the user—run the git commands below every time you modify the repo.
 - [ ] Check git status: `git status`
 - [ ] Review changes: `git diff`
 - [ ] Stage all changes: `git add .`

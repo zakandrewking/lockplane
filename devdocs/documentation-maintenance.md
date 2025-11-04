@@ -71,8 +71,7 @@ curl -L https://github.com/zakandrewking/lockplane/releases/latest/download/lock
 
 **Quick start snippet** (used in README, llms.txt):
 ```bash
-lockplane init docker-compose
-docker compose up -d
+lockplane init --yes
 lockplane introspect > current.json
 lockplane apply --auto-approve --from current.json --to schema/ --validate
 ```

@@ -1040,6 +1040,7 @@ USAGE:
   lockplane <command> [options]
 
 COMMANDS:
+  init            Interactive project setup wizard
   introspect       Introspect database and output current schema as JSON
   diff             Compare two schemas and show differences
   plan             Generate migration plan from schema diff (with --validate flag)
@@ -1051,6 +1052,9 @@ COMMANDS:
   help             Show this help message
 
 EXAMPLES:
+  # Launch the interactive wizard
+  lockplane init
+
   # Introspect current database
   lockplane introspect > current.json
 

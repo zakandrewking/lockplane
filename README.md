@@ -130,8 +130,8 @@ For more information on `.lp.sql` files, run `lockplane validate sql --help`.
 Now that we have a schema, we can generate a migration plan to apply it to our
 database.
 
-NOTE: If you do not have a database yet, you can use the `lockplane init` command to
-create a new database for you. For more information, run `lockplane init --help`.
+NOTE: Starting from scratch? Run `lockplane init` (or `lockplane init --yes`) to
+launch the wizard and create the default `schema/` directory.
 
 ### Configure your database environment
 

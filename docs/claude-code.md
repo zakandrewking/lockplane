@@ -58,42 +58,20 @@ psql -U myuser -d notesapp < migrations/001_initial.sql
 
 **The key insight: Your schema is the source of truth. Migration plans are generated on demand.**
 
-Start by letting Lockplane configure your Compose stack:
+Start by bootstrapping your schema workspace:
 
 ```bash
-lockplane init docker-compose
+lockplane init --yes
 ```
 
-The command searches for an existing `docker-compose.yml`, duplicates your primary Postgres service, and creates a `shadow` database on the next available port (defaults to `5433`).
+The wizard creates a `schema/` directory (or your chosen path) that will hold the
+declarative `.lp.sql` files Lockplane uses as the source of truth. You can re-run
+the wizard later to scaffold additional resources as we expand it.
 
-**Your new docker-compose.yml:**
-```yaml
-services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_PASSWORD: lockplane
-      POSTGRES_USER: lockplane
-      POSTGRES_DB: notesapp
-    ports:
-      - "5432:5432"
-    volumes:
-      - dbdata:/var/lib/postgresql/data
-
-  shadow:
-    image: postgres:16
-    environment:
-      POSTGRES_PASSWORD: lockplane
-      POSTGRES_USER: lockplane
-      POSTGRES_DB: notesapp_shadow
-    ports:
-      - "5433:5432"
-
-volumes:
-  dbdata:
-```
-
-**Key difference:** You now have two databases. Main for real data, shadow for testing.
+Bring up your application database however you normally would (Docker Compose,
+Supabase, Render, etc.). For local development, we recommend running Postgres
+alongside a shadow database so Lockplane can validate migrations before touching
+your data.
 
 ### Configuring Database Connections
 
