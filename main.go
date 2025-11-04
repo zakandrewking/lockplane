@@ -123,12 +123,6 @@ func newDriver(driverName string) (database.Driver, error) {
 	}
 }
 
-// newDriverFromConnString creates a new database driver by detecting the type from connection string
-func newDriverFromConnString(connString string) (database.Driver, error) {
-	driverType := detectDriver(connString)
-	return newDriver(driverType)
-}
-
 // getSQLDriverName returns the sql.Open driver name for a given database type
 func getSQLDriverName(driverType string) string {
 	switch driverType {
