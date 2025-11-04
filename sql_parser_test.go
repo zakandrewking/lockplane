@@ -103,8 +103,8 @@ ALTER TABLE users ALTER COLUMN email SET DEFAULT 'n/a';
 	}
 
 	bioCol := table.Columns[2]
-	if bioCol.Type != "pg_catalog.varchar(100)" {
-		t.Fatalf("expected bio type pg_catalog.varchar(100), got %s", bioCol.Type)
+	if bioCol.Type != "varchar(100)" {
+		t.Fatalf("expected bio type varchar(100), got %s", bioCol.Type)
 	}
 }
 

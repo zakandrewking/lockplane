@@ -3,11 +3,13 @@ package database
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 // Schema represents a database schema
 type Schema struct {
-	Tables []Table `json:"tables"`
+	Tables  []Table `json:"tables"`
+	Dialect Dialect `json:"dialect,omitempty"`
 }
 
 // Table represents a database table
@@ -20,11 +22,13 @@ type Table struct {
 
 // Column represents a table column
 type Column struct {
-	Name         string  `json:"name"`
-	Type         string  `json:"type"`
-	Nullable     bool    `json:"nullable"`
-	Default      *string `json:"default,omitempty"`
-	IsPrimaryKey bool    `json:"is_primary_key"`
+	Name            string           `json:"name"`
+	Type            string           `json:"type"`
+	Nullable        bool             `json:"nullable"`
+	Default         *string          `json:"default,omitempty"`
+	IsPrimaryKey    bool             `json:"is_primary_key"`
+	TypeMetadata    *TypeMetadata    `json:"type_metadata,omitempty"`
+	DefaultMetadata *DefaultMetadata `json:"default_metadata,omitempty"`
 }
 
 // Index represents a table index
@@ -42,6 +46,40 @@ type ForeignKey struct {
 	ReferencedColumns []string `json:"referenced_columns"`
 	OnDelete          *string  `json:"on_delete,omitempty"`
 	OnUpdate          *string  `json:"on_update,omitempty"`
+}
+
+// Dialect represents the database dialect associated with a schema
+type Dialect string
+
+const (
+	// DialectUnknown indicates we could not determine the dialect
+	DialectUnknown Dialect = ""
+	// DialectPostgres represents PostgreSQL
+	DialectPostgres Dialect = "postgres"
+	// DialectSQLite represents SQLite (and libsql/Turso)
+	DialectSQLite Dialect = "sqlite"
+)
+
+// TypeMetadata captures both logical and raw type representations.
+type TypeMetadata struct {
+	Logical string  `json:"logical,omitempty"`
+	Raw     string  `json:"raw,omitempty"`
+	Dialect Dialect `json:"dialect,omitempty"`
+}
+
+// DefaultMetadata captures raw default expressions with dialect information.
+type DefaultMetadata struct {
+	Raw     string  `json:"raw,omitempty"`
+	Dialect Dialect `json:"dialect,omitempty"`
+	Kind    string  `json:"kind,omitempty"`
+}
+
+// LogicalType returns the normalized type name used for comparisons.
+func (c Column) LogicalType() string {
+	if c.TypeMetadata != nil && c.TypeMetadata.Logical != "" {
+		return strings.ToLower(c.TypeMetadata.Logical)
+	}
+	return strings.ToLower(c.Type)
 }
 
 // Introspector defines the interface for database schema introspection

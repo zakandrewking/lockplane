@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/lockplane/lockplane/database"
 )
@@ -49,6 +50,7 @@ func (i *Introspector) IntrospectSchema(ctx context.Context, db *sql.DB) (*datab
 		schema.Tables = append(schema.Tables, table)
 	}
 
+	schema.Dialect = database.DialectPostgres
 	return schema, nil
 }
 
@@ -118,9 +120,22 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 			return nil, err
 		}
 
+		col.Type = strings.TrimSpace(col.Type)
+		col.TypeMetadata = &database.TypeMetadata{
+			Logical: strings.ToLower(col.Type),
+			Raw:     col.Type,
+			Dialect: database.DialectPostgres,
+		}
+
 		col.Nullable = nullable == "YES"
 		if defaultVal.Valid {
 			col.Default = &defaultVal.String
+			col.DefaultMetadata = &database.DefaultMetadata{
+				Raw:     defaultVal.String,
+				Dialect: database.DialectPostgres,
+			}
+		} else {
+			col.DefaultMetadata = nil
 		}
 
 		columns = append(columns, col)

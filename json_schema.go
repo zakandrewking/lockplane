@@ -10,8 +10,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lockplane/lockplane/database"
 	"github.com/xeipuuv/gojsonschema"
 )
+
+// SchemaLoadOptions controls how schema files are parsed.
+type SchemaLoadOptions struct {
+	Dialect database.Dialect
+}
 
 // isConnectionString checks if a string looks like a database connection string
 func isConnectionString(s string) bool {
@@ -73,31 +79,43 @@ func loadSchemaFromConnectionString(connStr string) (*Schema, error) {
 		return nil, fmt.Errorf("failed to introspect schema: %w", err)
 	}
 
-	return (*Schema)(schema), nil
+	result := (*Schema)(schema)
+	result.Dialect = driverNameToDialect(driverType)
+	return result, nil
 }
 
 // LoadSchemaOrIntrospect loads a schema from a file/directory or introspects from a database connection string
 func LoadSchemaOrIntrospect(pathOrConnStr string) (*Schema, error) {
+	return LoadSchemaOrIntrospectWithOptions(pathOrConnStr, nil)
+}
+
+// LoadSchemaOrIntrospectWithOptions loads a schema with optional parsing options.
+func LoadSchemaOrIntrospectWithOptions(pathOrConnStr string, opts *SchemaLoadOptions) (*Schema, error) {
 	// Check if it's a connection string
 	if isConnectionString(pathOrConnStr) {
 		return loadSchemaFromConnectionString(pathOrConnStr)
 	}
 
 	// Otherwise treat it as a file path
-	return LoadSchema(pathOrConnStr)
+	return LoadSchemaWithOptions(pathOrConnStr, opts)
 }
 
 // LoadSchema loads a schema from either JSON (.json) or SQL DDL (.lp.sql) file
 func LoadSchema(path string) (*Schema, error) {
+	return LoadSchemaWithOptions(path, nil)
+}
+
+// LoadSchemaWithOptions loads a schema with optional parsing options.
+func LoadSchemaWithOptions(path string, opts *SchemaLoadOptions) (*Schema, error) {
 	if info, err := os.Stat(path); err == nil && info.IsDir() {
-		return loadSchemaFromDir(path)
+		return loadSchemaFromDir(path, opts)
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
 
 	// Check for .lp.sql extension
 	if ext == ".sql" && strings.HasSuffix(strings.ToLower(path), ".lp.sql") {
-		return LoadSQLSchema(path)
+		return LoadSQLSchemaWithOptions(path, opts)
 	}
 
 	// Otherwise assume JSON
@@ -106,27 +124,45 @@ func LoadSchema(path string) (*Schema, error) {
 
 // LoadSQLSchema loads a schema from a SQL DDL file
 func LoadSQLSchema(path string) (*Schema, error) {
+	return LoadSQLSchemaWithOptions(path, nil)
+}
+
+// LoadSQLSchemaWithOptions loads a SQL schema with optional parsing options.
+func LoadSQLSchemaWithOptions(path string, opts *SchemaLoadOptions) (*Schema, error) {
 	// Read the SQL file
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read SQL file: %w", err)
 	}
 
-	return loadSQLSchemaFromBytes(data)
+	return loadSQLSchemaFromBytes(data, opts)
 }
 
-func loadSQLSchemaFromBytes(data []byte) (*Schema, error) {
+func loadSQLSchemaFromBytes(data []byte, opts *SchemaLoadOptions) (*Schema, error) {
+	dialect := database.DialectUnknown
+	if opts != nil && opts.Dialect != database.DialectUnknown {
+		dialect = opts.Dialect
+	}
+	if dialect == database.DialectUnknown {
+		dialect = detectDialectFromSQL(data)
+	}
+	if dialect == database.DialectUnknown {
+		dialect = database.DialectPostgres
+	}
+
 	// Parse SQL DDL
-	schema, err := ParseSQLSchema(string(data))
+	schema, err := ParseSQLSchemaWithDialect(string(data), dialect)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL DDL: %w", err)
 	}
 
 	// Convert from database.Schema to main.Schema (they're type aliases, so just cast)
-	return (*Schema)(schema), nil
+	result := (*Schema)(schema)
+	result.Dialect = dialect
+	return result, nil
 }
 
-func loadSchemaFromDir(dir string) (*Schema, error) {
+func loadSchemaFromDir(dir string, opts *SchemaLoadOptions) (*Schema, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema directory %s: %w", dir, err)
@@ -168,7 +204,60 @@ func loadSchemaFromDir(dir string) (*Schema, error) {
 		builder.WriteByte('\n')
 	}
 
-	return loadSQLSchemaFromBytes([]byte(builder.String()))
+	return loadSQLSchemaFromBytes([]byte(builder.String()), opts)
+}
+
+func detectDialectFromSQL(data []byte) database.Dialect {
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "--") {
+			lower := strings.ToLower(strings.TrimPrefix(trimmed, "--"))
+			lower = strings.TrimSpace(lower)
+
+			if strings.HasPrefix(lower, "dialect:") {
+				value := strings.TrimSpace(strings.TrimPrefix(lower, "dialect:"))
+				return parseDialect(value)
+			}
+			if strings.HasPrefix(lower, "dialect") {
+				value := strings.TrimSpace(strings.TrimPrefix(lower, "dialect"))
+				if strings.HasPrefix(value, ":") {
+					value = strings.TrimSpace(strings.TrimPrefix(value, ":"))
+				}
+				return parseDialect(value)
+			}
+			continue
+		}
+
+		// Stop scanning when we hit a non-comment statement.
+		break
+	}
+	return database.DialectUnknown
+}
+
+func parseDialect(value string) database.Dialect {
+	switch strings.ToLower(value) {
+	case "postgres", "postgresql":
+		return database.DialectPostgres
+	case "sqlite", "sqlite3", "libsql":
+		return database.DialectSQLite
+	default:
+		return database.DialectUnknown
+	}
+}
+
+func driverNameToDialect(name string) database.Dialect {
+	switch strings.ToLower(name) {
+	case "postgres", "postgresql":
+		return database.DialectPostgres
+	case "sqlite", "sqlite3", "libsql":
+		return database.DialectSQLite
+	default:
+		return database.DialectUnknown
+	}
 }
 
 // LoadJSONSchema loads and validates a JSON schema file, returning a Schema

@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/lockplane/lockplane/database"
 )
 
 // loadSchemaFixture loads a schema from a JSON file
@@ -14,6 +16,53 @@ func loadSchemaFixture(t *testing.T, path string) *Schema {
 	}
 
 	return schema
+}
+
+func TestDiffSchemas_UsesLogicalTypes(t *testing.T) {
+	before := &Schema{
+		Tables: []Table{
+			{
+				Name: "todos",
+				Columns: []Column{
+					{
+						Name:     "completed",
+						Type:     "INTEGER",
+						Nullable: false,
+						TypeMetadata: &database.TypeMetadata{
+							Logical: "integer",
+							Raw:     "INTEGER",
+							Dialect: database.DialectSQLite,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	after := &Schema{
+		Tables: []Table{
+			{
+				Name: "todos",
+				Columns: []Column{
+					{
+						Name:     "completed",
+						Type:     "integer",
+						Nullable: false,
+						TypeMetadata: &database.TypeMetadata{
+							Logical: "integer",
+							Raw:     "pg_catalog.int4",
+							Dialect: database.DialectPostgres,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	diff := DiffSchemas(before, after)
+	if !diff.IsEmpty() {
+		t.Fatalf("expected diff to be empty when logical types match, got %#v", diff)
+	}
 }
 
 func TestDiffSchemas_AddTable(t *testing.T) {

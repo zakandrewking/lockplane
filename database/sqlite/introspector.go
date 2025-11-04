@@ -50,6 +50,7 @@ func (i *Introspector) IntrospectSchema(ctx context.Context, db *sql.DB) (*datab
 		schema.Tables = append(schema.Tables, table)
 	}
 
+	schema.Dialect = database.DialectSQLite
 	return schema, nil
 }
 
@@ -103,10 +104,24 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 			return nil, err
 		}
 
+		col.Type = strings.TrimSpace(col.Type)
+		logical := strings.ToLower(col.Type)
+		col.TypeMetadata = &database.TypeMetadata{
+			Logical: logical,
+			Raw:     col.Type,
+			Dialect: database.DialectSQLite,
+		}
+
 		col.Nullable = notNull == 0
 		col.IsPrimaryKey = pk > 0
 		if defaultVal.Valid {
 			col.Default = &defaultVal.String
+			col.DefaultMetadata = &database.DefaultMetadata{
+				Raw:     defaultVal.String,
+				Dialect: database.DialectSQLite,
+			}
+		} else {
+			col.DefaultMetadata = nil
 		}
 
 		columns = append(columns, col)

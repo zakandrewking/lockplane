@@ -203,8 +203,25 @@ func dropPrimaryKey(table *database.Table) bool {
 	return hadPrimaryKey
 }
 
-// ParseSQLSchema parses SQL DDL and returns a Schema
+// ParseSQLSchema parses SQL DDL assuming PostgreSQL dialect.
 func ParseSQLSchema(sql string) (*database.Schema, error) {
+	return ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+}
+
+// ParseSQLSchemaWithDialect parses SQL DDL for the requested dialect.
+func ParseSQLSchemaWithDialect(sql string, dialect database.Dialect) (*database.Schema, error) {
+	switch dialect {
+	case database.DialectSQLite:
+		return parseSQLiteSQLSchema(sql)
+	case database.DialectPostgres, database.DialectUnknown:
+		return parsePostgresSQLSchema(sql)
+	default:
+		return parsePostgresSQLSchema(sql)
+	}
+}
+
+// parsePostgresSQLSchema parses SQL DDL via pg_query for PostgreSQL schemas.
+func parsePostgresSQLSchema(sql string) (*database.Schema, error) {
 	// Parse the SQL
 	tree, err := pg_query.Parse(sql)
 	if err != nil {
@@ -212,7 +229,8 @@ func ParseSQLSchema(sql string) (*database.Schema, error) {
 	}
 
 	schema := &database.Schema{
-		Tables: []database.Table{},
+		Tables:  []database.Table{},
+		Dialect: database.DialectPostgres,
 	}
 
 	// Walk the parse tree
@@ -301,7 +319,9 @@ func parseColumnDef(colDef *pg_query.ColumnDef) (*database.Column, error) {
 
 	// Parse type
 	if colDef.TypeName != nil {
-		col.Type = formatTypeName(colDef.TypeName)
+		colType, meta := formatTypeName(colDef.TypeName)
+		col.Type = colType
+		col.TypeMetadata = meta
 	}
 
 	// Parse constraints (NOT NULL, DEFAULT, PRIMARY KEY, etc.)
@@ -318,10 +338,10 @@ func parseColumnDef(colDef *pg_query.ColumnDef) (*database.Column, error) {
 	return col, nil
 }
 
-// formatTypeName converts TypeName AST to a string representation
-func formatTypeName(typeName *pg_query.TypeName) string {
+// formatTypeName converts TypeName AST to a string representation with metadata.
+func formatTypeName(typeName *pg_query.TypeName) (string, *database.TypeMetadata) {
 	if len(typeName.Names) == 0 {
-		return ""
+		return "", nil
 	}
 
 	// Get the type name (last element in Names)
@@ -332,7 +352,15 @@ func formatTypeName(typeName *pg_query.TypeName) string {
 		}
 	}
 
-	typeStr := strings.Join(parts, ".")
+	rawBase := strings.Join(parts, ".")
+	typeStr := rawBase
+
+	if len(parts) > 1 && parts[0] == "pg_catalog" {
+		typeStr = parts[len(parts)-1]
+	}
+
+	// Normalize PostgreSQL internal types to standard SQL types
+	typeStr = normalizePostgreSQLType(typeStr)
 
 	// Add type modifiers (e.g., VARCHAR(255))
 	if len(typeName.Typmods) > 0 {
@@ -345,16 +373,70 @@ func formatTypeName(typeName *pg_query.TypeName) string {
 			}
 		}
 		if len(mods) > 0 {
-			typeStr = fmt.Sprintf("%s(%s)", typeStr, strings.Join(mods, ","))
+			modStr := strings.Join(mods, ",")
+			typeStr = fmt.Sprintf("%s(%s)", typeStr, modStr)
+			rawBase = fmt.Sprintf("%s(%s)", rawBase, modStr)
 		}
 	}
 
 	// Add array notation if needed
 	if len(typeName.ArrayBounds) > 0 {
 		typeStr += "[]"
+		rawBase += "[]"
 	}
 
-	return typeStr
+	meta := &database.TypeMetadata{
+		Logical: typeStr,
+		Raw:     rawBase,
+		Dialect: database.DialectPostgres,
+	}
+
+	return typeStr, meta
+}
+
+// normalizePostgreSQLType converts PostgreSQL internal type names to standard SQL types
+// This is necessary because we use pg_query (PostgreSQL parser) for all SQL parsing,
+// and it normalizes types to PostgreSQL internal names like "int4", "int8", "bool", etc.
+func normalizePostgreSQLType(pgType string) string {
+	// Map PostgreSQL internal types to standard SQL types
+	typeMap := map[string]string{
+		// Integer types
+		"int2":    "smallint",
+		"int4":    "integer",
+		"int8":    "bigint",
+		"serial":  "serial",
+		"serial2": "smallserial",
+		"serial4": "serial",
+		"serial8": "bigserial",
+
+		// Boolean
+		"bool": "boolean",
+
+		// Character types
+		"varchar": "varchar",
+		"bpchar":  "char",
+
+		// Floating point
+		"float4": "real",
+		"float8": "double precision",
+
+		// Timestamp types
+		"timestamptz": "timestamp with time zone",
+		"timetz":      "time with time zone",
+
+		// Text (keep as-is, but explicitly map)
+		"text": "text",
+
+		// Numeric
+		"numeric": "numeric",
+		"decimal": "decimal",
+	}
+
+	if normalized, ok := typeMap[strings.ToLower(pgType)]; ok {
+		return normalized
+	}
+
+	return pgType
 }
 
 // parseColumnConstraint applies a column-level constraint to a Column
@@ -371,6 +453,10 @@ func parseColumnConstraint(col *database.Column, constraint *pg_query.Constraint
 			// Format the default expression
 			defaultStr := formatExpr(constraint.RawExpr)
 			col.Default = &defaultStr
+			col.DefaultMetadata = &database.DefaultMetadata{
+				Raw:     defaultStr,
+				Dialect: database.DialectPostgres,
+			}
 		}
 
 	case pg_query.ConstrType_CONSTR_PRIMARY:
@@ -549,8 +635,13 @@ func applyAlterTableCmd(table *database.Table, cmd *pg_query.AlterTableCmd) erro
 		if cmd.Def != nil {
 			defaultStr := formatExpr(cmd.Def)
 			table.Columns[idx].Default = &defaultStr
+			table.Columns[idx].DefaultMetadata = &database.DefaultMetadata{
+				Raw:     defaultStr,
+				Dialect: database.DialectPostgres,
+			}
 		} else {
 			table.Columns[idx].Default = nil
+			table.Columns[idx].DefaultMetadata = nil
 		}
 
 	case pg_query.AlterTableType_AT_AlterColumnType:
@@ -569,7 +660,9 @@ func applyAlterTableCmd(table *database.Table, cmd *pg_query.AlterTableCmd) erro
 		if colDef == nil || colDef.TypeName == nil {
 			return fmt.Errorf("ALTER TABLE %s ALTER COLUMN %s missing type definition", table.Name, cmd.Name)
 		}
-		table.Columns[idx].Type = formatTypeName(colDef.TypeName)
+		colType, meta := formatTypeName(colDef.TypeName)
+		table.Columns[idx].Type = colType
+		table.Columns[idx].TypeMetadata = meta
 
 	case pg_query.AlterTableType_AT_AddConstraint:
 		constraint := cmd.GetDef().GetConstraint()

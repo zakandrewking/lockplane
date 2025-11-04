@@ -69,6 +69,23 @@ that end in `.lp.sql`. These files contain normal valid SQL DDL (supporting
 either PostgreSQL or SQLite dialects), but with an extra level of strictness to
 guarantee that your schema is safe to use.
 
+> **Dialect hint**
+>
+> Lockplane parses `.lp.sql` files with PostgreSQL rules by default.  
+> To treat a file as SQLite DDL, add a comment at the top:
+>
+> ```sql
+> -- dialect: sqlite
+> CREATE TABLE todos (
+>   id INTEGER PRIMARY KEY,
+>   completed INTEGER NOT NULL DEFAULT 0,
+>   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+> );
+> ```
+>
+> When you supply SQLite connection strings (e.g., `sqlite://…`) Lockplane
+> automatically uses SQLite parsing for introspection and planning.
+
 Let's get started with an example. Create a new directory called `schema/` at
 the root of your project, and create a new file called `users.lp.sql`. Add the
 following SQL to the file:

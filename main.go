@@ -83,6 +83,13 @@ type Column = database.Column
 type Index = database.Index
 type ForeignKey = database.ForeignKey
 
+func buildSchemaLoadOptions(input string, dialect database.Dialect) *SchemaLoadOptions {
+	if isConnectionString(input) || dialect == database.DialectUnknown {
+		return nil
+	}
+	return &SchemaLoadOptions{Dialect: dialect}
+}
+
 // detectDriver detects the database driver type from a connection string
 func detectDriver(connString string) string {
 	connString = strings.ToLower(connString)
@@ -361,13 +368,25 @@ func runDiff(args []string) {
 		log.Fatalf("Usage: lockplane diff <before> <after>\n       lockplane diff --before-environment <name> --after-environment <name>")
 	}
 
+	var beforeFallback, afterFallback database.Dialect
+	if isConnectionString(beforeArg) {
+		beforeFallback = driverNameToDialect(detectDriver(beforeArg))
+		afterFallback = beforeFallback
+	}
+	if isConnectionString(afterArg) {
+		afterFallback = driverNameToDialect(detectDriver(afterArg))
+		if beforeFallback == database.DialectUnknown {
+			beforeFallback = afterFallback
+		}
+	}
+
 	// Load schemas
-	before, err := LoadSchemaOrIntrospect(beforeArg)
+	before, err := LoadSchemaOrIntrospectWithOptions(beforeArg, buildSchemaLoadOptions(beforeArg, beforeFallback))
 	if err != nil {
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
 
-	after, err := LoadSchemaOrIntrospect(afterArg)
+	after, err := LoadSchemaOrIntrospectWithOptions(afterArg, buildSchemaLoadOptions(afterArg, afterFallback))
 	if err != nil {
 		log.Fatalf("Failed to load after schema: %v", err)
 	}
@@ -436,13 +455,27 @@ func runPlan(args []string) {
 	var before *Schema
 	var after *Schema
 
+	var fromFallback, toFallback database.Dialect
+	if isConnectionString(fromInput) {
+		fromFallback = driverNameToDialect(detectDriver(fromInput))
+		if !isConnectionString(toInput) {
+			toFallback = fromFallback
+		}
+	}
+	if isConnectionString(toInput) {
+		toFallback = driverNameToDialect(detectDriver(toInput))
+		if fromFallback == database.DialectUnknown {
+			fromFallback = toFallback
+		}
+	}
+
 	var loadErr error
-	before, loadErr = LoadSchemaOrIntrospect(fromInput)
+	before, loadErr = LoadSchemaOrIntrospectWithOptions(fromInput, buildSchemaLoadOptions(fromInput, fromFallback))
 	if loadErr != nil {
 		log.Fatalf("Failed to load from schema: %v", loadErr)
 	}
 
-	after, loadErr = LoadSchemaOrIntrospect(toInput)
+	after, loadErr = LoadSchemaOrIntrospectWithOptions(toInput, buildSchemaLoadOptions(toInput, toFallback))
 	if loadErr != nil {
 		log.Fatalf("Failed to load to schema: %v", loadErr)
 	}
@@ -562,7 +595,12 @@ func runRollback(args []string) {
 	}
 
 	// Load the before schema (supports files, directories, or database connection strings)
-	beforeSchema, err := LoadSchemaOrIntrospect(sourceInput)
+	var rollbackFallback database.Dialect
+	if isConnectionString(sourceInput) {
+		rollbackFallback = driverNameToDialect(detectDriver(sourceInput))
+	}
+
+	beforeSchema, err := LoadSchemaOrIntrospectWithOptions(sourceInput, buildSchemaLoadOptions(sourceInput, rollbackFallback))
 	if err != nil {
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
@@ -690,9 +728,12 @@ func runApply(args []string) {
 			log.Fatalf("Failed to introspect target database: %v", err)
 		}
 
+		planDriverType := detectDriver(targetConnStr)
+		planDialect := driverNameToDialect(planDriverType)
+
 		// Load desired schema (this is the "to" state)
 		fmt.Fprintf(os.Stderr, "📖 Loading desired schema from %s...\n", schemaPath)
-		after, err := LoadSchemaOrIntrospect(schemaPath)
+		after, err := LoadSchemaOrIntrospectWithOptions(schemaPath, buildSchemaLoadOptions(schemaPath, planDialect))
 		if err != nil {
 			log.Fatalf("Failed to load schema: %v", err)
 		}
@@ -707,7 +748,6 @@ func runApply(args []string) {
 		}
 
 		// Detect database driver from target connection string
-		planDriverType := detectDriver(targetConnStr)
 		planDriver, err := newDriver(planDriverType)
 		if err != nil {
 			log.Fatalf("Failed to create database driver: %v", err)

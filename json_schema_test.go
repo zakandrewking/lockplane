@@ -3,7 +3,10 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/lockplane/lockplane/database"
 )
 
 func TestValidateJSONSchema_Valid(t *testing.T) {
@@ -54,7 +57,7 @@ CREATE TABLE users (
 				Columns: []Column{
 					{
 						Name:         "id",
-						Type:         "pg_catalog.int8",
+						Type:         "bigint",
 						Nullable:     false,
 						IsPrimaryKey: true,
 					},
@@ -66,7 +69,7 @@ CREATE TABLE users (
 					},
 					{
 						Name:         "team_id",
-						Type:         "pg_catalog.int8",
+						Type:         "bigint",
 						Nullable:     true,
 						IsPrimaryKey: false,
 					},
@@ -118,6 +121,60 @@ CREATE TABLE users (
 	}
 }
 
+func TestLoadSchemaSQLitePreservesTypes(t *testing.T) {
+	tmpDir := t.TempDir()
+	sqlPath := filepath.Join(tmpDir, "sqlite_schema.lp.sql")
+
+	sqlDDL := `
+CREATE TABLE todos (
+    id INTEGER PRIMARY KEY,
+    completed INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`
+
+	if err := os.WriteFile(sqlPath, []byte(sqlDDL), 0o600); err != nil {
+		t.Fatalf("Failed to write SQL fixture: %v", err)
+	}
+
+	schema, err := LoadSchemaWithOptions(sqlPath, &SchemaLoadOptions{Dialect: database.DialectSQLite})
+	if err != nil {
+		t.Fatalf("LoadSchemaWithOptions returned error: %v", err)
+	}
+
+	if schema.Dialect != database.DialectSQLite {
+		t.Fatalf("expected schema dialect sqlite, got %s", schema.Dialect)
+	}
+
+	if len(schema.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(schema.Tables))
+	}
+
+	todos := &schema.Tables[0]
+	completed := findColumnByName(t, todos, "completed")
+	if completed.Type != "INTEGER" {
+		t.Fatalf("expected completed type INTEGER, got %s", completed.Type)
+	}
+	if completed.LogicalType() != "integer" {
+		t.Fatalf("expected logical type integer, got %s", completed.LogicalType())
+	}
+
+	createdAt := findColumnByName(t, todos, "created_at")
+	if createdAt.Default == nil {
+		t.Fatalf("expected created_at default to be set")
+	}
+	lowerDefault := strings.ToLower(*createdAt.Default)
+	if !strings.Contains(lowerDefault, "datetime('now'") {
+		t.Fatalf("expected created_at default to contain datetime('now'), got %s", *createdAt.Default)
+	}
+	if createdAt.DefaultMetadata == nil {
+		t.Fatalf("expected default metadata to be populated")
+	}
+	if !strings.Contains(strings.ToLower(createdAt.DefaultMetadata.Raw), "datetime('now'") {
+		t.Fatalf("expected default metadata raw to contain datetime('now'), got %s", createdAt.DefaultMetadata.Raw)
+	}
+}
+
 func TestLoadSchemaFromLPSQLWithAlterStatements(t *testing.T) {
 	tmpDir := t.TempDir()
 	sqlPath := filepath.Join(tmpDir, "schema.lp.sql")
@@ -149,7 +206,7 @@ ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
 				Columns: []Column{
 					{
 						Name:         "id",
-						Type:         "pg_catalog.int8",
+						Type:         "bigint",
 						Nullable:     true,
 						IsPrimaryKey: false,
 					},
@@ -162,7 +219,7 @@ ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
 					},
 					{
 						Name:         "bio",
-						Type:         "pg_catalog.varchar(100)",
+						Type:         "varchar(100)",
 						Nullable:     true,
 						IsPrimaryKey: false,
 					},
@@ -197,8 +254,8 @@ ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
 	}
 
 	bioCol := findColumnByName(t, usersTable, "bio")
-	if bioCol.Type != "pg_catalog.varchar(100)" {
-		t.Fatalf("expected bio type pg_catalog.varchar(100), got %s", bioCol.Type)
+	if bioCol.Type != "varchar(100)" {
+		t.Fatalf("expected bio type varchar(100), got %s", bioCol.Type)
 	}
 }
 

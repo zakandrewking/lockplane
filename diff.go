@@ -163,7 +163,7 @@ func diffTables(current, desired *Table) *TableDiff {
 func diffColumns(current, desired *Column) *ColumnDiff {
 	var changes []string
 
-	if current.Type != desired.Type {
+	if current.LogicalType() != desired.LogicalType() {
 		changes = append(changes, "type")
 	}
 	if current.Nullable != desired.Nullable {
