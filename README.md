@@ -131,20 +131,21 @@ Now that we have a schema, we can generate a migration plan to apply it to our
 database.
 
 NOTE: Starting from scratch? Run `lockplane init` (or `lockplane init --yes`) to
-launch the wizard and create the default `schema/` directory.
+launch the wizard and create the default `schema/` directory plus
+`schema/lockplane.toml`.
 
 ### Configure your database environment
 
 Lockplane reads connection strings from named environments. Create a
-`lockplane.toml` file in your project root (or use the sample at
-`lockplane.toml.example`) and define a default environment:
+`schema/lockplane.toml` (created by the wizard) and define a default environment.
+If you're setting it up manually, use the sample at `lockplane.toml.example`.
 
 ```toml
 default_environment = "local"
 
 [environments.local]
 description = "Local development database"
-schema_path = "schema/"
+schema_path = "."
 ```
 
 Next, provide the actual credentials in `.env.local` (ignored by Git by default).

@@ -1,8 +1,8 @@
 # Lockplane Configuration File
 #
 # Define named environments and shared settings for your project. Lockplane looks for
-# this file (lockplane.toml) in the current directory or any parent directory. Each
-# environment can inline database URLs here or load them from matching .env.<name> files.
+# lockplane.toml in the current directory, any parent directory, or a schema/ subdirectory.
+# Each environment can inline database URLs here or load them from matching .env.<name> files.
 #
 # Priority order (highest to lowest):
 #   1. CLI flags (--target, --target-environment, --from, --from-environment, etc.)
@@ -13,8 +13,9 @@
 default_environment = "local"
 
 # Default schema path used when --schema is omitted in plan/apply commands.
-# This can point to a directory of .lp.sql files or a single schema file.
-# schema_path = "lockplane/schema/"
+# When this file lives inside schema/, set the path to "." so it points at the
+# directory containing your .lp.sql files. Uncomment to override globally.
+# schema_path = "."
 
 [environments.local]
 description = "Local development using the default docker-compose databases"

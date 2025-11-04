@@ -71,7 +71,7 @@ curl -L https://github.com/zakandrewking/lockplane/releases/latest/download/lock
 
 **Quick start snippet** (used in README, llms.txt):
 ```bash
-lockplane init --yes
+lockplane init --yes  # creates schema/ and schema/lockplane.toml
 lockplane introspect > current.json
 lockplane apply --auto-approve --from current.json --to schema/ --validate
 ```

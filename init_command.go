@@ -9,11 +9,21 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const defaultSchemaDir = "schema"
+const (
+	defaultSchemaDir         = "schema"
+	lockplaneConfigFilename  = "lockplane.toml"
+	defaultLockplaneTomlBody = `default_environment = "local"
+
+[environments.local]
+description = "Local development database"
+schema_path = "."
+database_url = "postgresql://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
+shadow_database_url = "postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable"
+`
+)
 
 func runInit(args []string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
@@ -21,10 +31,9 @@ func runInit(args []string) {
 
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: lockplane init [--yes]\n\n")
-		_, _ = fmt.Fprintf(os.Stderr, "Launch the interactive Lockplane project wizard. The wizard helps you\n")
-		_, _ = fmt.Fprintf(os.Stderr, "bootstrap a schema directory and will grow to cover more project setup\n")
-		_, _ = fmt.Fprintf(os.Stderr, "tasks over time. Use --yes to create the default schema/ directory\n")
-		_, _ = fmt.Fprintf(os.Stderr, "without any prompts.\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Launch the interactive Lockplane project wizard. The wizard bootstraps\n")
+		_, _ = fmt.Fprintf(os.Stderr, "the schema/ directory and creates schema/lockplane.toml.\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Use --yes to accept defaults without prompts.\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nExamples:\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init --yes\n")
@@ -36,16 +45,12 @@ func runInit(args []string) {
 	}
 
 	if *yes {
-		created, err := ensureSchemaDir(defaultSchemaDir)
+		result, err := bootstrapSchemaDirectory()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		if created {
-			_, _ = fmt.Fprintf(os.Stdout, "✓ Ready! Created %s/\n", defaultSchemaDir)
-		} else {
-			_, _ = fmt.Fprintf(os.Stdout, "✓ Ready! %s/ already exists\n", defaultSchemaDir)
-		}
+		reportBootstrapResult(os.Stdout, result)
 		return
 	}
 
@@ -53,6 +58,13 @@ func runInit(args []string) {
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+type bootstrapResult struct {
+	SchemaDir        string
+	ConfigPath       string
+	SchemaDirCreated bool
+	ConfigCreated    bool
 }
 
 func ensureSchemaDir(path string) (bool, error) {
@@ -74,6 +86,47 @@ func ensureSchemaDir(path string) (bool, error) {
 	return true, os.MkdirAll(path, 0o755)
 }
 
+func bootstrapSchemaDirectory() (*bootstrapResult, error) {
+	dirCreated, err := ensureSchemaDir(defaultSchemaDir)
+	if err != nil {
+		return nil, err
+	}
+
+	configPath := filepath.Join(defaultSchemaDir, lockplaneConfigFilename)
+	if info, err := os.Stat(configPath); err == nil && !info.IsDir() {
+		return nil, fmt.Errorf("%s already exists.\n\nEdit the existing file or delete it if you want to re-initialize.", filepath.ToSlash(configPath))
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+
+	if err := os.WriteFile(configPath, []byte(defaultLockplaneTomlBody), 0o644); err != nil {
+		return nil, err
+	}
+
+	return &bootstrapResult{
+		SchemaDir:        defaultSchemaDir,
+		ConfigPath:       configPath,
+		SchemaDirCreated: dirCreated,
+		ConfigCreated:    true,
+	}, nil
+}
+
+func reportBootstrapResult(out *os.File, result *bootstrapResult) {
+	if result == nil {
+		return
+	}
+
+	if result.SchemaDirCreated {
+		_, _ = fmt.Fprintf(out, "✓ Created %s/\n", filepath.ToSlash(result.SchemaDir))
+	} else {
+		_, _ = fmt.Fprintf(out, "• Using existing %s/\n", filepath.ToSlash(result.SchemaDir))
+	}
+
+	if result.ConfigCreated {
+		_, _ = fmt.Fprintf(out, "✓ Wrote %s\n", filepath.ToSlash(result.ConfigPath))
+	}
+}
+
 func startInitWizard() error {
 	model := newInitWizardModel()
 	if _, err := tea.NewProgram(model).Run(); err != nil {
@@ -82,67 +135,52 @@ func startInitWizard() error {
 	if model.err != nil {
 		return model.err
 	}
+	reportBootstrapResult(os.Stdout, model.result)
 	return nil
 }
 
 type initWizardModel struct {
-	input         textinput.Model
-	spinner       spinner.Model
-	creating      bool
-	done          bool
-	err           error
-	status        string
-	schemaDir     string
-	shouldQuit    bool
-	width, height int
+	spinner    spinner.Model
+	creating   bool
+	done       bool
+	err        error
+	status     string
+	result     *bootstrapResult
+	shouldQuit bool
 }
 
 func newInitWizardModel() *initWizardModel {
-	ti := textinput.New()
-	ti.Placeholder = defaultSchemaDir
-	ti.SetValue(defaultSchemaDir)
-	ti.Focus()
-	ti.CharLimit = 128
-
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
-
 	return &initWizardModel{
-		input:     ti,
-		spinner:   sp,
-		status:    "",
-		schemaDir: defaultSchemaDir,
+		spinner: sp,
 	}
 }
 
 func (m *initWizardModel) Init() tea.Cmd {
-	return textinput.Blink
+	return nil
 }
 
-type schemaCreatedMsg struct {
-	Path    string
-	Created bool
+type bootstrapResultMsg struct {
+	Result *bootstrapResult
 }
 
-type schemaErrorMsg struct {
+type bootstrapErrorMsg struct {
 	Err error
 }
 
-func createSchemaDirCmd(path string) tea.Cmd {
+func createBootstrapCmd() tea.Cmd {
 	return func() tea.Msg {
-		created, err := ensureSchemaDir(path)
+		result, err := bootstrapSchemaDirectory()
 		if err != nil {
-			return schemaErrorMsg{Err: err}
+			return bootstrapErrorMsg{Err: err}
 		}
-		return schemaCreatedMsg{Path: path, Created: created}
+		return bootstrapResultMsg{Result: result}
 	}
 }
 
 func (m *initWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
@@ -152,37 +190,10 @@ func (m *initWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.creating || m.done {
 				return m, nil
 			}
-			value := strings.TrimSpace(m.input.Value())
-			if value == "" {
-				value = defaultSchemaDir
-			}
-			m.schemaDir = value
-			if dirExists(value) {
-				m.status = fmt.Sprintf("%s/ already exists. Enter a different directory name.", filepath.ToSlash(value))
-				return m, nil
-			}
 			m.creating = true
 			m.status = ""
-			cmds := []tea.Cmd{
-				createSchemaDirCmd(value),
-				m.spinner.Tick,
-			}
-			return m, tea.Batch(cmds...)
+			return m, tea.Batch(createBootstrapCmd(), m.spinner.Tick)
 		}
-	case schemaCreatedMsg:
-		m.creating = false
-		m.done = true
-		if msg.Created {
-			m.status = fmt.Sprintf("✓ Ready! Created %s/", filepath.ToSlash(msg.Path))
-		} else {
-			m.status = fmt.Sprintf("✓ Ready! %s/ already exists", filepath.ToSlash(msg.Path))
-		}
-		m.shouldQuit = true
-		return m, tea.Sequence(tea.Quit)
-	case schemaErrorMsg:
-		m.creating = false
-		m.err = msg.Err
-		m.status = fmt.Sprintf("Error: %v", msg.Err)
 	case spinner.TickMsg:
 		if m.creating {
 			var cmd tea.Cmd
@@ -190,12 +201,26 @@ func (m *initWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
-	}
-
-	if !m.creating && !m.done {
-		var cmd tea.Cmd
-		m.input, cmd = m.input.Update(msg)
-		return m, cmd
+	case bootstrapResultMsg:
+		m.creating = false
+		m.done = true
+		m.result = msg.Result
+		if msg.Result != nil {
+			if msg.Result.SchemaDirCreated {
+				m.status = fmt.Sprintf("✓ Ready! Created %s/ and wrote %s", filepath.ToSlash(msg.Result.SchemaDir), filepath.ToSlash(msg.Result.ConfigPath))
+			} else {
+				m.status = fmt.Sprintf("✓ Ready! Wrote %s", filepath.ToSlash(msg.Result.ConfigPath))
+			}
+		} else {
+			m.status = "✓ Ready!"
+		}
+		m.shouldQuit = true
+		return m, tea.Sequence(tea.Quit)
+	case bootstrapErrorMsg:
+		m.creating = false
+		m.err = msg.Err
+		m.status = fmt.Sprintf("Error: %v", msg.Err)
+		return m, nil
 	}
 
 	return m, nil
@@ -205,28 +230,20 @@ func (m *initWizardModel) View() string {
 	var b strings.Builder
 
 	b.WriteString("\n  Lockplane Init Wizard\n\n")
-	b.WriteString("  This wizard bootstraps your project by creating a schema directory.\n")
-	b.WriteString("  More setup steps are coming in future releases.\n\n")
+	b.WriteString("  This wizard will create:\n")
+	b.WriteString("    • schema/\n")
+	b.WriteString("    • schema/lockplane.toml\n\n")
 
 	if m.creating {
-		b.WriteString(fmt.Sprintf("  %s Creating %s/\n\n", m.spinner.View(), filepath.ToSlash(m.schemaDir)))
+		b.WriteString(fmt.Sprintf("  %s Setting up schema/...\n\n", m.spinner.View()))
 	} else if m.done {
 		b.WriteString(fmt.Sprintf("  %s\n\n", m.status))
 	} else {
-		b.WriteString("  Where should we create your schema directory?\n")
-		b.WriteString("  Press Enter to accept the default.\n\n")
-		b.WriteString("  ")
-		b.WriteString(m.input.View())
-		b.WriteString("\n\n")
-		b.WriteString("  ↑/↓ Move | Enter Confirm | Esc Cancel\n\n")
+		b.WriteString("  Press Enter to continue or Esc to cancel.\n\n")
 	}
 
 	if m.err != nil && !m.creating && !m.done {
 		b.WriteString(fmt.Sprintf("  Error: %v\n\n", m.err))
-	}
-
-	if !m.creating && !m.done && m.status != "" {
-		b.WriteString(fmt.Sprintf("  %s\n\n", m.status))
 	}
 
 	if m.done {
@@ -234,9 +251,4 @@ func (m *initWizardModel) View() string {
 	}
 
 	return b.String()
-}
-
-func dirExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
 }

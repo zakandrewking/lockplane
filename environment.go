@@ -76,8 +76,10 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		baseDir        string
 		dotenvFileName = ".env." + envName
 	)
+	var projectDir string
 	if config != nil {
 		baseDir = config.ConfigDir()
+		projectDir = config.ProjectDir()
 	} else if cwd, err := os.Getwd(); err == nil {
 		baseDir = cwd
 	}
@@ -86,6 +88,18 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		resolved.DotenvPath = filepath.Join(baseDir, dotenvFileName)
 	} else {
 		resolved.DotenvPath = dotenvFileName
+	}
+
+	if _, err := os.Stat(resolved.DotenvPath); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to access %s: %w", resolved.DotenvPath, err)
+		}
+		if projectDir != "" && projectDir != baseDir {
+			altPath := filepath.Join(projectDir, dotenvFileName)
+			if altInfo, altErr := os.Stat(altPath); altErr == nil && !altInfo.IsDir() {
+				resolved.DotenvPath = altPath
+			}
+		}
 	}
 
 	if info, err := os.Stat(resolved.DotenvPath); err == nil && !info.IsDir() {
@@ -105,8 +119,6 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 				resolved.SchemaPath = value
 			}
 		}
-	} else if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to access %s: %w", resolved.DotenvPath, err)
 	}
 
 	if resolved.DatabaseURL == "" {
@@ -114,6 +126,14 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 	}
 	if resolved.ShadowDatabaseURL == "" {
 		resolved.ShadowDatabaseURL = defaultShadowDatabaseURL
+	}
+
+	if resolved.SchemaPath != "" {
+		base := resolved.ResolvedConfigDir
+		if base == "" && config != nil {
+			base = config.ConfigDir()
+		}
+		resolved.SchemaPath = resolveSchemaPath(resolved.SchemaPath, base)
 	}
 
 	if config != nil && config.Environments != nil && len(config.Environments) > 0 && !envExists {

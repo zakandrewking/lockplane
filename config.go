@@ -29,6 +29,8 @@ type Config struct {
 	ShadowDatabaseURL  string                       `toml:"shadow_database_url"` // legacy fallback
 	Environments       map[string]EnvironmentConfig `toml:"environments"`
 	configDir          string                       `toml:"-"`
+	projectDir         string                       `toml:"-"`
+	configFilePath     string                       `toml:"-"`
 }
 
 // LoadConfig loads the lockplane.toml file from the current directory or any parent directory.
@@ -40,20 +42,28 @@ func LoadConfig() (*Config, error) {
 
 	dir := startDir
 	for {
-		configPath := filepath.Join(dir, "lockplane.toml")
-		if _, err := os.Stat(configPath); err == nil {
-			data, err := os.ReadFile(configPath)
-			if err != nil {
-				return nil, err
-			}
+		candidates := []string{
+			filepath.Join(dir, "lockplane.toml"),
+			filepath.Join(dir, defaultSchemaDir, "lockplane.toml"),
+		}
 
-			var config Config
-			if err := toml.Unmarshal(data, &config); err != nil {
-				return nil, err
-			}
+		for _, configPath := range candidates {
+			if _, err := os.Stat(configPath); err == nil {
+				data, err := os.ReadFile(configPath)
+				if err != nil {
+					return nil, err
+				}
 
-			config.configDir = dir
-			return &config, nil
+				var config Config
+				if err := toml.Unmarshal(data, &config); err != nil {
+					return nil, err
+				}
+
+				config.configFilePath = configPath
+				config.configDir = filepath.Dir(configPath)
+				config.projectDir = dir
+				return &config, nil
+			}
 		}
 
 		parent := filepath.Dir(dir)
@@ -63,7 +73,7 @@ func LoadConfig() (*Config, error) {
 		dir = parent
 	}
 
-	return &Config{configDir: startDir}, nil
+	return &Config{configDir: startDir, projectDir: startDir}, nil
 }
 
 // ConfigDir returns the directory containing the resolved lockplane.toml (or the working directory if none exists).
@@ -80,16 +90,54 @@ func (c *Config) ConfigDir() string {
 	return ""
 }
 
+// ProjectDir returns the project root associated with the loaded configuration.
+func (c *Config) ProjectDir() string {
+	if c == nil {
+		return ""
+	}
+	if c.projectDir != "" {
+		return c.projectDir
+	}
+	return c.ConfigDir()
+}
+
+// ConfigFile returns the absolute path to the resolved lockplane.toml, if any.
+func (c *Config) ConfigFile() string {
+	if c == nil {
+		return ""
+	}
+	return c.configFilePath
+}
+
 // GetSchemaPath returns the schema path with priority: explicit value > environment config > global config > default.
 func GetSchemaPath(explicitValue string, config *Config, env *ResolvedEnvironment, defaultValue string) string {
 	if explicitValue != "" {
 		return explicitValue
 	}
 	if env != nil && env.SchemaPath != "" {
-		return env.SchemaPath
+		return resolveSchemaPath(env.SchemaPath, env.ResolvedConfigDir)
 	}
 	if config != nil && config.SchemaPath != "" {
-		return config.SchemaPath
+		return resolveSchemaPath(config.SchemaPath, config.ConfigDir())
+	}
+	if defaultValue != "" {
+		base := ""
+		if env != nil && env.ResolvedConfigDir != "" {
+			base = env.ResolvedConfigDir
+		} else if config != nil {
+			base = config.ConfigDir()
+		}
+		return resolveSchemaPath(defaultValue, base)
 	}
 	return defaultValue
+}
+
+func resolveSchemaPath(value, base string) string {
+	if value == "" {
+		return ""
+	}
+	if filepath.IsAbs(value) || base == "" {
+		return value
+	}
+	return filepath.Join(base, value)
 }

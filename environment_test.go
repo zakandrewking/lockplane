@@ -57,8 +57,9 @@ func TestResolveEnvironmentFromDotenv(t *testing.T) {
 		t.Fatalf("Expected dotenv shadow URL, got %q", env.ShadowDatabaseURL)
 	}
 
-	if env.SchemaPath != "schemas/staging" {
-		t.Fatalf("Expected schema path from dotenv, got %q", env.SchemaPath)
+	expectedSchema := filepath.Join(tempDir, "schemas/staging")
+	if env.SchemaPath != expectedSchema {
+		t.Fatalf("Expected schema path %q, got %q", expectedSchema, env.SchemaPath)
 	}
 }
 

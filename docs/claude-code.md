@@ -82,7 +82,7 @@ default_environment = "local"
 
 [environments.local]
 description = "Local notesapp database"
-schema_path = "lockplane/schema/"
+schema_path = "."
 ```
 
 Store the actual credentials in `.env.local`:
@@ -98,17 +98,17 @@ Lockplane automatically loads `.env.<name>` when you pass `--target-environment`
 
 > **Heads up:** Keep `.env.local` out of version control. Commit `lockplane.toml` (with sanitized defaults) and share a `.env.local.example` instead.
 
-**Your schema source of truth** - Create directory `lockplane/schema/` (recommended):
+**Your schema source of truth** - Create directory `schema/` (recommended):
 
 ```bash
 # Create the recommended schema directory
-mkdir -p lockplane/schema
+mkdir -p schema
 ```
 
 Then create your schema files inside:
 
 ```sql
--- lockplane/schema/001_users.lp.sql
+-- schema/001_users.lp.sql
 CREATE TABLE users (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
@@ -119,7 +119,7 @@ CREATE UNIQUE INDEX users_email_key ON users(email);
 ```
 
 ```sql
--- lockplane/schema/002_notes.lp.sql
+-- schema/002_notes.lp.sql
 CREATE TABLE notes (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id),
@@ -131,7 +131,7 @@ CREATE TABLE notes (
 CREATE INDEX idx_notes_user_id ON notes(user_id);
 ```
 
-**Why `lockplane/schema/`?**
+**Why `schema/`?**
 - Clear separation from other project files
 - Easy to find and maintain
 - Works well with `schema_path` in `lockplane.toml`
@@ -140,16 +140,16 @@ CREATE INDEX idx_notes_user_id ON notes(user_id);
 
 **Single file alternative:**
 
-If you prefer a single file, use `lockplane/schema.lp.sql`:
+If you prefer a single file, use `schema/schema.lp.sql`:
 
 ```bash
-lockplane plan --from current.json --to lockplane/schema.lp.sql --validate
+lockplane plan --from current.json --to schema/schema.lp.sql --validate
 ```
 
 **Convert to JSON when needed:**
 
 ```bash
-lockplane convert --input lockplane/schema/ --output lockplane/schema.json
+lockplane convert --input schema/ --output schema.json
 ```
 
 **Key insight:** This describes WHAT you want, not HOW to get there. Lockplane generates the migration plans.
