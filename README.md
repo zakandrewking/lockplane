@@ -233,6 +233,27 @@ Lockplane resolves configuration in this order:
 2. Named environments from `lockplane.toml` (plus `.env.<name>` overlays)
 3. Built-in defaults for local development
 
+### Configuration discovery
+
+When you run a Lockplane command, it searches for `lockplane.toml` starting from the
+current working directory and walking up parent directories. For convenience the
+search also checks each directory's `schema/` subdirectory, so the default project
+layout looks like this:
+
+```
+my-app/
+├── schema/
+│   ├── lockplane.toml    # configuration discovered here
+│   ├── 001_users.lp.sql
+│   └── 002_notes.lp.sql
+└── cmd/
+    └── main.go
+```
+
+From `schema/lockplane.toml` you can reference `.env.<name>` files located either next
+to the config file or in the project root. CLI flags still take precedence, so you can
+override connections temporarily without moving the config file.
+
 ### `lockplane.toml`
 
 Use this file to define environments shared across your team:
