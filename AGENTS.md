@@ -21,6 +21,7 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
 - [ ] Format code: `go fmt ./...`
 - [ ] Vet code: `go vet ./...` (catches common errors)
 - [ ] Run errcheck: `errcheck ./...` (ensures all errors are handled)
+- [ ] Run staticcheck: `staticcheck ./...` (lints for common bugs and style issues)
 
 ### Phase 2: Testing (CRITICAL - ALWAYS RUN TESTS)
 - [ ] Write or update tests for the changes

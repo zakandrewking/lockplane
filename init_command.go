@@ -94,7 +94,7 @@ func bootstrapSchemaDirectory() (*bootstrapResult, error) {
 
 	configPath := filepath.Join(defaultSchemaDir, lockplaneConfigFilename)
 	if info, err := os.Stat(configPath); err == nil && !info.IsDir() {
-		return nil, fmt.Errorf("%s already exists.\n\nEdit the existing file or delete it if you want to re-initialize.", filepath.ToSlash(configPath))
+		return nil, fmt.Errorf("%s already exists. Edit the existing file or delete it if you want to re-initialize", filepath.ToSlash(configPath))
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
