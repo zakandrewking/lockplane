@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/lockplane/lockplane/database"
 )
 
 // GenerateRollback creates a rollback plan from a forward migration plan
 // It reverses the operations and their order to undo the forward migration
-func GenerateRollback(forwardPlan *Plan, beforeSchema *Schema) (*Plan, error) {
+func GenerateRollback(forwardPlan *Plan, beforeSchema *Schema, driver database.Driver) (*Plan, error) {
 	rollbackPlan := &Plan{
 		Steps: []PlanStep{},
 	}
@@ -16,7 +18,7 @@ func GenerateRollback(forwardPlan *Plan, beforeSchema *Schema) (*Plan, error) {
 		step := forwardPlan.Steps[i]
 
 		// Generate reverse operation based on the forward step
-		reverseSteps, err := generateReverseOperation(step, beforeSchema)
+		reverseSteps, err := generateReverseOperation(step, beforeSchema, driver)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate reverse for step %d (%s): %w", i, step.Description, err)
 		}
@@ -28,18 +30,18 @@ func GenerateRollback(forwardPlan *Plan, beforeSchema *Schema) (*Plan, error) {
 }
 
 // generateReverseOperation creates the reverse operation for a given step
-func generateReverseOperation(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+func generateReverseOperation(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
 	// Parse the SQL to determine operation type
 	// This is a simplified approach - in production, you'd want a proper SQL parser
 
 	if containsSQL(step.SQL, "CREATE TABLE") {
 		return generateReverseCreateTable(step)
 	} else if containsSQL(step.SQL, "DROP TABLE") {
-		return generateReverseDropTable(step, beforeSchema)
+		return generateReverseDropTable(step, beforeSchema, driver)
 	} else if containsSQL(step.SQL, "ADD COLUMN") {
 		return generateReverseAddColumn(step)
 	} else if containsSQL(step.SQL, "DROP COLUMN") {
-		return generateReverseDropColumn(step, beforeSchema)
+		return generateReverseDropColumn(step, beforeSchema, driver)
 	} else if containsSQL(step.SQL, "ALTER COLUMN") && containsSQL(step.SQL, "TYPE") {
 		return generateReverseAlterColumnType(step, beforeSchema)
 	} else if containsSQL(step.SQL, "SET NOT NULL") {
@@ -53,11 +55,11 @@ func generateReverseOperation(step PlanStep, beforeSchema *Schema) ([]PlanStep, 
 	} else if containsSQL(step.SQL, "CREATE INDEX") || containsSQL(step.SQL, "CREATE UNIQUE INDEX") {
 		return generateReverseCreateIndex(step)
 	} else if containsSQL(step.SQL, "DROP INDEX") {
-		return generateReverseDropIndex(step, beforeSchema)
+		return generateReverseDropIndex(step, beforeSchema, driver)
 	} else if containsSQL(step.SQL, "ADD CONSTRAINT") && containsSQL(step.SQL, "FOREIGN KEY") {
 		return generateReverseAddForeignKey(step)
 	} else if containsSQL(step.SQL, "DROP CONSTRAINT") {
-		return generateReverseDropForeignKey(step, beforeSchema)
+		return generateReverseDropForeignKey(step, beforeSchema, driver)
 	}
 
 	return nil, fmt.Errorf("unsupported operation for rollback: %s", step.SQL)
@@ -79,7 +81,7 @@ func generateReverseCreateTable(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseDropTable recreates the table
-func generateReverseDropTable(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+func generateReverseDropTable(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
 	// Extract table name from "DROP TABLE tablename"
 	tableName, err := extractTableNameFromDrop(step.SQL)
 	if err != nil {
@@ -99,8 +101,8 @@ func generateReverseDropTable(step PlanStep, beforeSchema *Schema) ([]PlanStep, 
 		return nil, fmt.Errorf("table %s not found in before schema", tableName)
 	}
 
-	// Generate CREATE TABLE statement
-	sql, desc := generateAddTable(*table)
+	// Generate CREATE TABLE statement using driver
+	sql, desc := driver.CreateTable(*table)
 	return []PlanStep{{Description: fmt.Sprintf("Rollback: %s", desc), SQL: sql}}, nil
 }
 
@@ -118,7 +120,7 @@ func generateReverseAddColumn(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseDropColumn recreates the column
-func generateReverseDropColumn(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+func generateReverseDropColumn(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
 	tableName, columnName, err := extractTableAndColumnFromDropColumn(step.SQL)
 	if err != nil {
 		return nil, err
@@ -130,7 +132,7 @@ func generateReverseDropColumn(step PlanStep, beforeSchema *Schema) ([]PlanStep,
 		return nil, err
 	}
 
-	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", tableName, formatColumnDefinition(*column))
+	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", tableName, driver.FormatColumnDefinition(*column))
 	desc := fmt.Sprintf("Rollback: Add column %s to table %s", columnName, tableName)
 
 	return []PlanStep{{Description: desc, SQL: sql}}, nil
@@ -242,7 +244,7 @@ func generateReverseCreateIndex(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseDropIndex recreates the index
-func generateReverseDropIndex(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+func generateReverseDropIndex(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
 	indexName, err := extractIndexNameFromDrop(step.SQL)
 	if err != nil {
 		return nil, err
@@ -254,7 +256,7 @@ func generateReverseDropIndex(step PlanStep, beforeSchema *Schema) ([]PlanStep, 
 		return nil, err
 	}
 
-	sql, desc := generateAddIndex(tableName, *index)
+	sql, desc := driver.AddIndex(tableName, *index)
 	return []PlanStep{{Description: fmt.Sprintf("Rollback: %s", desc), SQL: sql}}, nil
 }
 
@@ -312,7 +314,7 @@ func generateReverseAddForeignKey(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseDropForeignKey recreates the foreign key constraint
-func generateReverseDropForeignKey(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+func generateReverseDropForeignKey(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
 	// Extract table name and constraint name from "ALTER TABLE tablename DROP CONSTRAINT constraintname"
 	tableName, constraintName, err := extractTableAndConstraintFromDropConstraint(step.SQL)
 	if err != nil {
@@ -330,6 +332,6 @@ func generateReverseDropForeignKey(step PlanStep, beforeSchema *Schema) ([]PlanS
 		return nil, fmt.Errorf("foreign key %s found in table %s, expected %s", constraintName, foundTableName, tableName)
 	}
 
-	sql, desc := generateAddForeignKey(tableName, *fk)
+	sql, desc := driver.AddForeignKey(tableName, *fk)
 	return []PlanStep{{Description: fmt.Sprintf("Rollback: %s", desc), SQL: sql}}, nil
 }

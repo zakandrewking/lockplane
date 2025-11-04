@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/lockplane/lockplane/database/postgres"
 )
 
 func TestGeneratePlan_AddTable(t *testing.T) {
@@ -18,7 +20,8 @@ func TestGeneratePlan_AddTable(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -48,7 +51,8 @@ func TestGeneratePlan_DropTable(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -75,7 +79,8 @@ func TestGeneratePlan_AddColumn(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -106,7 +111,8 @@ func TestGeneratePlan_DropColumn(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -138,7 +144,8 @@ func TestGeneratePlan_ModifyColumn_Type(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -171,7 +178,8 @@ func TestGeneratePlan_ModifyColumn_Nullable(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -189,7 +197,7 @@ func TestGeneratePlan_ModifyColumn_Nullable(t *testing.T) {
 	diff.ModifiedTables[0].ModifiedColumns[0].Old.Nullable = false
 	diff.ModifiedTables[0].ModifiedColumns[0].New.Nullable = true
 
-	plan, err = GeneratePlan(diff)
+	plan, err = GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -219,7 +227,8 @@ func TestGeneratePlan_ModifyColumn_Default(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -246,7 +255,8 @@ func TestGeneratePlan_AddIndex(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -273,7 +283,8 @@ func TestGeneratePlan_DropIndex(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -319,7 +330,8 @@ func TestGeneratePlan_ComplexMigration(t *testing.T) {
 		},
 	}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -359,7 +371,8 @@ func TestGeneratePlan_ComplexMigration(t *testing.T) {
 func TestGeneratePlan_EmptyDiff(t *testing.T) {
 	diff := &SchemaDiff{}
 
-	plan, err := GeneratePlan(diff)
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate plan: %v", err)
 	}

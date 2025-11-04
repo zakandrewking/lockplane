@@ -503,8 +503,16 @@ func runPlan(args []string) {
 		}
 	}
 
+	// Detect database driver from target schema (the "to" state)
+	// We generate SQL for the target database type
+	targetDriverType := detectDriver(toInput)
+	targetDriver, err := newDriver(targetDriverType)
+	if err != nil {
+		log.Fatalf("Failed to create database driver: %v", err)
+	}
+
 	// Generate plan with source hash
-	plan, err := GeneratePlanWithHash(diff, before)
+	plan, err := GeneratePlanWithHash(diff, before, targetDriver)
 	if err != nil {
 		log.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -565,8 +573,15 @@ func runRollback(args []string) {
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
 
+	// Detect database driver from source (the "before" state we're rolling back to)
+	sourceDriverType := detectDriver(sourceInput)
+	sourceDriver, err := newDriver(sourceDriverType)
+	if err != nil {
+		log.Fatalf("Failed to create database driver: %v", err)
+	}
+
 	// Generate rollback plan
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, sourceDriver)
 	if err != nil {
 		log.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -697,8 +712,15 @@ func runApply(args []string) {
 			os.Exit(0)
 		}
 
+		// Detect database driver from target connection string
+		planDriverType := detectDriver(targetConnStr)
+		planDriver, err := newDriver(planDriverType)
+		if err != nil {
+			log.Fatalf("Failed to create database driver: %v", err)
+		}
+
 		// Generate plan with source hash
-		generatedPlan, err := GeneratePlanWithHash(diff, before)
+		generatedPlan, err := GeneratePlanWithHash(diff, before, planDriver)
 		if err != nil {
 			log.Fatalf("Failed to generate plan: %v", err)
 		}

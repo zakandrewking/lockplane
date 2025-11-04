@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/lockplane/lockplane/database/postgres"
 )
 
 func TestGenerateRollback_CreateTable(t *testing.T) {
@@ -17,7 +19,8 @@ func TestGenerateRollback_CreateTable(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -54,7 +57,8 @@ func TestGenerateRollback_DropTable(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -90,7 +94,8 @@ func TestGenerateRollback_AddColumn(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -127,7 +132,8 @@ func TestGenerateRollback_DropColumn(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -164,7 +170,8 @@ func TestGenerateRollback_AlterColumnType(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -200,7 +207,8 @@ func TestGenerateRollback_SetNotNull(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -236,7 +244,8 @@ func TestGenerateRollback_CreateIndex(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -275,7 +284,8 @@ func TestGenerateRollback_DropIndex(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -317,7 +327,8 @@ func TestGenerateRollback_ComplexMigration(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -360,7 +371,8 @@ func TestGenerateRollback_SetDefault(t *testing.T) {
 		},
 	}
 
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema)
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to generate rollback: %v", err)
 	}
