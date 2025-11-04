@@ -249,13 +249,14 @@ func runIntrospect(args []string) {
 	}
 
 	// Detect database driver from connection string
-	driver, err := newDriverFromConnString(connStr)
+	driverType := detectDriver(connStr)
+	driver, err := newDriver(driverType)
 	if err != nil {
 		log.Fatalf("Failed to create database driver: %v", err)
 	}
 
-	// Get the SQL driver name
-	sqlDriverName := getSQLDriverName(driver.Name())
+	// Get the SQL driver name (use detected type, not driver.Name())
+	sqlDriverName := getSQLDriverName(driverType)
 
 	db, err := sql.Open(sqlDriverName, connStr)
 	if err != nil {
@@ -742,12 +743,13 @@ func runApply(args []string) {
 
 	// Connect to main database
 	// Detect database driver from connection string
-	mainDriver, err := newDriverFromConnString(targetConnStr)
+	mainDriverType := detectDriver(targetConnStr)
+	mainDriver, err := newDriver(mainDriverType)
 	if err != nil {
 		log.Fatalf("Failed to create database driver: %v", err)
 	}
 
-	mainDriverName := getSQLDriverName(mainDriver.Name())
+	mainDriverName := getSQLDriverName(mainDriverType)
 	mainDB, err := sql.Open(mainDriverName, targetConnStr)
 	if err != nil {
 		log.Fatalf("Failed to connect to target database: %v", err)
@@ -780,13 +782,9 @@ func runApply(args []string) {
 			}
 		}
 
-		// Detect shadow database driver
-		shadowDriver, err := newDriverFromConnString(shadowConnStr)
-		if err != nil {
-			log.Fatalf("Failed to create shadow database driver: %v", err)
-		}
-
-		shadowDriverName := getSQLDriverName(shadowDriver.Name())
+		// Detect shadow database driver type
+		shadowDriverType := detectDriver(shadowConnStr)
+		shadowDriverName := getSQLDriverName(shadowDriverType)
 		shadowDB, err = sql.Open(shadowDriverName, shadowConnStr)
 		if err != nil {
 			log.Fatalf("Failed to connect to shadow database: %v", err)

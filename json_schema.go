@@ -48,13 +48,14 @@ func isConnectionString(s string) bool {
 // loadSchemaFromConnectionString introspects a database and returns its schema
 func loadSchemaFromConnectionString(connStr string) (*Schema, error) {
 	// Detect database driver from connection string
-	driver, err := newDriverFromConnString(connStr)
+	driverType := detectDriver(connStr)
+	driver, err := newDriver(driverType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database driver: %w", err)
 	}
 
-	// Get the SQL driver name
-	sqlDriverName := getSQLDriverName(driver.Name())
+	// Get the SQL driver name (use detected type, not driver.Name())
+	sqlDriverName := getSQLDriverName(driverType)
 
 	db, err := sql.Open(sqlDriverName, connStr)
 	if err != nil {
