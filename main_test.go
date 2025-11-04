@@ -544,3 +544,55 @@ func TestDetectDriver(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSQLDriverName(t *testing.T) {
+	tests := []struct {
+		name       string
+		driverType string
+		expected   string
+	}{
+		// PostgreSQL
+		{
+			name:       "postgres",
+			driverType: "postgres",
+			expected:   "postgres",
+		},
+		{
+			name:       "postgresql",
+			driverType: "postgresql",
+			expected:   "postgres",
+		},
+		// SQLite
+		{
+			name:       "sqlite",
+			driverType: "sqlite",
+			expected:   "sqlite",
+		},
+		{
+			name:       "sqlite3",
+			driverType: "sqlite3",
+			expected:   "sqlite",
+		},
+		// libSQL/Turso (critical test for the bug we just fixed)
+		{
+			name:       "libsql",
+			driverType: "libsql",
+			expected:   "libsql",
+		},
+		// Unknown/default
+		{
+			name:       "unknown falls through",
+			driverType: "unknown",
+			expected:   "unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getSQLDriverName(tt.driverType)
+			if result != tt.expected {
+				t.Errorf("getSQLDriverName(%q) = %q, want %q", tt.driverType, result, tt.expected)
+			}
+		})
+	}
+}
