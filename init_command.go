@@ -20,37 +20,37 @@ func runInit(args []string) {
 	yes := fs.Bool("yes", false, "Skip the wizard and accept default values")
 
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: lockplane init [--yes]\n\n")
-		fmt.Fprintf(os.Stderr, "Launch the interactive Lockplane project wizard. The wizard helps you\n")
-		fmt.Fprintf(os.Stderr, "bootstrap a schema directory and will grow to cover more project setup\n")
-		fmt.Fprintf(os.Stderr, "tasks over time. Use --yes to create the default schema/ directory\n")
-		fmt.Fprintf(os.Stderr, "without any prompts.\n")
-		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  lockplane init\n")
-		fmt.Fprintf(os.Stderr, "  lockplane init --yes\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Usage: lockplane init [--yes]\n\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Launch the interactive Lockplane project wizard. The wizard helps you\n")
+		_, _ = fmt.Fprintf(os.Stderr, "bootstrap a schema directory and will grow to cover more project setup\n")
+		_, _ = fmt.Fprintf(os.Stderr, "tasks over time. Use --yes to create the default schema/ directory\n")
+		_, _ = fmt.Fprintf(os.Stderr, "without any prompts.\n")
+		_, _ = fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init --yes\n")
 	}
 
 	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Failed to parse flags: %v\n", err)
 		os.Exit(1)
 	}
 
 	if *yes {
 		created, err := ensureSchemaDir(defaultSchemaDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		if created {
-			fmt.Fprintf(os.Stdout, "✓ Ready! Created %s/\n", defaultSchemaDir)
+			_, _ = fmt.Fprintf(os.Stdout, "✓ Ready! Created %s/\n", defaultSchemaDir)
 		} else {
-			fmt.Fprintf(os.Stdout, "✓ Ready! %s/ already exists\n", defaultSchemaDir)
+			_, _ = fmt.Fprintf(os.Stdout, "✓ Ready! %s/ already exists\n", defaultSchemaDir)
 		}
 		return
 	}
 
 	if err := startInitWizard(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
