@@ -269,8 +269,12 @@ func TestApplyPlan_CreateTable(t *testing.T) {
 	}
 	plan := *planPtr
 
+	// Create empty schema and driver for apply
+	emptySchema := &Schema{Tables: []Table{}}
+	driver := postgres.NewDriver()
+
 	// Execute plan
-	result, err := applyPlan(ctx, db, &plan, nil)
+	result, err := applyPlan(ctx, db, &plan, nil, emptySchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to apply plan: %v", err)
 	}
@@ -335,8 +339,12 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 	}
 	plan := *planPtr
 
+	// Create empty schema and driver for apply
+	emptySchema := &Schema{Tables: []Table{}}
+	driver := postgres.NewDriver()
+
 	// Execute plan with shadow DB validation
-	result, err := applyPlan(ctx, mainDB, &plan, shadowDB)
+	result, err := applyPlan(ctx, mainDB, &plan, shadowDB, emptySchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to apply plan: %v", err)
 	}
@@ -387,8 +395,12 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 		},
 	}
 
+	// Create empty schema and driver for apply
+	emptySchema := &Schema{Tables: []Table{}}
+	driver := postgres.NewDriver()
+
 	// Execute plan - should fail
-	result, err := applyPlan(ctx, db, &plan, nil)
+	result, err := applyPlan(ctx, db, &plan, nil, emptySchema, driver)
 	if err == nil {
 		t.Error("Expected error for invalid SQL, got nil")
 	}
@@ -433,8 +445,22 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 	}
 	plan := *planPtr
 
+	// Create schema with the existing users table and driver for apply
+	existingSchema := &Schema{
+		Tables: []Table{
+			{
+				Name: "users",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+					{Name: "name", Type: "text", Nullable: false},
+				},
+			},
+		},
+	}
+	driver := postgres.NewDriver()
+
 	// Execute plan
-	result, err := applyPlan(ctx, db, &plan, nil)
+	result, err := applyPlan(ctx, db, &plan, nil, existingSchema, driver)
 	if err != nil {
 		t.Fatalf("Failed to apply plan: %v", err)
 	}

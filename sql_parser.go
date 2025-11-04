@@ -705,11 +705,21 @@ func formatExpr(node *pg_query.Node) string {
 		}
 
 	case *pg_query.Node_FuncCall:
-		// Handle function calls like NOW(), CURRENT_TIMESTAMP, etc.
+		// Handle function calls like NOW(), CURRENT_TIMESTAMP, datetime('now'), etc.
 		if len(expr.FuncCall.Funcname) > 0 {
 			if nameNode, ok := expr.FuncCall.Funcname[0].Node.(*pg_query.Node_String_); ok {
-				funcName := strings.ToUpper(nameNode.String_.Sval)
-				// For common functions, return them as-is
+				funcName := nameNode.String_.Sval
+
+				// Format arguments
+				var args []string
+				for _, argNode := range expr.FuncCall.Args {
+					argStr := formatExpr(argNode)
+					args = append(args, argStr)
+				}
+
+				if len(args) > 0 {
+					return fmt.Sprintf("%s(%s)", funcName, strings.Join(args, ", "))
+				}
 				return funcName + "()"
 			}
 		}

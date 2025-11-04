@@ -816,15 +816,15 @@ func runApply(args []string) {
 		fmt.Fprintf(os.Stderr, "⚠️  Skipping shadow DB validation (--skip-shadow)\n")
 	}
 
+	// Introspect current database state (needed for shadow DB validation and source hash check)
+	currentSchema, err := mainDriver.IntrospectSchema(ctx, mainDB)
+	if err != nil {
+		log.Fatalf("Failed to introspect current database schema: %v", err)
+	}
+
 	// Validate source hash if present in plan
 	if plan.SourceHash != "" {
 		fmt.Fprintf(os.Stderr, "🔐 Validating source schema hash...\n")
-
-		// Introspect current database state
-		currentSchema, err := mainDriver.IntrospectSchema(ctx, mainDB)
-		if err != nil {
-			log.Fatalf("Failed to introspect current database schema: %v", err)
-		}
 
 		// Compute hash of current state
 		currentHash, err := ComputeSchemaHash((*Schema)(currentSchema))
@@ -853,7 +853,7 @@ func runApply(args []string) {
 	}
 
 	// Apply the plan
-	result, err := applyPlan(ctx, mainDB, plan, shadowDB)
+	result, err := applyPlan(ctx, mainDB, plan, shadowDB, (*Schema)(currentSchema), mainDriver)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\n❌ Migration failed: %v\n\n", err)
 		if len(result.Errors) > 0 {
@@ -1107,7 +1107,7 @@ type ExecutionResult struct {
 }
 
 // applyPlan executes a migration plan with optional shadow DB validation
-func applyPlan(ctx context.Context, db *sql.DB, plan *Plan, shadowDB *sql.DB) (*ExecutionResult, error) {
+func applyPlan(ctx context.Context, db *sql.DB, plan *Plan, shadowDB *sql.DB, currentSchema *Schema, driver database.Driver) (*ExecutionResult, error) {
 	result := &ExecutionResult{
 		Success: false,
 		Errors:  []string{},
@@ -1115,7 +1115,7 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *Plan, shadowDB *sql.DB) (*
 
 	// If shadow DB provided, run dry-run first
 	if shadowDB != nil {
-		if err := dryRunPlan(ctx, shadowDB, plan); err != nil {
+		if err := dryRunPlan(ctx, shadowDB, plan, currentSchema, driver); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("dry-run failed: %v", err))
 			return result, fmt.Errorf("dry-run validation failed: %w", err)
 		}
@@ -1136,6 +1136,12 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *Plan, shadowDB *sql.DB) (*
 
 	// Execute each step
 	for i, step := range plan.Steps {
+		// Skip comment-only steps (e.g., SQLite limitation warnings)
+		trimmedSQL := strings.TrimSpace(step.SQL)
+		if trimmedSQL == "" || strings.HasPrefix(trimmedSQL, "--") {
+			continue
+		}
+
 		_, err := tx.ExecContext(ctx, step.SQL)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("step %d (%s) failed: %v", i, step.Description, err))
@@ -1155,7 +1161,13 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *Plan, shadowDB *sql.DB) (*
 }
 
 // dryRunPlan validates a plan by executing it on shadow DB and rolling back
-func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan) error {
+func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan, currentSchema *Schema, driver database.Driver) error {
+	// First, apply the current schema to the shadow DB so it matches the target DB state
+	// This is necessary because migration plans assume the DB is already in the "before" state
+	if err := applySchemaToDB(ctx, shadowDB, currentSchema, driver); err != nil {
+		return fmt.Errorf("failed to prepare shadow DB: %w", err)
+	}
+
 	tx, err := shadowDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin shadow transaction: %w", err)
@@ -1166,10 +1178,64 @@ func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan) error {
 
 	// Execute each step
 	for i, step := range plan.Steps {
+		// Skip comment-only steps (e.g., SQLite limitation warnings)
+		trimmedSQL := strings.TrimSpace(step.SQL)
+		if trimmedSQL == "" || strings.HasPrefix(trimmedSQL, "--") {
+			continue
+		}
+
 		_, err := tx.ExecContext(ctx, step.SQL)
 		if err != nil {
 			return fmt.Errorf("shadow DB step %d (%s) failed: %w", i, step.Description, err)
 		}
+	}
+
+	return nil
+}
+
+// applySchemaToDB applies a schema to a database by creating all tables, indexes, and constraints
+func applySchemaToDB(ctx context.Context, db *sql.DB, schema *Schema, driver database.Driver) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// Create all tables
+	for _, table := range schema.Tables {
+		sql, _ := driver.CreateTable(table)
+		if _, err := tx.ExecContext(ctx, sql); err != nil {
+			return fmt.Errorf("failed to create table %s: %w", table.Name, err)
+		}
+
+		// Create indexes for this table
+		for _, idx := range table.Indexes {
+			sql, _ := driver.AddIndex(table.Name, idx)
+			if _, err := tx.ExecContext(ctx, sql); err != nil {
+				return fmt.Errorf("failed to create index %s: %w", idx.Name, err)
+			}
+		}
+	}
+
+	// Foreign keys must be added after all tables exist
+	for _, table := range schema.Tables {
+		for _, fk := range table.ForeignKeys {
+			sql, _ := driver.AddForeignKey(table.Name, fk)
+			// Skip comment-only SQL (e.g., SQLite foreign key limitations)
+			trimmedSQL := strings.TrimSpace(sql)
+			if trimmedSQL == "" || strings.HasPrefix(trimmedSQL, "--") {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, sql); err != nil {
+				return fmt.Errorf("failed to create foreign key %s: %w", fk.Name, err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
 	}
 
 	return nil
