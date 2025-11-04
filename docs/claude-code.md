@@ -586,6 +586,36 @@ Your schema file is the single source of truth. Everything else is generated on 
 - **For production:** Shadow DB testing - safe migrations every time
 - **For rollbacks:** Automatically generated - always know you can undo
 
+## Project Planning and Design Documents
+
+**For complex features or significant changes, create design documents:**
+
+1. **Create a Markdown file in `devdocs/`** - Document complex implementation plans
+2. **Include a progress checklist at the top** - Track phases and tasks
+3. **Structure your document** with:
+   - Progress checklist (with checkboxes: `- [ ]` for incomplete, `- [x]` for complete)
+   - Context/background explaining the problem
+   - Goals and requirements
+   - Implementation phases with detailed steps
+   - Testing strategy
+   - Documentation updates needed
+
+**Example: `devdocs/sqlite_dialect_redesign.md`**
+
+This approach helps:
+- Track progress across multiple work sessions
+- Document design decisions and trade-offs
+- Coordinate complex implementations
+- Resume work easily after interruptions
+- Maintain institutional knowledge in version control
+
+**When to create a devdocs plan:**
+- Multi-phase features spanning multiple days
+- Significant architectural changes
+- Complex bug fixes requiring multiple system changes
+- Migration or refactoring projects
+- Integration with new systems or libraries
+
 ## Common Workflows
 
 **Starting a new feature:**

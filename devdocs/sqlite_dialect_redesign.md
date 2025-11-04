@@ -1,5 +1,49 @@
 # SQLite Dialect Redesign Plan
 
+## Progress Checklist
+
+### Phase 1: Scope and Diagnosis
+- [x] Audit code paths feeding SQLite schema into PostgreSQL parsing
+- [x] Document schema data flow for each dialect
+- [x] Catalogue currently failing fixtures
+
+### Phase 2: Parser Abstraction
+- [ ] Implement dialect detection in `LoadSQLSchema`
+- [ ] Create parser interface abstraction
+- [ ] Implement SQLite parser using execution+introspection approach (Option A)
+- [ ] Update validation tooling for dialect-aware linting
+
+### Phase 3: Intermediate Representation
+- [ ] Define `LogicalType` and `ColumnDefault` structures
+- [ ] Add `Dialect` metadata to `Schema` root
+- [ ] Implement logical/raw type preservation
+- [ ] Add helper accessors for backward compatibility
+
+### Phase 4: Planner and Diff Updates
+- [ ] Update `DiffSchemas` to use logical type comparison
+- [ ] Implement dialect-specific SQL emitters
+- [ ] Update schema hash computation for logical/raw forms
+
+### Phase 5: Shadow Database Strategy
+- [ ] Extend shadow DB setup to branch on dialect
+- [ ] Implement SQLite ephemeral/in-memory DB workflow
+- [ ] Handle pre-existing tables in shadow DB
+
+### Phase 6: Testing and Tooling
+- [ ] Add parser roundtrip fixture test (`TestLoadSchema_SQLitePreservesTypes`)
+- [ ] Add diff normalization unit tests
+- [ ] Add plan generation integration tests
+- [ ] Add shadow validation flow integration tests
+- [ ] Add validation tooling tests for dialect awareness
+- [ ] Add schema hash compatibility regression tests
+- [ ] Update CI for SQLite-focused integration tests
+
+### Documentation
+- [ ] Update `README.md` with SQLite dialect support
+- [ ] Update `docs/getting_started.md` with SQLite examples
+- [ ] Document dialect detection and parser selection
+- [ ] Add SQLite-specific troubleshooting guide
+
 ## Context
 Lockplane currently runs all schema parsing through the PostgreSQL `pg_query` parser, even when the source schema is SQLite. This normalizes SQLite column types and default expressions into PostgreSQL-specific representations (for example, `integer` becomes `pg_catalog.int4`, and `datetime('now')` is reinterpreted). The generated plans then fail when executed against SQLite shadow databases or targets, revealing a fundamental design gap in our dialect handling.
 

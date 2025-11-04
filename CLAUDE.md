@@ -171,6 +171,48 @@ The project uses `golangci-lint` in CI. Common issues:
 
 ## Development Workflow
 
+### Project Planning and Design Documents
+
+**When working on complex features or significant changes:**
+
+1. **Create a design document in `devdocs/`** - Use Markdown format
+2. **Include a progress checklist** - Track implementation phases and tasks
+3. **Structure the document** with:
+   - Progress checklist at the top
+   - Context/background section
+   - Goals and requirements
+   - Implementation phases with detailed steps
+   - Testing plan
+   - Documentation updates needed
+
+**Example structure:**
+```markdown
+# Feature Name
+
+## Progress Checklist
+- [ ] Phase 1: Research and design
+- [ ] Phase 2: Implementation
+- [ ] Phase 3: Testing
+- [ ] Phase 4: Documentation
+
+## Context
+[Why we're doing this]
+
+## Goals
+[What we want to achieve]
+
+## Implementation Phases
+### Phase 1: ...
+[Detailed steps]
+```
+
+**Why use `devdocs/`?**
+- Keeps implementation plans tracked in version control
+- Provides clear progress visibility for complex features
+- Documents decisions and trade-offs for future reference
+- Makes it easy to resume work after interruptions
+- Helps coordinate work across multiple sessions
+
 ### When Adding New Features or Changing Behavior
 
 **ALWAYS FOLLOW THE CHECKLIST ABOVE - NO EXCEPTIONS**
