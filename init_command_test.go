@@ -10,8 +10,12 @@ func TestEnsureSchemaDirCreatesDirectory(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "schema")
 
-	if err := ensureSchemaDir(path); err != nil {
+	created, err := ensureSchemaDir(path)
+	if err != nil {
 		t.Fatalf("ensureSchemaDir returned error: %v", err)
+	}
+	if !created {
+		t.Fatalf("expected directory to be created")
 	}
 
 	info, err := os.Stat(path)
@@ -26,8 +30,12 @@ func TestEnsureSchemaDirCreatesDirectory(t *testing.T) {
 func TestEnsureSchemaDirExistingDirectory(t *testing.T) {
 	tmp := t.TempDir()
 
-	if err := ensureSchemaDir(tmp); err != nil {
+	created, err := ensureSchemaDir(tmp)
+	if err != nil {
 		t.Fatalf("expected existing directory to succeed, got %v", err)
+	}
+	if created {
+		t.Fatalf("expected created=false when directory already exists")
 	}
 }
 
@@ -39,7 +47,7 @@ func TestEnsureSchemaDirExistingFile(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	if err := ensureSchemaDir(file); err == nil {
-		t.Fatalf("expected error when path is an existing file")
+	if created, err := ensureSchemaDir(file); err == nil {
+		t.Fatalf("expected error when path is an existing file (created=%v)", created)
 	}
 }

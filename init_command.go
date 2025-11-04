@@ -36,11 +36,16 @@ func runInit(args []string) {
 	}
 
 	if *yes {
-		if err := ensureSchemaDir(defaultSchemaDir); err != nil {
+		created, err := ensureSchemaDir(defaultSchemaDir)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Fprintf(os.Stdout, "✓ Ready! Created %s/\n", defaultSchemaDir)
+		if created {
+			fmt.Fprintf(os.Stdout, "✓ Ready! Created %s/\n", defaultSchemaDir)
+		} else {
+			fmt.Fprintf(os.Stdout, "✓ Ready! %s/ already exists\n", defaultSchemaDir)
+		}
 		return
 	}
 
@@ -50,7 +55,7 @@ func runInit(args []string) {
 	}
 }
 
-func ensureSchemaDir(path string) error {
+func ensureSchemaDir(path string) (bool, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		path = defaultSchemaDir
@@ -59,14 +64,14 @@ func ensureSchemaDir(path string) error {
 	info, err := os.Stat(path)
 	if err == nil {
 		if info.IsDir() {
-			return nil
+			return false, nil
 		}
-		return fmt.Errorf("%s exists but is not a directory", path)
+		return false, fmt.Errorf("%s exists but is not a directory", path)
 	}
 	if !errors.Is(err, os.ErrNotExist) {
-		return err
+		return false, err
 	}
-	return os.MkdirAll(path, 0o755)
+	return true, os.MkdirAll(path, 0o755)
 }
 
 func startInitWizard() error {
@@ -115,7 +120,8 @@ func (m *initWizardModel) Init() tea.Cmd {
 }
 
 type schemaCreatedMsg struct {
-	Path string
+	Path    string
+	Created bool
 }
 
 type schemaErrorMsg struct {
@@ -124,10 +130,11 @@ type schemaErrorMsg struct {
 
 func createSchemaDirCmd(path string) tea.Cmd {
 	return func() tea.Msg {
-		if err := ensureSchemaDir(path); err != nil {
+		created, err := ensureSchemaDir(path)
+		if err != nil {
 			return schemaErrorMsg{Err: err}
 		}
-		return schemaCreatedMsg{Path: path}
+		return schemaCreatedMsg{Path: path, Created: created}
 	}
 }
 
@@ -150,6 +157,10 @@ func (m *initWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				value = defaultSchemaDir
 			}
 			m.schemaDir = value
+			if dirExists(value) {
+				m.status = fmt.Sprintf("%s/ already exists. Enter a different directory name.", filepath.ToSlash(value))
+				return m, nil
+			}
 			m.creating = true
 			m.status = ""
 			cmds := []tea.Cmd{
@@ -161,7 +172,11 @@ func (m *initWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case schemaCreatedMsg:
 		m.creating = false
 		m.done = true
-		m.status = fmt.Sprintf("✓ Ready! Created %s/", msg.Path)
+		if msg.Created {
+			m.status = fmt.Sprintf("✓ Ready! Created %s/", filepath.ToSlash(msg.Path))
+		} else {
+			m.status = fmt.Sprintf("✓ Ready! %s/ already exists", filepath.ToSlash(msg.Path))
+		}
 		m.shouldQuit = true
 		return m, tea.Sequence(tea.Quit)
 	case schemaErrorMsg:
@@ -210,9 +225,18 @@ func (m *initWizardModel) View() string {
 		b.WriteString(fmt.Sprintf("  Error: %v\n\n", m.err))
 	}
 
+	if !m.creating && !m.done && m.status != "" {
+		b.WriteString(fmt.Sprintf("  %s\n\n", m.status))
+	}
+
 	if m.done {
 		b.WriteString("  See you soon! 👋\n\n")
 	}
 
 	return b.String()
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
