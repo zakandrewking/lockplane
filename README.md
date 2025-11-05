@@ -4,7 +4,7 @@
 # Lockplane
 
 [![Test](https://github.com/zakandrewking/lockplane/actions/workflows/test.yml/badge.svg)](https://github.com/zakandrewking/lockplane/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/zakandrewking/lockplane/branch/main/graph/badge.svg)](https://codecov.io/gh/zakandrewking/lockplane)
+[![codecov](https://codecov.io/github/zakandrewking/lockplane/graph/badge.svg?token=JP0QINP1G1)](https://codecov.io/github/zakandrewking/lockplane)
 
 A control plane for safe, AI-friendly schema management. Works with PostgreSQL, SQLite, and Turso.
 

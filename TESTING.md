@@ -280,7 +280,7 @@ The CI runs 4 parallel jobs on every push:
 
 ### Coverage Tracking
 
-- **Coverage reports**: [![codecov](https://codecov.io/gh/zakandrewking/lockplane/branch/main/graph/badge.svg)](https://codecov.io/gh/zakandrewking/lockplane)
+- **Coverage reports**: [![codecov](https://codecov.io/github/zakandrewking/lockplane/graph/badge.svg?token=JP0QINP1G1)](https://codecov.io/github/zakandrewking/lockplane)
 - **Separate coverage** for PostgreSQL and SQLite test runs
 - **Coverage trends** tracked over time on Codecov
 - Coverage reports uploaded automatically from CI
