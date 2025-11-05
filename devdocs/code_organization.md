@@ -4,10 +4,25 @@
 
 - [x] Phase 1: Planning and design
 - [x] Phase 2: Create new directory structure
-- [ ] Phase 3: Move files and update imports
+- [x] Phase 3a: Move internal/config (COMPLETE)
+- [x] Phase 3b: Move internal/parser (COMPLETE)
+- [x] Phase 3c: Move internal/testutil (COMPLETE)
+- [ ] Phase 3d: Move internal/schema (IN PROGRESS - blocked by circular dependencies)
+- [ ] Phase 3e: Move internal/planner
+- [ ] Phase 3f: Split main.go into cmd/ packages
 - [ ] Phase 4: Update build and test configuration
 - [ ] Phase 5: Update documentation
 - [ ] Phase 6: Verify and test
+
+## Status: Partially Complete (3/6 packages moved)
+
+### ✅ Completed Packages
+1. **internal/config** - Config and environment resolution
+2. **internal/parser** - SQL parsing (PostgreSQL and SQLite)
+3. **internal/testutil** - Test database utilities
+
+### 🔄 Remaining Work
+The remaining packages have tight coupling with main.go and circular dependency issues that need careful handling.
 
 ## Context
 
@@ -366,3 +381,54 @@ func someFunc() {
 ---
 
 **Next Steps**: Review this plan, then proceed with Phase 2.
+
+## Circular Dependency Challenge
+
+### Problem
+The remaining files have circular dependencies:
+- `json_schema.go` needs `detectDriver()`, `newDriver()`, `getSQLDriverName()` from main.go
+- `planner.go`, `rollback.go` need `Schema`, `SchemaDiff`, `Plan` types
+- `main.go` uses all schema/planner functions
+- internal packages cannot import main
+
+### Solution Approaches
+
+#### Option A: Create internal/dbutil Package
+Move database helper functions to a new package:
+```
+internal/dbutil/
+  ├── driver.go  (detectDriver, newDriver, getSQLDriverName)
+  └── driver_test.go
+```
+
+**Pros**: Clean separation, no circular deps
+**Cons**: Extra package for just 3 functions
+
+#### Option B: Keep Helpers in Main, Use Dependency Injection
+Pass driver functions as parameters to schema loading functions.
+
+**Pros**: No new packages
+**Cons**: More verbose function signatures
+
+#### Option C: Move Schema Loading to Main, Only Move Pure Functions
+Keep database introspection in main.go, move only:
+- `diff.go` → internal/schema/diff.go (pure diffing logic)
+- `schema_hash.go` → internal/schema/hash.go (pure hashing)
+- Pure JSON/SQL file loading functions
+
+**Pros**: Minimal changes, clear separation
+**Cons**: Some functions stay in main.go
+
+#### Recommended: Option C (Incremental Approach)
+1. Move diff.go and schema_hash.go first (they're pure functions)
+2. Extract file loading to internal/schema/loader.go
+3. Keep database introspection in main.go
+4. Later refactor main.go → cmd/ when splitting commands
+
+### Next Steps
+1. Move diff.go → internal/schema/diff.go ✅
+2. Move schema_hash.go → internal/schema/hash.go ✅
+3. Extract pure file loading from json_schema.go → internal/schema/files.go
+4. Leave database introspection in main.go for now
+5. Move planner.go, rollback.go → internal/planner/
+6. Update all imports
