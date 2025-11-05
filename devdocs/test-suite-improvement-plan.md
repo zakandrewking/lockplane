@@ -860,15 +860,29 @@ All tests run automatically in GitHub Actions:
 - SQLite introspection fully tested (6 integration tests)
 - Test infrastructure supports multiple databases seamlessly
 
-### Week 3: CI Integration (8-12 hours)
+### Week 3: CI Integration (8-12 hours) ✅ COMPLETE
 
-- [ ] Create `.github/workflows/test.yml`
-- [ ] Set up PostgreSQL service in GitHub Actions
-- [ ] Add SQLite test job
-- [ ] Configure `REQUIRE_TEST_DB=true` in CI
-- [ ] Add codecov integration
+- [x] Enhanced existing `.github/workflows/test.yml`
+- [x] Set up PostgreSQL service containers in GitHub Actions (main DB on 5432, shadow DB on 5433)
+- [x] Added SQLite test job (uses in-memory DB, no service needed)
+- [x] Configured `REQUIRE_TEST_DB=true` for PostgreSQL job
+- [x] Split tests into 4 jobs: unit-tests, integration-tests-postgres, integration-tests-sqlite, lint
+- [x] Added separate codecov uploads for PostgreSQL and SQLite (flags: postgres, sqlite)
+- [x] All jobs passing ✅
 
-**Deliverable**: All tests running in CI
+**Deliverable**: ✅ All tests running in CI with database matrix (commits: b8adb7d, d206ef3) - All jobs green
+
+**Jobs breakdown**:
+- **Unit Tests** (1m14s): Fast unit tests, format check, vet
+- **Integration Tests (PostgreSQL)** (48s): Full PostgreSQL + shadow DB integration tests
+- **Integration Tests (SQLite)** (30s): SQLite integration tests (2 multi-database tests + introspector tests)
+- **Lint** (1m33s): golangci-lint v2
+
+**Benefits**:
+- Tests run in parallel (faster CI)
+- Both databases tested on every push
+- Shadow DB available for migration validation
+- Separate coverage tracking per database
 
 ### Week 4: Cleanup (6-8 hours)
 
