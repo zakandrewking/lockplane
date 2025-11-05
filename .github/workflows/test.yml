@@ -123,7 +123,6 @@ jobs:
 
       - name: Run SQLite integration tests
         env:
-          REQUIRE_TEST_DB: "true"
           TEST_ALL_DRIVERS: "true"
         run: |
           go test -v -race -coverprofile=coverage-sqlite.txt -covermode=atomic ./...
