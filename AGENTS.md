@@ -61,9 +61,12 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
 ### Phase 5: Verification
 - [ ] Verify commit was successful: `git log -1`
 - [ ] Verify push was successful: `git status` should show "up to date"
+- [ ] **CRITICAL**: Check GitHub Actions status: `gh run list --limit 1`
+- [ ] If workflows failed, view details: `gh run view --log-failed`
+- [ ] Fix any CI failures before considering work complete
 - [ ] Summarize what was done for the user
 
-**REMEMBER: Code changes without tests, documentation updates, and git commits are incomplete work!**
+**REMEMBER: Code changes without tests, documentation updates, git commits, and passing CI are incomplete work!**
 
 ## Code Organization
 
@@ -343,11 +346,13 @@ Lockplane uses JSON Schema for validation. Schema files reference:
 
 1. **Forgetting to run tests** - This is the most common issue. Always run tests!
 2. **Not running `go vet`** - Catches common errors before they become bugs
-3. **Not updating test fixtures** - When changing schema format, update test files too
-4. **Database not running** - Tests will skip, which might hide issues
-5. **Format string errors** - Use `fmt.Errorf("%s", msg)` not `fmt.Errorf(msg)`
-6. **Forgetting to update docs** - Documentation must match code
-7. **Not committing or pushing** - Work isn't complete until it's pushed
+3. **Not checking CI status** - Always verify workflows pass after pushing
+4. **Leaving failing CI** - Fix failures immediately, don't move to next task
+5. **Not updating test fixtures** - When changing schema format, update test files too
+6. **Database not running** - Tests will skip, which might hide issues
+7. **Format string errors** - Use `fmt.Errorf("%s", msg)` not `fmt.Errorf(msg)`
+8. **Forgetting to update docs** - Documentation must match code
+9. **Not committing or pushing** - Work isn't complete until it's pushed
 
 ## Continuous Integration
 
@@ -355,6 +360,51 @@ Tests run automatically on:
 - Push to `main` branch
 - Pull request creation
 - All commits are linted with `golangci-lint`
+
+### Checking CI Status (MANDATORY)
+
+**AI agents MUST check GitHub Actions status after pushing using the `gh` CLI:**
+
+```bash
+# View recent workflow runs
+gh run list --limit 5
+
+# Check the most recent run
+gh run view
+
+# View failed logs for the most recent run
+gh run view --log-failed
+
+# Watch a run in real-time
+gh run watch
+```
+
+**Common workflow failures and fixes:**
+
+1. **Lint failures (`golangci-lint`)**
+   - View the error: `gh run view --log-failed`
+   - Fix locally: Run `go vet ./...`, `errcheck ./...`, `staticcheck ./...`
+   - Common issues: unchecked errors, format strings, unused variables
+
+2. **Test failures**
+   - View the error: `gh run view --log-failed`
+   - Reproduce locally: `go test -v ./...`
+   - Fix the test or the code
+
+3. **Build failures**
+   - View the error: `gh run view --log-failed`
+   - Verify locally: `go build .`
+   - Check for syntax errors or missing dependencies
+
+**If CI fails, AI agents MUST:**
+1. View the failure details: `gh run view --log-failed`
+2. Fix the issue locally
+3. Run all checks: `go fmt ./... && go vet ./... && errcheck ./... && staticcheck ./... && go test ./...`
+4. Commit and push the fix
+5. Verify CI passes: `gh run list --limit 1`
+6. Repeat until all checks pass
+
+**Work is NOT complete until CI passes. Never leave failing workflows.**
 
 ## Remember
 
@@ -373,16 +423,19 @@ This is not optional. The checklist ensures:
 - ❌ Code changes without documentation updates
 - ❌ Code changes without git commit
 - ❌ Git commits without git push
+- ❌ Push without checking CI status
+- ❌ Leaving failing CI workflows
 - ❌ Skipping any step in the checklist
 
 **Complete work is:**
 - ✅ All checklist items completed
 - ✅ Code formatted with `go fmt`
 - ✅ Code vetted with `go vet`
-- ✅ Tests pass
+- ✅ Tests pass locally
 - ✅ Build succeeds
 - ✅ Documentation updated
 - ✅ Changes committed and pushed
+- ✅ GitHub Actions workflows pass
 - ✅ User informed of what was done
 
 ## Questions?
