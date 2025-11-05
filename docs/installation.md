@@ -22,4 +22,3 @@ lockplane
 lockplane version
 lockplane help
 ```
-

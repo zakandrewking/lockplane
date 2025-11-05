@@ -74,16 +74,16 @@ To make this pass:
 ✗ Claude mentioned 'plugin'
 ✗ Claude suggested installing plugin
   Expected: '/plugin install lockplane' or similar
-  
+
   Claude's response preview:
     I see this is a test project directory. Let me run the `lockplane init` command,
-    
+
     The `lockplane init` command will create a `docker-compose.yml` file that sets u
     - Main PostgreSQL database (port 5432)
     - Shadow PostgreSQL database for testing migrations (port 5433)
-    
+
     Would you like me to proceed with running `lockplane init`? This command will cr
-    
+
 ✗ Claude explained plugin benefits
 
 

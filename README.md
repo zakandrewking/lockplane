@@ -71,7 +71,7 @@ guarantee that your schema is safe to use.
 
 > **Dialect hint**
 >
-> Lockplane parses `.lp.sql` files with PostgreSQL rules by default.  
+> Lockplane parses `.lp.sql` files with PostgreSQL rules by default.
 > To treat a file as SQLite DDL, add a comment at the top:
 >
 > ```sql

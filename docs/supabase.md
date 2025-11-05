@@ -9,4 +9,3 @@ Supabase projects run on managed PostgreSQL. Lockplane gives you declarative sch
 
 **Already have tables and data?**
 → [Using Lockplane with an Existing Supabase Project](supabase-existing-project.md)
-
