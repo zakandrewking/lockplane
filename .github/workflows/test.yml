@@ -99,8 +99,9 @@ jobs:
           go test -v -race -coverprofile=coverage-postgres.txt -covermode=atomic ./...
 
       - name: Upload PostgreSQL coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-postgres.txt
           flags: postgres
           name: postgres-coverage
@@ -128,8 +129,9 @@ jobs:
           go test -v -race -coverprofile=coverage-sqlite.txt -covermode=atomic ./...
 
       - name: Upload SQLite coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-sqlite.txt
           flags: sqlite
           name: sqlite-coverage
