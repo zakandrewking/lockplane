@@ -22,7 +22,7 @@
 ### Phase 4: Planner and Diff Updates
 - [x] Update `DiffSchemas` to use logical type comparison (test in `diff_test.go:TestDiffSchemas_UsesLogicalTypes`)
 - [x] Implement dialect-specific SQL emitters (already exists in `database/sqlite/generator.go`)
-- [ ] Update schema hash computation for logical/raw forms
+- [x] Update schema hash computation for logical/raw forms (updated `schema_hash.go` line 81 to use `col.LogicalType()`)
 
 ### Phase 5: Shadow Database Strategy
 - [ ] Extend shadow DB setup to branch on dialect
@@ -36,10 +36,13 @@
 - [x] Add foreign key tests (`TestParseSQLiteSchema_ForeignKeys` in `sqlite_parser_test.go`)
 - [x] Add index tests (`TestParseSQLiteSchema_Indexes` in `sqlite_parser_test.go`)
 - [x] Add diff normalization unit tests (`TestDiffSchemas_UsesLogicalTypes` in `diff_test.go`)
-- [ ] Add plan generation integration tests
+- [x] Add plan generation integration tests (`TestSQLitePlanGeneration_*` in `sqlite_integration_test.go`)
+- [x] Add end-to-end execution test (`TestSQLitePlanExecution_EndToEnd` in `sqlite_integration_test.go`)
+- [x] Add rollback generation test (`TestSQLiteRollbackGeneration` in `sqlite_integration_test.go`)
+- [x] Add introspection round-trip test (`TestSQLiteSchemaIntrospectionRoundTrip` in `sqlite_integration_test.go`)
+- [x] Add schema hash compatibility tests (`TestComputeSchemaHash_*` in `schema_hash_test.go`)
 - [ ] Add shadow validation flow integration tests
 - [ ] Add validation tooling tests for dialect awareness
-- [ ] Add schema hash compatibility regression tests
 - [ ] Update CI for SQLite-focused integration tests
 
 ### Documentation

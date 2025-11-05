@@ -78,7 +78,7 @@ func canonicalizeColumns(columns []database.Column) []interface{} {
 	for _, col := range sortedCols {
 		colMap := map[string]interface{}{
 			"name":           col.Name,
-			"type":           col.Type,
+			"type":           col.LogicalType(), // Use logical type for cross-dialect compatibility
 			"nullable":       col.Nullable,
 			"is_primary_key": col.IsPrimaryKey,
 		}
