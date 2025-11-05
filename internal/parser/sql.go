@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 // These are simplified parsers that work for the SQL we generate
 
 // extractTableNameFromCreate extracts table name from CREATE TABLE statement
-func extractTableNameFromCreate(sql string) (string, error) {
+func ExtractTableNameFromCreate(sql string) (string, error) {
 	// Pattern: CREATE TABLE <name> ...
 	re := regexp.MustCompile(`CREATE\s+TABLE\s+(\w+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -24,7 +24,7 @@ func extractTableNameFromCreate(sql string) (string, error) {
 }
 
 // extractTableNameFromDrop extracts table name from DROP TABLE statement
-func extractTableNameFromDrop(sql string) (string, error) {
+func ExtractTableNameFromDrop(sql string) (string, error) {
 	// Pattern: DROP TABLE <name> [CASCADE]
 	re := regexp.MustCompile(`DROP\s+TABLE\s+(\w+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -35,7 +35,7 @@ func extractTableNameFromDrop(sql string) (string, error) {
 }
 
 // extractTableAndColumnFromAddColumn extracts table and column name from ALTER TABLE ADD COLUMN
-func extractTableAndColumnFromAddColumn(sql string) (string, string, error) {
+func ExtractTableAndColumnFromAddColumn(sql string) (string, string, error) {
 	// Pattern: ALTER TABLE <table> ADD COLUMN <column> ...
 	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -46,7 +46,7 @@ func extractTableAndColumnFromAddColumn(sql string) (string, string, error) {
 }
 
 // extractTableAndColumnFromDropColumn extracts table and column name from ALTER TABLE DROP COLUMN
-func extractTableAndColumnFromDropColumn(sql string) (string, string, error) {
+func ExtractTableAndColumnFromDropColumn(sql string) (string, string, error) {
 	// Pattern: ALTER TABLE <table> DROP COLUMN <column>
 	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+DROP\s+COLUMN\s+(\w+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -57,7 +57,7 @@ func extractTableAndColumnFromDropColumn(sql string) (string, string, error) {
 }
 
 // extractTableAndColumnFromAlterType extracts table and column from ALTER COLUMN TYPE
-func extractTableAndColumnFromAlterType(sql string) (string, string, error) {
+func ExtractTableAndColumnFromAlterType(sql string) (string, string, error) {
 	// Pattern: ALTER TABLE <table> ALTER COLUMN <column> TYPE <type>
 	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+ALTER\s+COLUMN\s+(\w+)\s+TYPE`)
 	matches := re.FindStringSubmatch(sql)
@@ -68,7 +68,7 @@ func extractTableAndColumnFromAlterType(sql string) (string, string, error) {
 }
 
 // extractTableAndColumnFromAlterNotNull extracts table and column from ALTER COLUMN SET/DROP NOT NULL
-func extractTableAndColumnFromAlterNotNull(sql string) (string, string, error) {
+func ExtractTableAndColumnFromAlterNotNull(sql string) (string, string, error) {
 	// Pattern: ALTER TABLE <table> ALTER COLUMN <column> SET/DROP NOT NULL
 	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+ALTER\s+COLUMN\s+(\w+)\s+(SET|DROP)\s+NOT\s+NULL`)
 	matches := re.FindStringSubmatch(sql)
@@ -79,7 +79,7 @@ func extractTableAndColumnFromAlterNotNull(sql string) (string, string, error) {
 }
 
 // extractTableAndColumnFromSetDefault extracts table and column from SET DEFAULT
-func extractTableAndColumnFromSetDefault(sql string) (string, string, error) {
+func ExtractTableAndColumnFromSetDefault(sql string) (string, string, error) {
 	// Pattern: ALTER TABLE <table> ALTER COLUMN <column> SET DEFAULT ...
 	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+ALTER\s+COLUMN\s+(\w+)\s+SET\s+DEFAULT`)
 	matches := re.FindStringSubmatch(sql)
@@ -90,7 +90,7 @@ func extractTableAndColumnFromSetDefault(sql string) (string, string, error) {
 }
 
 // extractTableAndColumnFromDropDefault extracts table and column from DROP DEFAULT
-func extractTableAndColumnFromDropDefault(sql string) (string, string, error) {
+func ExtractTableAndColumnFromDropDefault(sql string) (string, string, error) {
 	// Pattern: ALTER TABLE <table> ALTER COLUMN <column> DROP DEFAULT
 	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+ALTER\s+COLUMN\s+(\w+)\s+DROP\s+DEFAULT`)
 	matches := re.FindStringSubmatch(sql)
@@ -101,7 +101,7 @@ func extractTableAndColumnFromDropDefault(sql string) (string, string, error) {
 }
 
 // extractIndexNameFromCreate extracts index name from CREATE INDEX
-func extractIndexNameFromCreate(sql string) (string, error) {
+func ExtractIndexNameFromCreate(sql string) (string, error) {
 	// Pattern: CREATE [UNIQUE] INDEX <name> ON ...
 	re := regexp.MustCompile(`CREATE\s+(UNIQUE\s+)?INDEX\s+(\w+)\s+ON`)
 	matches := re.FindStringSubmatch(sql)
@@ -112,7 +112,7 @@ func extractIndexNameFromCreate(sql string) (string, error) {
 }
 
 // extractIndexNameFromDrop extracts index name from DROP INDEX
-func extractIndexNameFromDrop(sql string) (string, error) {
+func ExtractIndexNameFromDrop(sql string) (string, error) {
 	// Pattern: DROP INDEX <name>
 	re := regexp.MustCompile(`DROP\s+INDEX\s+(\w+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -123,7 +123,7 @@ func extractIndexNameFromDrop(sql string) (string, error) {
 }
 
 // extractTableAndConstraintFromAddConstraint extracts table and constraint name from ADD CONSTRAINT
-func extractTableAndConstraintFromAddConstraint(sql string) (string, string, error) {
+func ExtractTableAndConstraintFromAddConstraint(sql string) (string, string, error) {
 	// Pattern: ALTER TABLE <table> ADD CONSTRAINT <constraint> ...
 	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+ADD\s+CONSTRAINT\s+(\w+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -134,7 +134,7 @@ func extractTableAndConstraintFromAddConstraint(sql string) (string, string, err
 }
 
 // extractTableAndConstraintFromDropConstraint extracts table and constraint name from DROP CONSTRAINT
-func extractTableAndConstraintFromDropConstraint(sql string) (string, string, error) {
+func ExtractTableAndConstraintFromDropConstraint(sql string) (string, string, error) {
 	// Pattern: ALTER TABLE <table> DROP CONSTRAINT <constraint>
 	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)\s+DROP\s+CONSTRAINT\s+(\w+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -144,8 +144,8 @@ func extractTableAndConstraintFromDropConstraint(sql string) (string, string, er
 	return matches[1], matches[2], nil
 }
 
-// containsSQL is a helper to check if SQL contains a substring (case-insensitive)
-func containsSQL(sql, substr string) bool {
+// ContainsSQL is a helper to check if SQL contains a substring (case-insensitive)
+func ContainsSQL(sql, substr string) bool {
 	return strings.Contains(strings.ToUpper(sql), strings.ToUpper(substr))
 }
 

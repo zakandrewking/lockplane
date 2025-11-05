@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/lockplane/lockplane/database"
+	"github.com/lockplane/lockplane/internal/parser"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -151,7 +152,7 @@ func loadSQLSchemaFromBytes(data []byte, opts *SchemaLoadOptions) (*Schema, erro
 	}
 
 	// Parse SQL DDL
-	schema, err := ParseSQLSchemaWithDialect(string(data), dialect)
+	schema, err := parser.ParseSQLSchemaWithDialect(string(data), dialect)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL DDL: %w", err)
 	}
