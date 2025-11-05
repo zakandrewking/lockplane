@@ -40,6 +40,14 @@ repos:
         pass_filenames: false
         types: [go]
 
+      # golangci-lint (comprehensive linting - same as CI)
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; golangci-lint run'
+        language: system
+        pass_filenames: false
+        types: [go]
+
       # Go tests (optional, can be slow)
       - id: go-test
         name: go test

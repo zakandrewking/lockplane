@@ -702,13 +702,14 @@ func (m *initWizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEnter()
 
 	case tea.KeyUp, tea.KeyShiftTab:
-		if m.state == StateConnectionDetails {
+		switch m.state {
+		case StateConnectionDetails:
 			m.focusIndex--
 			if m.focusIndex < 0 {
 				m.focusIndex = m.getInputCount() - 1
 			}
 			m.updateInputFocus()
-		} else if m.state == StateDatabaseType {
+		case StateDatabaseType:
 			m.dbTypeChoice--
 			if m.dbTypeChoice < 0 {
 				m.dbTypeChoice = 2
@@ -716,13 +717,14 @@ func (m *initWizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyDown, tea.KeyTab:
-		if m.state == StateConnectionDetails {
+		switch m.state {
+		case StateConnectionDetails:
 			m.focusIndex++
 			if m.focusIndex >= m.getInputCount() {
 				m.focusIndex = 0
 			}
 			m.updateInputFocus()
-		} else if m.state == StateDatabaseType {
+		case StateDatabaseType:
 			m.dbTypeChoice++
 			if m.dbTypeChoice > 2 {
 				m.dbTypeChoice = 0
