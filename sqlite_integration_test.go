@@ -145,7 +145,7 @@ func TestSQLitePlanExecution_EndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 
@@ -210,7 +210,7 @@ CREATE INDEX idx_products_name ON products(name);
 	if err != nil {
 		t.Fatalf("failed to query table info: %v", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	columnCount := 0
 	for rows.Next() {
@@ -310,7 +310,7 @@ func TestSQLiteSchemaIntrospectionRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 

@@ -1,0 +1,65 @@
+# Pre-commit hooks for Lockplane
+# See https://pre-commit.com for more information
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      # Go formatting
+      - id: go-fmt
+        name: go fmt
+        entry: go fmt
+        args: ["./..."]
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      # Go vet (catches common errors)
+      - id: go-vet
+        name: go vet
+        entry: go vet
+        args: ["./..."]
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      # errcheck (ensures all errors are handled)
+      - id: errcheck
+        name: errcheck
+        entry: bash -c 'command -v errcheck >/dev/null 2>&1 || go install github.com/kisielk/errcheck@latest; errcheck ./...'
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      # staticcheck (advanced linting)
+      - id: staticcheck
+        name: staticcheck
+        entry: bash -c 'command -v staticcheck >/dev/null 2>&1 || go install honnef.co/go/tools/cmd/staticcheck@latest; staticcheck ./...'
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      # Go tests (optional, can be slow)
+      - id: go-test
+        name: go test
+        entry: go test
+        args: ["./..."]
+        language: system
+        pass_filenames: false
+        types: [go]
+        # Uncomment to enable (disabled by default as tests can be slow)
+        # stages: [commit]
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']

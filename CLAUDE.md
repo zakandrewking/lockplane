@@ -140,7 +140,50 @@ When adding features:
 
 ## Code Quality
 
-### Before Committing
+### Pre-commit Hooks (Recommended)
+
+**The project uses pre-commit hooks to automatically run quality checks before each commit.**
+
+**Setup (one-time):**
+
+```bash
+# Install pre-commit (if not already installed)
+# Option 1: Using pip
+pip install pre-commit
+
+# Option 2: Using brew (macOS)
+brew install pre-commit
+
+# Option 3: Using pipx
+pipx install pre-commit
+
+# Install the hooks
+./scripts/setup-pre-commit.sh
+# Or manually:
+pre-commit install
+```
+
+**What the hooks do:**
+- ✅ `go fmt ./...` - Format code automatically
+- ✅ `go vet ./...` - Catch common errors
+- ✅ `errcheck ./...` - Ensure all errors are handled
+- ✅ `staticcheck ./...` - Advanced linting
+- ✅ `go test ./...` - Run tests (optional, disabled by default)
+- ✅ File checks (trailing whitespace, yaml validation, etc.)
+
+**The hooks will run automatically on `git commit` and prevent commits with issues.**
+
+To run manually without committing:
+```bash
+pre-commit run --all-files
+```
+
+To skip hooks (not recommended):
+```bash
+git commit --no-verify
+```
+
+### Manual Quality Checks (if not using pre-commit)
 
 **ALWAYS run these commands before pushing to ensure code quality:**
 
@@ -151,23 +194,36 @@ go fmt ./...
 # Vet code for issues (catches common errors)
 go vet ./...
 
+# Check all errors are handled
+errcheck ./...
+
+# Advanced linting
+staticcheck ./...
+
 # Run tests
 go test ./...
 ```
 
-**Critical**: Always run `go vet ./...` before pushing. It catches errors like:
-- Unchecked error return values
-- Printf format string issues
-- Unreachable code
-- Common mistakes
+**Critical**: These checks prevent common issues from reaching CI:
+- Unchecked error return values (errcheck)
+- Printf format string issues (go vet)
+- Unreachable code (go vet)
+- Common mistakes (staticcheck)
+- Test failures
 
-### Linting
+### CI Linting
 
 The project uses `golangci-lint` in CI. Common issues:
 - Unused variables or imports
 - Non-constant format strings in fmt.Errorf (use `%s` placeholder)
 - Missing comments on exported functions
 - Inconsistent formatting
+
+**Why pre-commit hooks?**
+- Catches issues before CI runs (faster feedback)
+- Prevents "fix lint" commits
+- Consistent code quality across contributors
+- Reduces back-and-forth in code review
 
 ## Development Workflow
 
