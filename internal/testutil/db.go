@@ -1,6 +1,4 @@
-//go:build !test
-
-package main
+package testutil
 
 import (
 	"context"

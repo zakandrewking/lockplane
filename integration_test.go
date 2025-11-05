@@ -8,6 +8,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/lockplane/lockplane/database/postgres"
 	"github.com/lockplane/lockplane/internal/config"
+	"github.com/lockplane/lockplane/internal/testutil"
 )
 
 func resolveTestEnvironment(t *testing.T) *config.ResolvedEnvironment {
@@ -174,7 +175,7 @@ func TestApplyPlan_CreateTable(t *testing.T) {
 	// Note: This test uses PostgreSQL-only JSON fixtures (SERIAL, TIMESTAMP, NOW()).
 	// Database-agnostic SQL generation is tested in database/*/generator_test.go.
 	// SQLite introspection is tested in database/sqlite/introspector_test.go.
-	tdb := SetupTestDB(t, "postgres")
+	tdb := testutil.SetupTestDB(t, "postgres")
 	defer tdb.Close()
 	defer tdb.CleanupTables(t, "posts")
 
@@ -298,9 +299,9 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 
 func TestApplyPlan_InvalidSQL(t *testing.T) {
 	// This test validates error handling and works with all databases
-	for _, driverType := range GetAllDrivers() {
+	for _, driverType := range testutil.GetAllDrivers() {
 		t.Run(driverType, func(t *testing.T) {
-			tdb := SetupTestDB(t, driverType)
+			tdb := testutil.SetupTestDB(t, driverType)
 			defer tdb.Close()
 
 			ctx := context.Background()
@@ -335,9 +336,9 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 func TestApplyPlan_AddColumn(t *testing.T) {
 	// This test uses a plan with portable SQL (ALTER TABLE ... ADD COLUMN)
 	// and handles database-specific table creation in the setup
-	for _, driverType := range GetAllDrivers() {
+	for _, driverType := range testutil.GetAllDrivers() {
 		t.Run(driverType, func(t *testing.T) {
-			tdb := SetupTestDB(t, driverType)
+			tdb := testutil.SetupTestDB(t, driverType)
 			defer tdb.Close()
 			defer tdb.CleanupTables(t, "users")
 
