@@ -8,30 +8,34 @@
 - [x] Catalogue currently failing fixtures
 
 ### Phase 2: Parser Abstraction
-- [ ] Implement dialect detection in `LoadSQLSchema`
-- [ ] Create parser interface abstraction
-- [ ] Implement SQLite parser using execution+introspection approach (Option A)
+- [x] Implement dialect detection in `LoadSQLSchema`
+- [x] Create parser interface abstraction (`ParseSQLSchemaWithDialect`)
+- [x] Implement SQLite parser using execution+introspection approach (Option A) in `sqlite_parser.go`
 - [ ] Update validation tooling for dialect-aware linting
 
 ### Phase 3: Intermediate Representation
-- [ ] Define `LogicalType` and `ColumnDefault` structures
-- [ ] Add `Dialect` metadata to `Schema` root
-- [ ] Implement logical/raw type preservation
-- [ ] Add helper accessors for backward compatibility
+- [x] Define `LogicalType` and `ColumnDefault` structures (in `database/interface.go`)
+- [x] Add `Dialect` metadata to `Schema` root
+- [x] Implement logical/raw type preservation (in `database/sqlite/introspector.go`)
+- [x] Add helper accessors for backward compatibility (`Column.LogicalType()`)
 
 ### Phase 4: Planner and Diff Updates
-- [ ] Update `DiffSchemas` to use logical type comparison
-- [ ] Implement dialect-specific SQL emitters
+- [x] Update `DiffSchemas` to use logical type comparison (test in `diff_test.go:TestDiffSchemas_UsesLogicalTypes`)
+- [x] Implement dialect-specific SQL emitters (already exists in `database/sqlite/generator.go`)
 - [ ] Update schema hash computation for logical/raw forms
 
 ### Phase 5: Shadow Database Strategy
 - [ ] Extend shadow DB setup to branch on dialect
-- [ ] Implement SQLite ephemeral/in-memory DB workflow
+- [x] Implement SQLite ephemeral/in-memory DB workflow (already exists in `sqlite_parser.go`)
 - [ ] Handle pre-existing tables in shadow DB
 
 ### Phase 6: Testing and Tooling
-- [ ] Add parser roundtrip fixture test (`TestLoadSchema_SQLitePreservesTypes`)
-- [ ] Add diff normalization unit tests
+- [x] Add parser roundtrip fixture test (`TestLoadSchemaSQLitePreservesTypes` exists in `json_schema_test.go`)
+- [x] Add type preservation tests (`TestParseSQLiteSchema_TypePreservation` in `sqlite_parser_test.go`)
+- [x] Add default expression tests (`TestParseSQLiteSchema_DefaultExpressions` in `sqlite_parser_test.go`)
+- [x] Add foreign key tests (`TestParseSQLiteSchema_ForeignKeys` in `sqlite_parser_test.go`)
+- [x] Add index tests (`TestParseSQLiteSchema_Indexes` in `sqlite_parser_test.go`)
+- [x] Add diff normalization unit tests (`TestDiffSchemas_UsesLogicalTypes` in `diff_test.go`)
 - [ ] Add plan generation integration tests
 - [ ] Add shadow validation flow integration tests
 - [ ] Add validation tooling tests for dialect awareness

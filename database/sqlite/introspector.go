@@ -158,9 +158,9 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 
 		// Get columns for this index
 		indexInfoQuery := fmt.Sprintf("PRAGMA index_info(%s)", idx.Name)
-		indexRows, err := db.QueryContext(ctx, indexInfoQuery)
-		if err != nil {
-			return nil, err
+		indexRows, indexErr := db.QueryContext(ctx, indexInfoQuery)
+		if indexErr != nil {
+			return nil, fmt.Errorf("failed to query index_info for %s: %w", idx.Name, indexErr)
 		}
 
 		for indexRows.Next() {
@@ -170,17 +170,22 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 			// PRAGMA index_info returns: seqno, cid, name
 			if err := indexRows.Scan(&seqno, &cid, &name); err != nil {
 				_ = indexRows.Close()
-				return nil, err
+				return nil, fmt.Errorf("failed to scan index_info for %s: %w", idx.Name, err)
 			}
 
 			if name.Valid {
 				idx.Columns = append(idx.Columns, name.String)
 			}
 		}
+		if err := indexRows.Err(); err != nil {
+			_ = indexRows.Close()
+			return nil, fmt.Errorf("error iterating index_info for %s: %w", idx.Name, err)
+		}
 		_ = indexRows.Close()
 
-		// Skip auto-created indexes (like for primary keys)
-		if origin != "c" && !strings.HasPrefix(idx.Name, "sqlite_autoindex") {
+		// Only include user-created indexes (origin == "c" means created by CREATE INDEX)
+		// Skip auto-created indexes (like for primary keys and unique constraints)
+		if origin == "c" {
 			indexes = append(indexes, idx)
 		}
 	}
