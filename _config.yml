@@ -1,5 +1,5 @@
 # Site settings
-title: Lockplane Documentation
+title: Lockplane Docs
 description: Safe, AI-friendly schema management for PostgreSQL and SQLite
 url: https://zakandrewking.github.io
 baseurl: /lockplane
