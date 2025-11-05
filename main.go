@@ -15,6 +15,7 @@ import (
 	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/database/postgres"
 	"github.com/lockplane/lockplane/database/sqlite"
+	"github.com/lockplane/lockplane/internal/config"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
 )
@@ -187,7 +188,7 @@ func main() {
 
 func runIntrospect(args []string) {
 	// Load config file (if it exists)
-	config, err := LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config file: %v", err)
 	}
@@ -224,9 +225,9 @@ func runIntrospect(args []string) {
 	}
 
 	connStr := strings.TrimSpace(*dbURL)
-	var resolvedEnv *ResolvedEnvironment
+	var resolvedEnv *config.ResolvedEnvironment
 	if connStr == "" {
-		resolvedEnv, err = ResolveEnvironment(config, *sourceEnv)
+		resolvedEnv, err = config.ResolveEnvironment(cfg, *sourceEnv)
 		if err != nil {
 			log.Fatalf("Failed to resolve source environment: %v", err)
 		}
@@ -240,11 +241,11 @@ func runIntrospect(args []string) {
 	}
 
 	if connStr == "" {
-		envName := defaultEnvironmentName
+		envName := "local"
 		if resolvedEnv != nil {
 			envName = resolvedEnv.Name
-		} else if config != nil && config.DefaultEnvironment != "" {
-			envName = config.DefaultEnvironment
+		} else if cfg != nil && cfg.DefaultEnvironment != "" {
+			envName = cfg.DefaultEnvironment
 		}
 		log.Fatalf("No database connection configured. Provide --db or configure environment %q in lockplane.toml / .env.%s.", envName, envName)
 	}
@@ -328,7 +329,7 @@ func runIntrospect(args []string) {
 }
 
 func runDiff(args []string) {
-	config, err := LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config file: %v", err)
 	}
@@ -349,7 +350,7 @@ func runDiff(args []string) {
 	}
 
 	if beforeArg == "" {
-		env, err := ResolveEnvironment(config, *beforeEnv)
+		env, err := config.ResolveEnvironment(cfg, *beforeEnv)
 		if err != nil {
 			log.Fatalf("Failed to resolve before environment: %v", err)
 		}
@@ -357,7 +358,7 @@ func runDiff(args []string) {
 	}
 
 	if afterArg == "" {
-		env, err := ResolveEnvironment(config, *afterEnv)
+		env, err := config.ResolveEnvironment(cfg, *afterEnv)
 		if err != nil {
 			log.Fatalf("Failed to resolve after environment: %v", err)
 		}
@@ -404,7 +405,7 @@ func runDiff(args []string) {
 }
 
 func runPlan(args []string) {
-	config, err := LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config file: %v", err)
 	}
@@ -423,7 +424,7 @@ func runPlan(args []string) {
 	toInput := strings.TrimSpace(*toSchema)
 
 	if fromInput == "" {
-		resolvedFrom, err := ResolveEnvironment(config, *fromEnvironment)
+		resolvedFrom, err := config.ResolveEnvironment(cfg, *fromEnvironment)
 		if err != nil {
 			log.Fatalf("Failed to resolve source environment: %v", err)
 		}
@@ -435,7 +436,7 @@ func runPlan(args []string) {
 	}
 
 	if toInput == "" {
-		resolvedTo, err := ResolveEnvironment(config, *toEnvironment)
+		resolvedTo, err := config.ResolveEnvironment(cfg, *toEnvironment)
 		if err != nil {
 			log.Fatalf("Failed to resolve target environment: %v", err)
 		}
@@ -554,7 +555,7 @@ func runPlan(args []string) {
 }
 
 func runRollback(args []string) {
-	config, err := LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config file: %v", err)
 	}
@@ -573,7 +574,7 @@ func runRollback(args []string) {
 
 	sourceInput := strings.TrimSpace(*fromSchema)
 	if sourceInput == "" {
-		resolved, err := ResolveEnvironment(config, *fromEnvironment)
+		resolved, err := config.ResolveEnvironment(cfg, *fromEnvironment)
 		if err != nil {
 			log.Fatalf("Failed to resolve source environment: %v", err)
 		}
@@ -629,7 +630,7 @@ func runRollback(args []string) {
 
 func runApply(args []string) {
 	// Load config file (if it exists)
-	config, err := LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config file: %v", err)
 	}
@@ -661,7 +662,7 @@ func runApply(args []string) {
 		os.Exit(1)
 	}
 
-	resolvedTarget, err := ResolveEnvironment(config, *targetEnvironment)
+	resolvedTarget, err := config.ResolveEnvironment(cfg, *targetEnvironment)
 	if err != nil {
 		log.Fatalf("Failed to resolve target environment: %v", err)
 	}
@@ -712,7 +713,7 @@ func runApply(args []string) {
 		// Generate plan mode - require --schema
 		schemaPath := strings.TrimSpace(*schema)
 		if schemaPath == "" {
-			schemaPath = GetSchemaPath("", config, resolvedTarget, "")
+			schemaPath = config.GetSchemaPath("", cfg, resolvedTarget, "")
 		}
 		if schemaPath == "" {
 			fmt.Fprintf(os.Stderr, "Error: --schema required when generating a plan.\n\n")
@@ -826,7 +827,7 @@ func runApply(args []string) {
 			if shadowEnvName == "" {
 				shadowEnvName = resolvedTarget.Name
 			}
-			resolvedShadow, err := ResolveEnvironment(config, shadowEnvName)
+			resolvedShadow, err := config.ResolveEnvironment(cfg, shadowEnvName)
 			if err != nil {
 				log.Fatalf("Failed to resolve shadow environment: %v", err)
 			}

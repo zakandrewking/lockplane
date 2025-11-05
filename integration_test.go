@@ -7,17 +7,18 @@ import (
 
 	_ "github.com/lib/pq"
 	"github.com/lockplane/lockplane/database/postgres"
+	"github.com/lockplane/lockplane/internal/config"
 )
 
-func resolveTestEnvironment(t *testing.T) *ResolvedEnvironment {
+func resolveTestEnvironment(t *testing.T) *config.ResolvedEnvironment {
 	t.Helper()
 
-	config, err := LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	env, err := ResolveEnvironment(config, "")
+	env, err := config.ResolveEnvironment(cfg, "")
 	if err != nil {
 		t.Fatalf("Failed to resolve default environment: %v", err)
 	}

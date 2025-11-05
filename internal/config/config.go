@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"os"
@@ -11,6 +11,7 @@ const (
 	defaultEnvironmentName   = "local"
 	defaultDatabaseURL       = "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
 	defaultShadowDatabaseURL = "postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable"
+	defaultSchemaDir         = "schema"
 )
 
 // EnvironmentConfig describes a single named environment from lockplane.toml.
