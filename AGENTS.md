@@ -20,7 +20,7 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
 - [ ] Make code changes
 - [ ] Format code: `go fmt ./...`
 - [ ] Vet code: `go vet ./...` (catches common errors)
-- [ ] Run errcheck: `errcheck ./...` (ensures all errors are handled)
+- [ ] **CRITICAL**: Run errcheck: `errcheck ./...` (ensures all errors are handled - prevents CI failures)
 - [ ] Run staticcheck: `staticcheck ./...` (lints for common bugs and style issues)
 
 ### Phase 2: Testing (CRITICAL - ALWAYS RUN TESTS)
@@ -139,9 +139,11 @@ When adding features:
 
 ## Code Quality
 
-### Before Committing
+### Pre-commit Hooks (MANDATORY for AI Agents)
 
-**ALWAYS run these commands before pushing to ensure code quality:**
+**AI agents MUST run all quality checks before committing. The project has pre-commit hooks configured.**
+
+**Quality checks to run before EVERY commit:**
 
 ```bash
 # Format code
@@ -150,17 +152,53 @@ go fmt ./...
 # Vet code for issues (catches common errors)
 go vet ./...
 
+# Check all errors are handled (CRITICAL)
+errcheck ./...
+
+# Advanced linting
+staticcheck ./...
+
 # Run tests
 go test ./...
 ```
 
-**Critical**: Always run `go vet ./...` before pushing. It catches errors like:
-- Unchecked error return values
+**Install errcheck and staticcheck if not available:**
+```bash
+go install github.com/kisielk/errcheck@latest
+go install honnef.co/go/tools/cmd/staticcheck@latest
+```
+
+### Why These Checks Matter
+
+**errcheck** (CRITICAL):
+- Catches unchecked error return values
+- Example: `defer db.Close()` should be `defer func() { _ = db.Close() }()`
+- Prevents lint failures in CI
+
+**go vet** (CRITICAL):
 - Printf format string issues
 - Unreachable code
 - Common mistakes
 
-### Linting
+**staticcheck**:
+- Advanced linting for common bugs
+- Style consistency issues
+
+### Pre-commit Hook Setup (For Human Contributors)
+
+The project provides automated pre-commit hooks:
+
+```bash
+# Install pre-commit (human contributors)
+pip install pre-commit
+pre-commit install
+```
+
+See `.pre-commit-config.yaml` and `.pre-commit-readme.md` for details.
+
+**AI agents should run checks manually before committing since they don't use git hooks.**
+
+### CI Linting
 
 The project uses `golangci-lint` in CI. Common issues:
 - Unused variables or imports
@@ -169,6 +207,52 @@ The project uses `golangci-lint` in CI. Common issues:
 - Inconsistent formatting
 
 ## Development Workflow
+
+### Project Planning and Design Documents
+
+**When working on complex features or significant changes:**
+
+1. **Create a design document in `devdocs/`** - Use Markdown format
+2. **Include a progress checklist** - Track implementation phases and tasks
+3. **Structure the document** with:
+   - Progress checklist at the top
+   - Context/background section
+   - Goals and requirements
+   - Implementation phases with detailed steps
+   - Testing plan
+   - Documentation updates needed
+
+**Example structure:**
+```markdown
+# Feature Name
+
+## Progress Checklist
+- [ ] Phase 1: Research and design
+- [ ] Phase 2: Implementation
+- [ ] Phase 3: Testing
+- [ ] Phase 4: Documentation
+
+## Context
+[Why we're doing this]
+
+## Goals
+[What we want to achieve]
+
+## Implementation Phases
+### Phase 1: ...
+[Detailed steps]
+```
+
+**Why use `devdocs/`?**
+- Keeps implementation plans tracked in version control
+- Provides clear progress visibility for complex features
+- Documents decisions and trade-offs for future reference
+- Makes it easy to resume work after interruptions
+- Helps coordinate work across multiple sessions
+
+**Examples:**
+- `devdocs/sqlite_dialect_redesign.md` - Multi-phase feature with checklist
+- `devdocs/interactive_init_wizard.md` - Design document for new feature
 
 ### When Adding New Features or Changing Behavior
 
