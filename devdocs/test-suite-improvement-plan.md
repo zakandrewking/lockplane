@@ -845,11 +845,13 @@ All tests run automatically in GitHub Actions:
 ### Week 2: SQLite Support (12-16 hours) 🚧 IN PROGRESS
 
 - [x] Create `database/sqlite/introspector_test.go` (6 tests, all passing)
-- [ ] Refactor `main_test.go` to use `SetupTestDB()`
-- [ ] Make 3-5 integration tests driver-agnostic
-- [ ] Test with both PostgreSQL and SQLite locally
+- [x] Refactor `main_test.go` to use `SetupTestDB()`
+- [x] Make 3 integration tests driver-agnostic (TestApplyPlan_CreateTable, TestApplyPlan_InvalidSQL, TestApplyPlan_AddColumn)
+- [x] Tests pass in CI with PostgreSQL
+- [ ] Test locally with SQLite (TEST_ALL_DRIVERS=true)
+- [ ] Make 2+ more integration tests driver-agnostic
 
-**Deliverable**: SQLite integration tests working (introspector done, main_test pending)
+**Deliverable**: SQLite integration tests working (commit: 5105845) - 3 integration tests refactored, CI passing
 
 ### Week 3: CI Integration (8-12 hours)
 
