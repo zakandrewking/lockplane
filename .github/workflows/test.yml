@@ -7,7 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -22,16 +23,120 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      - name: Run unit tests
+        run: go test -v -race -short ./...
 
-      - name: Upload coverage
+      - name: Format check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted:"
+            gofmt -s -d .
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+  integration-tests-postgres:
+    name: Integration Tests (PostgreSQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: lockplane
+          POSTGRES_PASSWORD: lockplane
+          POSTGRES_DB: lockplane
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      postgres-shadow:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: lockplane
+          POSTGRES_PASSWORD: lockplane
+          POSTGRES_DB: lockplane_shadow
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5433:5432
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U lockplane; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+
+      - name: Run PostgreSQL integration tests
+        env:
+          REQUIRE_TEST_DB: "true"
+          POSTGRES_TEST_URL: "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
+          DATABASE_URL: "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
+          SHADOW_DATABASE_URL: "postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable"
+        run: |
+          go test -v -race -coverprofile=coverage-postgres.txt -covermode=atomic ./...
+
+      - name: Upload PostgreSQL coverage
         uses: codecov/codecov-action@v3
         with:
-          files: ./coverage.txt
-          flags: unittests
+          files: ./coverage-postgres.txt
+          flags: postgres
+          name: postgres-coverage
+
+  integration-tests-sqlite:
+    name: Integration Tests (SQLite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run SQLite integration tests
+        env:
+          REQUIRE_TEST_DB: "true"
+          TEST_ALL_DRIVERS: "true"
+        run: |
+          go test -v -race -coverprofile=coverage-sqlite.txt -covermode=atomic ./...
+
+      - name: Upload SQLite coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage-sqlite.txt
+          flags: sqlite
+          name: sqlite-coverage
 
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,7 +145,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.23'
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8
