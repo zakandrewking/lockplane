@@ -243,59 +243,56 @@ func TestIndexesSchema(t *testing.T) {
 // Executor tests
 
 func TestApplyPlan_CreateTable(t *testing.T) {
-	env := resolveTestEnvironment(t)
-	connStr := env.DatabaseURL
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer func() { _ = db.Close() }()
+	for _, driverType := range GetAllDrivers() {
+		t.Run(driverType, func(t *testing.T) {
+			tdb := SetupTestDB(t, driverType)
+			defer tdb.Close()
+			defer tdb.CleanupTables(t, "posts")
 
-	ctx := context.Background()
-	if err := db.PingContext(ctx); err != nil {
-		t.Skipf("Database not available (this is okay in CI): %v", err)
-	}
+			ctx := context.Background()
 
-	// Clean up
-	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
-	defer func() {
-		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS posts CASCADE")
-	}()
+			// Load plan from JSON
+			planPtr, err := LoadJSONPlan("testdata/plans-json/create_table.json")
+			if err != nil {
+				t.Fatalf("Failed to load plan: %v", err)
+			}
+			plan := *planPtr
 
-	// Load plan from JSON
-	planPtr, err := LoadJSONPlan("testdata/plans-json/create_table.json")
-	if err != nil {
-		t.Fatalf("Failed to load plan: %v", err)
-	}
-	plan := *planPtr
+			// Create empty schema for apply
+			emptySchema := &Schema{Tables: []Table{}}
 
-	// Create empty schema and driver for apply
-	emptySchema := &Schema{Tables: []Table{}}
-	driver := postgres.NewDriver()
+			// Execute plan
+			result, err := applyPlan(ctx, tdb.DB, &plan, nil, emptySchema, tdb.Driver)
+			if err != nil {
+				t.Fatalf("Failed to apply plan: %v", err)
+			}
 
-	// Execute plan
-	result, err := applyPlan(ctx, db, &plan, nil, emptySchema, driver)
-	if err != nil {
-		t.Fatalf("Failed to apply plan: %v", err)
-	}
+			if !result.Success {
+				t.Errorf("Expected success=true, got false")
+			}
 
-	if !result.Success {
-		t.Errorf("Expected success=true, got false")
-	}
+			if result.StepsApplied != 1 {
+				t.Errorf("Expected 1 step applied, got %d", result.StepsApplied)
+			}
 
-	if result.StepsApplied != 1 {
-		t.Errorf("Expected 1 step applied, got %d", result.StepsApplied)
-	}
+			// Verify table was created
+			var exists bool
+			var checkQuery string
+			if tdb.Type == "postgres" || tdb.Type == "postgresql" {
+				checkQuery = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'posts')"
+			} else {
+				// SQLite/libSQL
+				checkQuery = "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='posts'"
+			}
+			err = tdb.DB.QueryRowContext(ctx, checkQuery).Scan(&exists)
+			if err != nil {
+				t.Fatalf("Failed to check table existence: %v", err)
+			}
 
-	// Verify table was created
-	var exists bool
-	err = db.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'posts')").Scan(&exists)
-	if err != nil {
-		t.Fatalf("Failed to check table existence: %v", err)
-	}
-
-	if !exists {
-		t.Error("Expected posts table to exist")
+			if !exists {
+				t.Error("Expected posts table to exist")
+			}
+		})
 	}
 }
 
@@ -375,118 +372,114 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 }
 
 func TestApplyPlan_InvalidSQL(t *testing.T) {
-	env := resolveTestEnvironment(t)
-	connStr := env.DatabaseURL
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer func() { _ = db.Close() }()
+	for _, driverType := range GetAllDrivers() {
+		t.Run(driverType, func(t *testing.T) {
+			tdb := SetupTestDB(t, driverType)
+			defer tdb.Close()
 
-	ctx := context.Background()
-	if err := db.PingContext(ctx); err != nil {
-		t.Skipf("Database not available (this is okay in CI): %v", err)
-	}
+			ctx := context.Background()
 
-	// Create an invalid plan inline (no JSON fixture for this)
-	plan := Plan{
-		Steps: []PlanStep{
-			{Description: "Invalid SQL", SQL: "INVALID SQL STATEMENT"},
-		},
-	}
+			// Create an invalid plan inline (no JSON fixture for this)
+			plan := Plan{
+				Steps: []PlanStep{
+					{Description: "Invalid SQL", SQL: "INVALID SQL STATEMENT"},
+				},
+			}
 
-	// Create empty schema and driver for apply
-	emptySchema := &Schema{Tables: []Table{}}
-	driver := postgres.NewDriver()
+			// Create empty schema for apply
+			emptySchema := &Schema{Tables: []Table{}}
 
-	// Execute plan - should fail
-	result, err := applyPlan(ctx, db, &plan, nil, emptySchema, driver)
-	if err == nil {
-		t.Error("Expected error for invalid SQL, got nil")
-	}
+			// Execute plan - should fail
+			result, err := applyPlan(ctx, tdb.DB, &plan, nil, emptySchema, tdb.Driver)
+			if err == nil {
+				t.Error("Expected error for invalid SQL, got nil")
+			}
 
-	if result.Success {
-		t.Error("Expected success=false for invalid SQL")
-	}
+			if result.Success {
+				t.Error("Expected success=false for invalid SQL")
+			}
 
-	if len(result.Errors) == 0 {
-		t.Error("Expected errors to be recorded")
+			if len(result.Errors) == 0 {
+				t.Error("Expected errors to be recorded")
+			}
+		})
 	}
 }
 
 func TestApplyPlan_AddColumn(t *testing.T) {
-	env := resolveTestEnvironment(t)
-	connStr := env.DatabaseURL
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer func() { _ = db.Close() }()
+	for _, driverType := range GetAllDrivers() {
+		t.Run(driverType, func(t *testing.T) {
+			tdb := SetupTestDB(t, driverType)
+			defer tdb.Close()
+			defer tdb.CleanupTables(t, "users")
 
-	ctx := context.Background()
-	if err := db.PingContext(ctx); err != nil {
-		t.Skipf("Database not available (this is okay in CI): %v", err)
-	}
+			ctx := context.Background()
 
-	// Set up - create users table first
-	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS users CASCADE")
-	_, err = db.ExecContext(ctx, "CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL)")
-	if err != nil {
-		t.Fatalf("Failed to create users table: %v", err)
-	}
-	defer func() {
-		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS users CASCADE")
-	}()
+			// Set up - create users table first
+			var createTableSQL string
+			if tdb.Type == "postgres" || tdb.Type == "postgresql" {
+				createTableSQL = "CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL)"
+			} else {
+				// SQLite/libSQL
+				createTableSQL = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+			}
+			_, err := tdb.DB.ExecContext(ctx, createTableSQL)
+			if err != nil {
+				t.Fatalf("Failed to create users table: %v", err)
+			}
 
-	// Load plan to add age column from JSON
-	planPtr, err := LoadJSONPlan("testdata/plans-json/add_column.json")
-	if err != nil {
-		t.Fatalf("Failed to load plan: %v", err)
-	}
-	plan := *planPtr
+			// Load plan to add age column from JSON
+			planPtr, err := LoadJSONPlan("testdata/plans-json/add_column.json")
+			if err != nil {
+				t.Fatalf("Failed to load plan: %v", err)
+			}
+			plan := *planPtr
 
-	// Create schema with the existing users table and driver for apply
-	existingSchema := &Schema{
-		Tables: []Table{
-			{
-				Name: "users",
-				Columns: []Column{
-					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
-					{Name: "name", Type: "text", Nullable: false},
+			// Create schema with the existing users table
+			existingSchema := &Schema{
+				Tables: []Table{
+					{
+						Name: "users",
+						Columns: []Column{
+							{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+							{Name: "name", Type: "text", Nullable: false},
+						},
+					},
 				},
-			},
-		},
-	}
-	driver := postgres.NewDriver()
+			}
 
-	// Execute plan
-	result, err := applyPlan(ctx, db, &plan, nil, existingSchema, driver)
-	if err != nil {
-		t.Fatalf("Failed to apply plan: %v", err)
-	}
+			// Execute plan
+			result, err := applyPlan(ctx, tdb.DB, &plan, nil, existingSchema, tdb.Driver)
+			if err != nil {
+				t.Fatalf("Failed to apply plan: %v", err)
+			}
 
-	if !result.Success {
-		t.Errorf("Expected success=true, got false")
-	}
+			if !result.Success {
+				t.Errorf("Expected success=true, got false")
+			}
 
-	if result.StepsApplied != 1 {
-		t.Errorf("Expected 1 step applied, got %d", result.StepsApplied)
-	}
+			if result.StepsApplied != 1 {
+				t.Errorf("Expected 1 step applied, got %d", result.StepsApplied)
+			}
 
-	// Verify age column was added
-	var hasAge bool
-	err = db.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT FROM information_schema.columns
-			WHERE table_name = 'users' AND column_name = 'age'
-		)
-	`).Scan(&hasAge)
-	if err != nil {
-		t.Fatalf("Failed to check column existence: %v", err)
-	}
+			// Verify age column was added
+			var hasAge bool
+			var checkQuery string
+			if tdb.Type == "postgres" || tdb.Type == "postgresql" {
+				checkQuery = "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'age')"
+			} else {
+				// SQLite/libSQL
+				checkQuery = "SELECT COUNT(*) > 0 FROM pragma_table_info('users') WHERE name='age'"
+			}
+			err = tdb.DB.QueryRowContext(ctx, checkQuery).Scan(&hasAge)
+			if err != nil {
+				t.Fatalf("Failed to check column existence: %v", err)
+			}
 
-	if !hasAge {
-		t.Error("Expected age column to exist")
+			if !hasAge {
+				t.Error("Expected age column to exist")
+			}
+		})
 	}
 }
 

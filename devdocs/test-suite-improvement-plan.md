@@ -838,8 +838,9 @@ All tests run automatically in GitHub Actions:
 - [x] Add `REQUIRE_TEST_DB` environment variable support
 - [x] Set up local coverage reporting (documented in TESTING.md)
 - [x] Create `TESTING.md` documentation
+- [x] All CI checks passing (build, lint, tests)
 
-**Deliverable**: ✅ Shared test infrastructure in place (commit: 9a54ecb)
+**Deliverable**: ✅ Shared test infrastructure in place (commits: 9a54ecb, ca33863) - CI passing
 
 ### Week 2: SQLite Support (12-16 hours) 🚧 IN PROGRESS
 
