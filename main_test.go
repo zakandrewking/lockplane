@@ -28,6 +28,8 @@ func resolveTestEnvironment(t *testing.T) *ResolvedEnvironment {
 }
 
 // goldenTest runs a test case using fixture files
+// Note: This function is PostgreSQL-only and currently unused (callers are skipped).
+// Future: Refactor to use SetupTestDB() and support multiple databases when fixtures are created.
 func goldenTest(t *testing.T, fixtureName string) {
 	t.Helper()
 
@@ -243,60 +245,57 @@ func TestIndexesSchema(t *testing.T) {
 // Executor tests
 
 func TestApplyPlan_CreateTable(t *testing.T) {
-	for _, driverType := range GetAllDrivers() {
-		t.Run(driverType, func(t *testing.T) {
-			tdb := SetupTestDB(t, driverType)
-			defer tdb.Close()
-			defer tdb.CleanupTables(t, "posts")
+	// Note: This test uses PostgreSQL-only JSON fixtures (SERIAL, TIMESTAMP, NOW()).
+	// Database-agnostic SQL generation is tested in database/*/generator_test.go.
+	// SQLite introspection is tested in database/sqlite/introspector_test.go.
+	tdb := SetupTestDB(t, "postgres")
+	defer tdb.Close()
+	defer tdb.CleanupTables(t, "posts")
 
-			ctx := context.Background()
+	ctx := context.Background()
 
-			// Load plan from JSON
-			planPtr, err := LoadJSONPlan("testdata/plans-json/create_table.json")
-			if err != nil {
-				t.Fatalf("Failed to load plan: %v", err)
-			}
-			plan := *planPtr
+	// Load plan from JSON
+	planPtr, err := LoadJSONPlan("testdata/plans-json/create_table.json")
+	if err != nil {
+		t.Fatalf("Failed to load plan: %v", err)
+	}
+	plan := *planPtr
 
-			// Create empty schema for apply
-			emptySchema := &Schema{Tables: []Table{}}
+	// Create empty schema for apply
+	emptySchema := &Schema{Tables: []Table{}}
 
-			// Execute plan
-			result, err := applyPlan(ctx, tdb.DB, &plan, nil, emptySchema, tdb.Driver)
-			if err != nil {
-				t.Fatalf("Failed to apply plan: %v", err)
-			}
+	// Execute plan
+	result, err := applyPlan(ctx, tdb.DB, &plan, nil, emptySchema, tdb.Driver)
+	if err != nil {
+		t.Fatalf("Failed to apply plan: %v", err)
+	}
 
-			if !result.Success {
-				t.Errorf("Expected success=true, got false")
-			}
+	if !result.Success {
+		t.Errorf("Expected success=true, got false")
+	}
 
-			if result.StepsApplied != 1 {
-				t.Errorf("Expected 1 step applied, got %d", result.StepsApplied)
-			}
+	if result.StepsApplied != 1 {
+		t.Errorf("Expected 1 step applied, got %d", result.StepsApplied)
+	}
 
-			// Verify table was created
-			var exists bool
-			var checkQuery string
-			if tdb.Type == "postgres" || tdb.Type == "postgresql" {
-				checkQuery = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'posts')"
-			} else {
-				// SQLite/libSQL
-				checkQuery = "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='posts'"
-			}
-			err = tdb.DB.QueryRowContext(ctx, checkQuery).Scan(&exists)
-			if err != nil {
-				t.Fatalf("Failed to check table existence: %v", err)
-			}
+	// Verify table was created
+	var exists bool
+	err = tdb.DB.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'posts')").Scan(&exists)
+	if err != nil {
+		t.Fatalf("Failed to check table existence: %v", err)
+	}
 
-			if !exists {
-				t.Error("Expected posts table to exist")
-			}
-		})
+	if !exists {
+		t.Error("Expected posts table to exist")
 	}
 }
 
 func TestApplyPlan_WithShadowDB(t *testing.T) {
+	// Note: This test is PostgreSQL-only because:
+	// 1. Uses create_table.json plan with PostgreSQL-specific SQL (SERIAL, NOW())
+	// 2. Requires separate shadow database (typically port 5433)
+	// 3. resolveTestEnvironment expects PostgreSQL configuration
+	// Future: Could extend to SQLite with two in-memory databases
 	env := resolveTestEnvironment(t)
 	mainConnStr := env.DatabaseURL
 	shadowConnStr := env.ShadowDatabaseURL
@@ -372,6 +371,7 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 }
 
 func TestApplyPlan_InvalidSQL(t *testing.T) {
+	// This test validates error handling and works with all databases
 	for _, driverType := range GetAllDrivers() {
 		t.Run(driverType, func(t *testing.T) {
 			tdb := SetupTestDB(t, driverType)
@@ -407,6 +407,8 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 }
 
 func TestApplyPlan_AddColumn(t *testing.T) {
+	// This test uses a plan with portable SQL (ALTER TABLE ... ADD COLUMN)
+	// and handles database-specific table creation in the setup
 	for _, driverType := range GetAllDrivers() {
 		t.Run(driverType, func(t *testing.T) {
 			tdb := SetupTestDB(t, driverType)
