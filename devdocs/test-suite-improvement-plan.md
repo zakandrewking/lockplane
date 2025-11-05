@@ -831,24 +831,24 @@ All tests run automatically in GitHub Actions:
 
 ## Action Plan
 
-### Week 1: Foundation (8-12 hours)
+### Week 1: Foundation (8-12 hours) ✅ COMPLETE
 
 - [x] Document current state (this document)
-- [ ] Create `testing_utils.go` with shared helpers
-- [ ] Add `REQUIRE_TEST_DB` environment variable support
-- [ ] Set up local coverage reporting
-- [ ] Create `TESTING.md` documentation
+- [x] Create `testing_utils.go` with shared helpers
+- [x] Add `REQUIRE_TEST_DB` environment variable support
+- [x] Set up local coverage reporting (documented in TESTING.md)
+- [x] Create `TESTING.md` documentation
 
-**Deliverable**: Shared test infrastructure in place
+**Deliverable**: ✅ Shared test infrastructure in place (commit: 9a54ecb)
 
-### Week 2: SQLite Support (12-16 hours)
+### Week 2: SQLite Support (12-16 hours) 🚧 IN PROGRESS
 
-- [ ] Create `database/sqlite/introspector_test.go`
+- [x] Create `database/sqlite/introspector_test.go` (6 tests, all passing)
 - [ ] Refactor `main_test.go` to use `SetupTestDB()`
 - [ ] Make 3-5 integration tests driver-agnostic
 - [ ] Test with both PostgreSQL and SQLite locally
 
-**Deliverable**: SQLite integration tests working
+**Deliverable**: SQLite integration tests working (introspector done, main_test pending)
 
 ### Week 3: CI Integration (8-12 hours)
 
@@ -949,4 +949,3 @@ After completing this plan:
 ---
 
 **Next Steps**: Review this plan, prioritize items, and begin Week 1 implementation.
-
