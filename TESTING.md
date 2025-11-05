@@ -255,24 +255,35 @@ Tests run automatically in GitHub Actions on:
 
 ### CI Test Matrix
 
-1. **Unit Tests** (fast, no database)
-   - Run on every commit
+The CI runs 4 parallel jobs on every push:
+
+1. **Unit Tests** (~1m14s)
+   - Fast tests, no database required
+   - Includes format check and `go vet`
    - Must pass for PR merge
 
-2. **PostgreSQL Integration Tests**
-   - Uses GitHub Actions PostgreSQL service
-   - Tests main + shadow database scenarios
-   - Uploads coverage to Codecov
+2. **PostgreSQL Integration Tests** (~48s)
+   - Uses GitHub Actions PostgreSQL service containers
+   - Tests main database (port 5432) + shadow database (port 5433)
+   - Runs all integration tests with `REQUIRE_TEST_DB=true`
+   - Uploads coverage to Codecov with `postgres` flag
 
-3. **SQLite Integration Tests**
-   - Uses in-memory SQLite
-   - Fast, no external dependencies
-   - Uploads coverage to Codecov
+3. **SQLite Integration Tests** (~30s)
+   - Uses in-memory SQLite (no service needed)
+   - Tests SQLite-specific functionality
+   - Runs multi-database tests (TestApplyPlan_InvalidSQL, TestApplyPlan_AddColumn)
+   - Uploads coverage to Codecov with `sqlite` flag
 
-### Coverage Requirements
+4. **Lint** (~1m33s)
+   - Runs golangci-lint v2
+   - Checks code quality and style
 
-- Minimum coverage: **70%**
-- Coverage reports available at: `https://codecov.io/gh/yourusername/lockplane`
+### Coverage Tracking
+
+- **Coverage reports**: [![codecov](https://codecov.io/gh/zakandrewking/lockplane/branch/main/graph/badge.svg)](https://codecov.io/gh/zakandrewking/lockplane)
+- **Separate coverage** for PostgreSQL and SQLite test runs
+- **Coverage trends** tracked over time on Codecov
+- Coverage reports uploaded automatically from CI
 
 ## Troubleshooting
 

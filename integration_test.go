@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"os"
-	"path/filepath"
 	"testing"
 
 	_ "github.com/lib/pq"
@@ -27,72 +25,7 @@ func resolveTestEnvironment(t *testing.T) *ResolvedEnvironment {
 	return env
 }
 
-// goldenTest runs a test case using fixture files
-// Note: This function is PostgreSQL-only and currently unused (callers are skipped).
-// Future: Refactor to use SetupTestDB() and support multiple databases when fixtures are created.
-func goldenTest(t *testing.T, fixtureName string) {
-	t.Helper()
-
-	// Connect to test database
-	env := resolveTestEnvironment(t)
-	connStr := env.DatabaseURL
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	ctx := context.Background()
-	if err := db.PingContext(ctx); err != nil {
-		t.Skipf("Database not available (this is okay in CI): %v", err)
-	}
-
-	// Read SQL fixture
-	fixtureDir := filepath.Join("testdata", "fixtures", fixtureName)
-	sqlPath := filepath.Join(fixtureDir, "schema.sql")
-	sqlBytes, err := os.ReadFile(sqlPath)
-	if err != nil {
-		t.Fatalf("Failed to read SQL fixture: %v", err)
-	}
-
-	// Read expected output from JSON file
-	expectedPath := filepath.Join(fixtureDir, "expected.json")
-	expectedSchema, err := LoadJSONSchema(expectedPath)
-	if err != nil {
-		t.Fatalf("Failed to load expected JSON schema: %v", err)
-	}
-	expected := *expectedSchema
-
-	// Clean up tables first (extract table names from expected output)
-	for _, table := range expected.Tables {
-		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table.Name+" CASCADE")
-	}
-
-	// Execute SQL to create schema
-	_, err = db.ExecContext(ctx, string(sqlBytes))
-	if err != nil {
-		t.Fatalf("Failed to execute SQL fixture: %v", err)
-	}
-
-	// Clean up after test
-	defer func() {
-		for _, table := range expected.Tables {
-			_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table.Name+" CASCADE")
-		}
-	}()
-
-	// Run introspection using postgres driver
-	driver := postgres.NewDriver()
-	actual, err := driver.IntrospectSchema(ctx, db)
-	if err != nil {
-		t.Fatalf("Failed to introspect schema: %v", err)
-	}
-
-	// Compare results
-	compareSchemas(t, &expected, actual)
-}
-
-// compareSchemas compares two Schema objects
+// compareSchemas compares two Schema objects (used by json_schema_test.go)
 func compareSchemas(t *testing.T, expected, actual *Schema) {
 	t.Helper()
 
@@ -226,21 +159,13 @@ func compareIndex(t *testing.T, tableName string, expected, actual *Index) {
 	// Note: We're not comparing columns yet since the introspector doesn't parse them
 }
 
-// Test cases using golden files
-func TestBasicSchema(t *testing.T) {
-	t.Skip("JSON test fixtures not yet created")
-	goldenTest(t, "basic")
-}
-
-func TestComprehensiveSchema(t *testing.T) {
-	t.Skip("JSON test fixtures not yet created")
-	goldenTest(t, "comprehensive")
-}
-
-func TestIndexesSchema(t *testing.T) {
-	t.Skip("JSON test fixtures not yet created")
-	goldenTest(t, "indexes")
-}
+// Note: The following golden file tests were removed as they required extensive fixture creation
+// but schema introspection is already comprehensively tested in:
+// - database/postgres/introspector_test.go (5 PostgreSQL tests)
+// - database/sqlite/introspector_test.go (6 SQLite tests)
+//
+// Removed tests:
+// - TestBasicSchema, TestComprehensiveSchema, TestIndexesSchema
 
 // Executor tests
 
