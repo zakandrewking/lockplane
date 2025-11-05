@@ -4,14 +4,16 @@ This document describes how to run and write tests for Lockplane.
 
 ## Quick Start
 
-### Run All Tests (requires PostgreSQL)
+### Run All Tests
 
 ```bash
-# Start test databases
-docker compose up -d
+# Run unit tests only (no database required)
+go test -short ./...
 
-# Run full test suite
-go test ./...
+# Run all tests including SQLite integration tests
+TEST_ALL_DRIVERS=true go test ./...
+
+# For PostgreSQL integration tests, set up PostgreSQL manually or rely on CI
 ```
 
 ### Run Unit Tests Only (no database required)
@@ -67,9 +69,8 @@ Control test behavior with these environment variables:
 # Quick test (unit tests only)
 go test -short ./...
 
-# Full test suite (requires PostgreSQL)
-docker compose up -d
-go test ./...
+# Full test suite with SQLite integration tests
+TEST_ALL_DRIVERS=true go test ./...
 
 # Test specific package
 go test ./database/postgres/...
@@ -195,25 +196,28 @@ func TestIntrospection(t *testing.T) {
 
 ## Test Database Setup
 
-### PostgreSQL (Docker)
+### PostgreSQL
 
+For local PostgreSQL testing, you have several options:
+
+**Option 1: Use CI for PostgreSQL tests**
+- Push to GitHub and let CI run PostgreSQL integration tests
+- Run SQLite tests locally with `TEST_ALL_DRIVERS=true go test ./...`
+
+**Option 2: Manual PostgreSQL installation**
+- Install PostgreSQL locally
+- Create databases: `lockplane` (port 5432) and `lockplane_shadow` (port 5433)
+- Set environment variables:
+  ```bash
+  export DATABASE_URL="postgres://user:pass@localhost:5432/lockplane?sslmode=disable"
+  export SHADOW_DATABASE_URL="postgres://user:pass@localhost:5433/lockplane_shadow?sslmode=disable"
+  ```
+
+**Option 3: Docker**
 ```bash
-# Start PostgreSQL (main + shadow)
-docker compose up -d
-
-# Check status
-docker compose ps
-
-# View logs
-docker compose logs postgres
-
-# Stop databases
-docker compose down
+docker run -d -p 5432:5432 -e POSTGRES_USER=lockplane -e POSTGRES_PASSWORD=lockplane -e POSTGRES_DB=lockplane postgres:15-alpine
+docker run -d -p 5433:5432 -e POSTGRES_USER=lockplane -e POSTGRES_PASSWORD=lockplane -e POSTGRES_DB=lockplane_shadow postgres:15-alpine
 ```
-
-The `docker-compose.yml` defines:
-- Main database: `localhost:5432`
-- Shadow database: `localhost:5433`
 
 ### SQLite
 
@@ -292,38 +296,36 @@ The CI runs 4 parallel jobs on every push:
 **Problem**: Integration tests skip because PostgreSQL isn't running.
 
 **Solution**:
-```bash
-docker compose up -d
-# Wait a few seconds for startup
-go test ./...
-```
+- Run unit tests only: `go test -short ./...`
+- Run SQLite integration tests: `TEST_ALL_DRIVERS=true go test ./...`
+- For PostgreSQL tests: Set up PostgreSQL (see "Test Database Setup" section) or rely on CI
 
 ### Tests Fail with "connection refused"
 
 **Problem**: Database hasn't finished starting.
 
 **Solution**:
-```bash
-# Wait for database to be ready
-until pg_isready -h localhost -p 5432; do
-    echo "Waiting for PostgreSQL..."
-    sleep 2
-done
-
-# Now run tests
-go test ./...
-```
+- Run tests without PostgreSQL: `go test -short ./...` or `TEST_ALL_DRIVERS=true go test ./...`
+- If using local PostgreSQL, wait for it to be ready:
+  ```bash
+  until pg_isready -h localhost -p 5432; do
+      echo "Waiting for PostgreSQL..."
+      sleep 2
+  done
+  go test ./...
+  ```
 
 ### Tests Fail with "database lockplane does not exist"
 
 **Problem**: Database hasn't been created.
 
 **Solution**:
-```bash
-# Restart compose to recreate databases
-docker compose down
-docker compose up -d
-```
+- Create the database manually:
+  ```bash
+  createdb -U lockplane lockplane
+  createdb -U lockplane lockplane_shadow
+  ```
+- Or run tests without PostgreSQL: `go test -short ./...`
 
 ### Coverage Report Not Generating
 
