@@ -16,6 +16,7 @@ import (
 	"github.com/lockplane/lockplane/database/postgres"
 	"github.com/lockplane/lockplane/database/sqlite"
 	"github.com/lockplane/lockplane/internal/config"
+	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/lockplane/lockplane/internal/schema"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
@@ -541,7 +542,7 @@ func runPlan(args []string) {
 	}
 
 	// Generate plan with source hash
-	plan, err := GeneratePlanWithHash(diff, before, targetDriver)
+	plan, err := planner.GeneratePlanWithHash(diff, before, targetDriver)
 	if err != nil {
 		log.Fatalf("Failed to generate plan: %v", err)
 	}
@@ -615,7 +616,7 @@ func runRollback(args []string) {
 	}
 
 	// Generate rollback plan
-	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, sourceDriver)
+	rollbackPlan, err := planner.GenerateRollback(forwardPlan, beforeSchema, sourceDriver)
 	if err != nil {
 		log.Fatalf("Failed to generate rollback: %v", err)
 	}
@@ -678,7 +679,7 @@ func runApply(args []string) {
 		os.Exit(1)
 	}
 
-	var plan *Plan
+	var plan *planner.Plan
 	var planFile string
 
 	// Check if first positional arg is a plan file
@@ -756,7 +757,7 @@ func runApply(args []string) {
 		}
 
 		// Generate plan with source hash
-		generatedPlan, err := GeneratePlanWithHash(diff, before, planDriver)
+		generatedPlan, err := planner.GeneratePlanWithHash(diff, before, planDriver)
 		if err != nil {
 			log.Fatalf("Failed to generate plan: %v", err)
 		}
@@ -1133,28 +1134,9 @@ For more information: https://github.com/lockplane/lockplane
 `)
 }
 
-// Plan represents a migration plan with a series of steps
-type Plan struct {
-	SourceHash string     `json:"source_hash"`
-	Steps      []PlanStep `json:"steps"`
-}
-
-// PlanStep represents a single migration operation
-type PlanStep struct {
-	Description string `json:"description"`
-	SQL         string `json:"sql"`
-}
-
-// ExecutionResult tracks the outcome of executing a plan
-type ExecutionResult struct {
-	Success      bool     `json:"success"`
-	StepsApplied int      `json:"steps_applied"`
-	Errors       []string `json:"errors,omitempty"`
-}
-
 // applyPlan executes a migration plan with optional shadow DB validation
-func applyPlan(ctx context.Context, db *sql.DB, plan *Plan, shadowDB *sql.DB, currentSchema *Schema, driver database.Driver) (*ExecutionResult, error) {
-	result := &ExecutionResult{
+func applyPlan(ctx context.Context, db *sql.DB, plan *planner.Plan, shadowDB *sql.DB, currentSchema *Schema, driver database.Driver) (*planner.ExecutionResult, error) {
+	result := &planner.ExecutionResult{
 		Success: false,
 		Errors:  []string{},
 	}
@@ -1207,7 +1189,7 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *Plan, shadowDB *sql.DB, cu
 }
 
 // dryRunPlan validates a plan by executing it on shadow DB and rolling back
-func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *Plan, currentSchema *Schema, driver database.Driver) error {
+func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *planner.Plan, currentSchema *Schema, driver database.Driver) error {
 	// First, apply the current schema to the shadow DB so it matches the target DB state
 	// This is necessary because migration plans assume the DB is already in the "before" state
 	if err := applySchemaToDB(ctx, shadowDB, currentSchema, driver); err != nil {

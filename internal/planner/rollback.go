@@ -1,4 +1,4 @@
-package main
+package planner
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 
 // GenerateRollback creates a rollback plan from a forward migration plan
 // It reverses the operations and their order to undo the forward migration
-func GenerateRollback(forwardPlan *Plan, beforeSchema *Schema, driver database.Driver) (*Plan, error) {
+func GenerateRollback(forwardPlan *Plan, beforeSchema *database.Schema, driver database.Driver) (*Plan, error) {
 	rollbackPlan := &Plan{
 		Steps: []PlanStep{},
 	}
@@ -31,7 +31,7 @@ func GenerateRollback(forwardPlan *Plan, beforeSchema *Schema, driver database.D
 }
 
 // generateReverseOperation creates the reverse operation for a given step
-func generateReverseOperation(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
+func generateReverseOperation(step PlanStep, beforeSchema *database.Schema, driver database.Driver) ([]PlanStep, error) {
 	// Parse the SQL to determine operation type
 	// This is a simplified approach - in production, you'd want a proper SQL parser
 
@@ -82,7 +82,7 @@ func generateReverseCreateTable(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseDropTable recreates the table
-func generateReverseDropTable(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
+func generateReverseDropTable(step PlanStep, beforeSchema *database.Schema, driver database.Driver) ([]PlanStep, error) {
 	// Extract table name from "DROP TABLE tablename"
 	tableName, err := parser.ExtractTableNameFromDrop(step.SQL)
 	if err != nil {
@@ -90,7 +90,7 @@ func generateReverseDropTable(step PlanStep, beforeSchema *Schema, driver databa
 	}
 
 	// Find the table in the before schema
-	var table *Table
+	var table *database.Table
 	for i := range beforeSchema.Tables {
 		if beforeSchema.Tables[i].Name == tableName {
 			table = &beforeSchema.Tables[i]
@@ -121,7 +121,7 @@ func generateReverseAddColumn(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseDropColumn recreates the column
-func generateReverseDropColumn(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
+func generateReverseDropColumn(step PlanStep, beforeSchema *database.Schema, driver database.Driver) ([]PlanStep, error) {
 	tableName, columnName, err := parser.ExtractTableAndColumnFromDropColumn(step.SQL)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func generateReverseDropColumn(step PlanStep, beforeSchema *Schema, driver datab
 }
 
 // generateReverseAlterColumnType changes the column type back
-func generateReverseAlterColumnType(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+func generateReverseAlterColumnType(step PlanStep, beforeSchema *database.Schema) ([]PlanStep, error) {
 	tableName, columnName, err := parser.ExtractTableAndColumnFromAlterType(step.SQL)
 	if err != nil {
 		return nil, err
@@ -185,7 +185,7 @@ func generateReverseDropNotNull(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseSetDefault drops the default
-func generateReverseSetDefault(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+func generateReverseSetDefault(step PlanStep, beforeSchema *database.Schema) ([]PlanStep, error) {
 	tableName, columnName, err := parser.ExtractTableAndColumnFromSetDefault(step.SQL)
 	if err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func generateReverseSetDefault(step PlanStep, beforeSchema *Schema) ([]PlanStep,
 }
 
 // generateReverseDropDefault restores the default
-func generateReverseDropDefault(step PlanStep, beforeSchema *Schema) ([]PlanStep, error) {
+func generateReverseDropDefault(step PlanStep, beforeSchema *database.Schema) ([]PlanStep, error) {
 	tableName, columnName, err := parser.ExtractTableAndColumnFromDropDefault(step.SQL)
 	if err != nil {
 		return nil, err
@@ -245,7 +245,7 @@ func generateReverseCreateIndex(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseDropIndex recreates the index
-func generateReverseDropIndex(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
+func generateReverseDropIndex(step PlanStep, beforeSchema *database.Schema, driver database.Driver) ([]PlanStep, error) {
 	indexName, err := parser.ExtractIndexNameFromDrop(step.SQL)
 	if err != nil {
 		return nil, err
@@ -262,7 +262,7 @@ func generateReverseDropIndex(step PlanStep, beforeSchema *Schema, driver databa
 }
 
 // Helper function to find a column in a schema
-func findColumn(schema *Schema, tableName, columnName string) (*Column, error) {
+func findColumn(schema *database.Schema, tableName, columnName string) (*database.Column, error) {
 	for _, table := range schema.Tables {
 		if table.Name == tableName {
 			for i := range table.Columns {
@@ -277,7 +277,7 @@ func findColumn(schema *Schema, tableName, columnName string) (*Column, error) {
 }
 
 // Helper function to find an index in a schema
-func findIndex(schema *Schema, indexName string) (string, *Index, error) {
+func findIndex(schema *database.Schema, indexName string) (string, *database.Index, error) {
 	for _, table := range schema.Tables {
 		for i := range table.Indexes {
 			if table.Indexes[i].Name == indexName {
@@ -289,7 +289,7 @@ func findIndex(schema *Schema, indexName string) (string, *Index, error) {
 }
 
 // Helper function to find a foreign key in a schema
-func findForeignKey(schema *Schema, fkName string) (string, *ForeignKey, error) {
+func findForeignKey(schema *database.Schema, fkName string) (string, *database.ForeignKey, error) {
 	for _, table := range schema.Tables {
 		for i := range table.ForeignKeys {
 			if table.ForeignKeys[i].Name == fkName {
@@ -315,7 +315,7 @@ func generateReverseAddForeignKey(step PlanStep) ([]PlanStep, error) {
 }
 
 // generateReverseDropForeignKey recreates the foreign key constraint
-func generateReverseDropForeignKey(step PlanStep, beforeSchema *Schema, driver database.Driver) ([]PlanStep, error) {
+func generateReverseDropForeignKey(step PlanStep, beforeSchema *database.Schema, driver database.Driver) ([]PlanStep, error) {
 	// Extract table name and constraint name from "ALTER TABLE tablename DROP CONSTRAINT constraintname"
 	tableName, constraintName, err := parser.ExtractTableAndConstraintFromDropConstraint(step.SQL)
 	if err != nil {

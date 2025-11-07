@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"github.com/lockplane/lockplane/internal/planner"
 	"testing"
 
 	_ "github.com/lib/pq"
@@ -307,8 +308,8 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 			ctx := context.Background()
 
 			// Create an invalid plan inline (no JSON fixture for this)
-			plan := Plan{
-				Steps: []PlanStep{
+			plan := planner.Plan{
+				Steps: []planner.PlanStep{
 					{Description: "Invalid SQL", SQL: "INVALID SQL STATEMENT"},
 				},
 			}

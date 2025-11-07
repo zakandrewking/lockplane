@@ -12,6 +12,7 @@ import (
 
 	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/internal/parser"
+	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -303,7 +304,7 @@ func ValidateJSONSchema(path string) error {
 }
 
 // LoadJSONPlan loads and validates a JSON plan file, returning a Plan
-func LoadJSONPlan(path string) (*Plan, error) {
+func LoadJSONPlan(path string) (*planner.Plan, error) {
 	// Read the JSON file
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -311,7 +312,7 @@ func LoadJSONPlan(path string) (*Plan, error) {
 	}
 
 	// Parse into Plan
-	var plan Plan
+	var plan planner.Plan
 	if err := json.Unmarshal(data, &plan); err != nil {
 		return nil, fmt.Errorf("failed to parse plan JSON: %w", err)
 	}

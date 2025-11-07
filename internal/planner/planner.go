@@ -1,4 +1,4 @@
-package main
+package planner
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ func GeneratePlan(diff *schema.SchemaDiff, driver database.Driver) (*Plan, error
 }
 
 // GeneratePlanWithHash creates a migration plan with a source schema hash using the provided driver
-func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *Schema, driver database.Driver) (*Plan, error) {
+func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema, driver database.Driver) (*Plan, error) {
 	plan := &Plan{
 		Steps: []PlanStep{},
 	}

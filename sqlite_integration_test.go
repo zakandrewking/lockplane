@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"github.com/lockplane/lockplane/internal/planner"
 	"os"
 	"strings"
 	"testing"
@@ -46,7 +47,7 @@ CREATE TABLE tasks (
 	}
 
 	// Generate plan
-	plan, err := GeneratePlanWithHash(diff, before, driver)
+	plan, err := planner.GeneratePlanWithHash(diff, before, driver)
 	if err != nil {
 		t.Fatalf("failed to generate plan: %v", err)
 	}
@@ -110,7 +111,7 @@ CREATE TABLE users (
 	}
 
 	// Generate plan
-	plan, err := GeneratePlanWithHash(diff, before, driver)
+	plan, err := planner.GeneratePlanWithHash(diff, before, driver)
 	if err != nil {
 		t.Fatalf("failed to generate plan: %v", err)
 	}
@@ -182,7 +183,7 @@ CREATE INDEX idx_products_name ON products(name);
 	}
 
 	// Generate plan
-	plan, err := GeneratePlanWithHash(diff, before, driver)
+	plan, err := planner.GeneratePlanWithHash(diff, before, driver)
 	if err != nil {
 		t.Fatalf("failed to generate plan: %v", err)
 	}
@@ -263,7 +264,7 @@ CREATE TABLE notes (
 	}
 
 	// Generate forward plan
-	forwardPlan, err := GeneratePlanWithHash(diff, before, driver)
+	forwardPlan, err := planner.GeneratePlanWithHash(diff, before, driver)
 	if err != nil {
 		t.Fatalf("failed to generate forward plan: %v", err)
 	}
@@ -281,7 +282,7 @@ CREATE TABLE notes (
 
 	// Generate rollback plan (reverse diff)
 	reverseDiff := schema.DiffSchemas(after, before)
-	rollbackPlan, err := GeneratePlanWithHash(reverseDiff, after, driver)
+	rollbackPlan, err := planner.GeneratePlanWithHash(reverseDiff, after, driver)
 	if err != nil {
 		t.Fatalf("failed to generate rollback plan: %v", err)
 	}
@@ -357,7 +358,7 @@ CREATE INDEX idx_books_author ON books(author_id);
 
 	// Generate plan between introspected and target
 	diff := schema.DiffSchemas((*Schema)(introspectedSchema), targetSchema)
-	plan, err := GeneratePlanWithHash(diff, (*Schema)(introspectedSchema), driver)
+	plan, err := planner.GeneratePlanWithHash(diff, (*Schema)(introspectedSchema), driver)
 	if err != nil {
 		t.Fatalf("failed to generate plan: %v", err)
 	}

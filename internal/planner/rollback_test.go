@@ -1,14 +1,15 @@
-package main
+package planner
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/database/postgres"
 )
 
 func TestGenerateRollback_CreateTable(t *testing.T) {
-	beforeSchema := &Schema{Tables: []Table{}}
+	beforeSchema := &database.Schema{Tables: []database.Table{}}
 
 	forwardPlan := &Plan{
 		Steps: []PlanStep{
@@ -36,11 +37,11 @@ func TestGenerateRollback_CreateTable(t *testing.T) {
 }
 
 func TestGenerateRollback_DropTable(t *testing.T) {
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "old_table",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "name", Type: "text", Nullable: false},
 				},
@@ -74,11 +75,11 @@ func TestGenerateRollback_DropTable(t *testing.T) {
 }
 
 func TestGenerateRollback_AddColumn(t *testing.T) {
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 				},
 			},
@@ -111,11 +112,11 @@ func TestGenerateRollback_AddColumn(t *testing.T) {
 }
 
 func TestGenerateRollback_DropColumn(t *testing.T) {
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "deprecated_field", Type: "text", Nullable: true},
 				},
@@ -149,11 +150,11 @@ func TestGenerateRollback_DropColumn(t *testing.T) {
 }
 
 func TestGenerateRollback_AlterColumnType(t *testing.T) {
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "age", Type: "integer", Nullable: true},
 				},
@@ -187,11 +188,11 @@ func TestGenerateRollback_AlterColumnType(t *testing.T) {
 }
 
 func TestGenerateRollback_SetNotNull(t *testing.T) {
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "email", Type: "text", Nullable: true},
 				},
 			},
@@ -224,11 +225,11 @@ func TestGenerateRollback_SetNotNull(t *testing.T) {
 }
 
 func TestGenerateRollback_CreateIndex(t *testing.T) {
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "email", Type: "text", Nullable: false},
 				},
 			},
@@ -261,14 +262,14 @@ func TestGenerateRollback_CreateIndex(t *testing.T) {
 }
 
 func TestGenerateRollback_DropIndex(t *testing.T) {
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "email", Type: "text", Nullable: false},
 				},
-				Indexes: []Index{
+				Indexes: []database.Index{
 					{Name: "idx_old", Columns: []string{"email"}, Unique: false},
 				},
 			},
@@ -301,11 +302,11 @@ func TestGenerateRollback_DropIndex(t *testing.T) {
 }
 
 func TestGenerateRollback_ComplexMigration(t *testing.T) {
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "email", Type: "text", Nullable: false},
 				},
@@ -351,11 +352,11 @@ func TestGenerateRollback_ComplexMigration(t *testing.T) {
 
 func TestGenerateRollback_SetDefault(t *testing.T) {
 	defaultVal := "0"
-	beforeSchema := &Schema{
-		Tables: []Table{
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "score", Type: "integer", Nullable: true, Default: &defaultVal},
 				},
 			},
