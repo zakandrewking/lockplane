@@ -1,294 +1,537 @@
 # Lockplane Roadmap
 
-This roadmap is organized around the 8 major production pain points teams face when managing Postgres schemas while shipping fast. Each section explains the problem, how Lockplane addresses it today, and what's planned.
+**Mission:** Help teams safely manage database schemas in production—and help them adopt best-in-class tools like [pgroll](https://github.com/xataio/pgroll) when they need zero-downtime migrations.
 
-## The 8 Big Problems in Production Postgres Schema Management
+## Philosophy: Don't Recreate, Integrate
+
+**pgroll** is the state-of-the-art for zero-downtime Postgres migrations. It uses schema versioning (via views) and expand/contract patterns to keep applications running during schema changes.
+
+**Lockplane's role:**
+- **Schema authoring** - Define schemas declaratively, not as migration scripts
+- **Migration planning** - Generate migration plans (including pgroll migrations) from schema diffs
+- **Validation & testing** - Test migrations on shadow databases before production
+- **Multi-database support** - SQLite, libSQL, eventually MySQL (pgroll is Postgres-only)
+- **Adoption path** - Start simple, graduate to pgroll when you need zero-downtime
+
+---
+
+## Core Strategy: Lockplane + pgroll Integration
+
+### Current State (Lockplane Today)
+
+Lockplane provides:
+- Declarative JSON schema format (`desired.json`)
+- Schema introspection from live databases
+- Diff generation (compare desired vs. actual)
+- Migration plan generation
+- Automatic rollback plans
+- Shadow DB validation
+- Multi-database support (PostgreSQL, SQLite, libSQL)
+
+### Target State (Lockplane + pgroll)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. Author schema in Lockplane JSON                        │
+│     (easier than writing migration files by hand)          │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. Lockplane generates diff & validates safety             │
+│     - Shadow DB testing                                     │
+│     - Detect dangerous operations                           │
+│     - Estimate impact                                       │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. Choose execution path:                                  │
+│                                                             │
+│     Simple change (add nullable column, create table)?      │
+│     → Use traditional Lockplane apply                       │
+│                                                             │
+│     Need zero-downtime (alter column, add NOT NULL)?       │
+│     → Export to pgroll format                               │
+│     → pgroll start migration.yaml                           │
+│     → Deploy new app version                                │
+│     → pgroll complete                                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- Better authoring experience than writing pgroll YAML by hand
+- Validation before execution
+- Flexibility to use simple migrations when zero-downtime isn't needed
+- Clear upgrade path: start with Lockplane, add pgroll when needed
+
+---
+
+## Roadmap Organized by Production Pain Points
+
+Each section shows how Lockplane + pgroll address real production challenges.
 
 ### 1. Backward-Compatible Changes (Expand/Contract Pattern)
 
 **The Problem:**
-You can't do "one big DDL + code deploy" in prod. You need multi-step, backward-compatible changes: add new column, backfill, dual-write, flip reads, then drop old stuff. This is evolutionary database design—treat schema changes as incremental, reversible steps, not big-bang redesigns.
+You can't do "one big DDL + code deploy" in prod. You need multi-step, backward-compatible changes: add new column, backfill, dual-write, flip reads, then drop old stuff. This is evolutionary database design.
 
-**How Lockplane Helps Today:**
-- **Declarative schema** naturally supports expand/contract: define your target state, generate the minimal migration
-- **Shadow DB validation** catches breaking changes before they hit prod
-- **Automatic rollback generation** for every forward migration gives you a safety net
+**How pgroll Solves This:**
+- Expand/contract pattern is pgroll's core strength
+- Schema versioning via views allows old and new versions to coexist
+- Automatic dual-write triggers keep old and new columns in sync
+- `pgroll start` → expand, `pgroll complete` → contract
+
+**How Lockplane Helps:**
+- **Today:**
+  - Declarative schema naturally expresses target state without manual expand/contract steps
+  - Shadow DB validation catches breaking changes before prod
+  - Automatic rollback generation provides safety net
 
 **Roadmap:**
-- [ ] **Multi-step migration planning** - Detect operations that require expand/contract and generate the full sequence (e.g., "add nullable column" → "backfill" → "add NOT NULL constraint")
-- [ ] **Compatibility checker** - Analyze schema changes and flag operations that break backward compatibility with running application versions
-- [ ] **Migration tags** - Label migrations with app version compatibility ranges to coordinate deployments
+- [ ] **Generate pgroll migrations from Lockplane diffs**
+  - Detect operations that require expand/contract (alter column type, add NOT NULL, etc.)
+  - Generate pgroll YAML with correct `up`/`down` expressions
+  - Map Lockplane JSON types to pgroll operations
+
+- [ ] **Smart execution mode selection**
+  - Analyze migration: "This can be done with simple DDL" vs. "This needs pgroll"
+  - Flag operations that benefit from zero-downtime:
+    - ALTER COLUMN TYPE
+    - ADD CONSTRAINT NOT NULL
+    - DROP COLUMN with data
+    - Rename operations
+  - Recommend: "Use pgroll for this migration"
+
+- [ ] **Validate pgroll migrations before execution**
+  - Parse pgroll YAML and test on shadow DB
+  - Verify `up`/`down` expressions work correctly
+  - Measure impact of triggers and view overhead
 
 ### 2. Avoiding Locks and Downtime During DDL
 
 **The Problem:**
-Many Postgres DDL operations take heavyweight locks that block reads/writes or get blocked by long transactions. A "simple" ALTER TABLE can stall your whole app. Postgres-specific mitigations (CREATE INDEX CONCURRENTLY, lock_timeout, NOT VALID constraints) reduce this but add complexity.
+Many Postgres DDL operations take heavyweight locks that block reads/writes. A "simple" ALTER TABLE can stall your whole app.
 
-**How Lockplane Helps Today:**
-- **Validation reports** warn about potentially dangerous operations
-- **Shadow DB testing** lets you measure lock duration and impact before prod
+**How pgroll Solves This:**
+- Zero-downtime migrations are pgroll's primary goal
+- Schema versioning via views eliminates locking on ALTER COLUMN
+- Expand/contract pattern means no blocking DDL on critical path
+
+**How Lockplane Helps:**
+- **Today:**
+  - Validation reports warn about potentially dangerous operations
+  - Shadow DB testing lets you measure lock duration before prod
 
 **Roadmap:**
-- [ ] **Lock-safe DDL rewriting** - Automatically rewrite dangerous operations into safe patterns:
-  - `CREATE INDEX` → `CREATE INDEX CONCURRENTLY`
-  - `ADD COLUMN NOT NULL DEFAULT` → two-step with NOT VALID + VALIDATE
-  - `ALTER COLUMN TYPE` → expand/contract with new column + trigger
-- [ ] **Lock timeout configuration** - Inject `SET lock_timeout` for DDL statements
-- [ ] **Operation timing estimates** - Measure DDL duration on shadow DB and report expected lock times
-- [ ] **Batched operations** - Break large index builds or constraint validations into smaller chunks
+- [ ] **Automatic pgroll routing for lock-heavy operations**
+  - Detect DDL that would lock tables for significant time
+  - Auto-suggest pgroll execution path
+  - Show comparison: "Traditional: 30s lock. pgroll: zero downtime"
+
+- [ ] **Lock-safe rewrites for non-pgroll migrations**
+  - For simple migrations that don't need full pgroll:
+    - `CREATE INDEX` → `CREATE INDEX CONCURRENTLY`
+    - `ADD CONSTRAINT` → `ADD CONSTRAINT NOT VALID` + `VALIDATE CONSTRAINT`
+  - Inject `SET lock_timeout` for safety
+
+- [ ] **Operation timing estimates from shadow DB**
+  - Measure DDL duration on shadow DB
+  - Report expected lock times
+  - Help decide: "Is pgroll worth the complexity for this change?"
 
 ### 3. Large Data Migrations & Backfills
 
 **The Problem:**
-Schema changes require moving or transforming data: backfilling new columns, splitting/merging tables, normalizing blobs. Doing this online requires chunked/batched updates, background workers, and careful management of transaction size, vacuum, and index bloat.
+Schema changes require moving or transforming data: backfilling new columns, splitting/merging tables. Doing this online requires chunked updates and careful transaction management.
 
-**How Lockplane Helps Today:**
-- **Shadow DB validation** lets you test backfill performance on realistic data before prod
-- **Explicit migration plans** show exactly what SQL will run
+**How pgroll Solves This:**
+- Automatic column backfilling with `up` expressions
+- Dual-write triggers handle ongoing writes during backfill
+- No manual batching needed for most cases
+
+**How Lockplane Helps:**
+- **Today:**
+  - Shadow DB validation tests backfill performance on realistic data
+  - Explicit migration plans show exactly what SQL runs
 
 **Roadmap:**
-- [ ] **Batched backfill generation** - For data-heavy operations, generate chunked UPDATE statements with progress tracking:
-  ```sql
-  -- Generated by Lockplane
-  UPDATE users SET email_normalized = LOWER(email)
-  WHERE id >= $1 AND id < $2
-  AND email_normalized IS NULL;
-  ```
-- [ ] **Backfill estimator** - Calculate expected duration based on shadow DB row counts and statistics
-- [ ] **Progress tracking** - Monitor backfill progress, resume from checkpoints on failure
-- [ ] **Vacuum & bloat management** - Automatically insert VACUUM/ANALYZE commands after large updates
+- [ ] **Generate pgroll `up`/`down` expressions**
+  - For computed columns: `up: "expression"`, `down: "reverse"`
+  - For type conversions: `up: "CAST(col AS newtype)"`
+  - For splits: generate expressions to populate new columns from old
+
+- [ ] **Backfill performance estimation**
+  - Test on shadow DB to estimate duration
+  - Report: "Backfill will process ~1M rows, estimated time: 3 minutes"
+  - Warn if backfill expression is expensive (full table scan)
+
+- [ ] **Batched backfill mode for massive tables**
+  - When pgroll's automatic backfill would be too slow
+  - Generate chunked UPDATE scripts with progress tracking
+  - Coordinate with pgroll: backfill before `pgroll complete`
 
 ### 4. Rollbacks Are Hard (Stateful System, Irreversible Changes)
 
 **The Problem:**
-DB changes aren't trivially reversible once new data has been written in the "new" shape (dropped columns, destructive transforms). Blue-green/shadow DB strategies exist precisely because safe in-place rollback is non-trivial.
+DB changes aren't trivially reversible once new data has been written in the "new" shape (dropped columns, destructive transforms).
 
-**How Lockplane Helps Today:**
-- **Automatic rollback generation** for every forward migration
-- **Shadow DB testing** provides a safe environment to validate both forward and rollback before prod
+**How pgroll Solves This:**
+- Instant rollback with `pgroll rollback`
+- Old schema version remains active until `pgroll complete`
+- No data loss during rollback before completion
+
+**How Lockplane Helps:**
+- **Today:**
+  - Automatic rollback generation for traditional migrations
+  - Shadow DB testing validates both forward and rollback
 
 **Roadmap:**
-- [ ] **Rollback safety analysis** - Flag migrations where rollback would be lossy or dangerous:
-  - "⚠️ Rollback drops column `new_status` with data written after migration"
-  - "✅ Rollback is safe: only removes empty column"
-- [ ] **Blue-green migration mode** - Generate plans for parallel schema deployment:
-  1. Deploy new schema alongside old
-  2. Dual-write to both
-  3. Validate new schema
-  4. Cutover reads
-  5. Remove old schema
-- [ ] **Point-in-time recovery guides** - Document when PITR is safer than in-place rollback
+- [ ] **Rollback safety analysis**
+  - Flag migrations where rollback would be lossy:
+    - "⚠️ After pgroll complete, rollback requires new migration"
+    - "✅ Safe to rollback: pgroll maintains old schema until complete"
+  - Show data loss risk: "Rollback drops column with N rows of new data"
+
+- [ ] **Generate traditional rollback when pgroll isn't available**
+  - For non-Postgres databases
+  - For simple migrations that don't use pgroll
+  - Document point-in-time recovery as alternative
+
+- [ ] **pgroll completion safety checks**
+  - Before recommending `pgroll complete`, verify old schema is unused
+  - Check application deployments: "3 pods still using old schema version"
+  - Suggest wait time: "Safe to complete in 1 hour when old pods terminate"
 
 ### 5. Schema Drift Between Environments
 
 **The Problem:**
-Hotfixes in prod, manual psql changes, and inconsistent migration runs across dev/stage/prod cause drift. Debugging and reproducing issues becomes painful. Multi-env/multi-project setups make this worse.
+Hotfixes in prod, manual psql changes, and inconsistent migration runs across dev/stage/prod cause drift. Debugging becomes painful.
 
-**How Lockplane Helps Today:**
-- **Introspection + diff** detects drift: compare your desired schema to any environment
-- **Declarative source of truth** (desired.json) eliminates "which migration did we run where?" confusion
-- **Environment-specific configs** in lockplane.toml keep credentials and URLs organized
+**How pgroll Helps:**
+- Version tracking in `pgroll.internal_schema` table
+- Clear migration history
+
+**How Lockplane Helps:**
+- **Today:**
+  - Introspection + diff detects drift: compare desired schema to any environment
+  - Declarative source of truth (`desired.json`) eliminates "which migration ran where?" confusion
+  - Environment-specific configs in `lockplane.toml`
 
 **Roadmap:**
-- [ ] **Drift detection CI workflow** - GitHub Action that runs `lockplane plan` on each environment and flags drift
-- [ ] **Schema fingerprinting** - Hash schema state for quick drift detection across environments
-- [ ] **Drift reconciliation** - Generate fix-up migrations to bring drifted environments back to desired state
-- [ ] **Read-only mode** - Prevent manual changes by using restricted DB roles during normal operations
-- [ ] **Audit log** - Track all schema changes with who/when/why metadata
+- [ ] **Drift detection across Lockplane + pgroll**
+  - Read `pgroll.internal_schema` to understand pgroll state
+  - Introspect actual schema (views + physical tables)
+  - Compare to desired state
+  - Report: "Stage has 3 uncommitted pgroll migrations"
+
+- [ ] **Drift reconciliation**
+  - Generate fix-up migrations to bring drifted environments back
+  - Detect manual schema changes outside pgroll
+  - Suggest: "Convert manual changes to Lockplane JSON + generate pgroll migration"
+
+- [ ] **CI workflow for drift detection**
+  - GitHub Action that checks each environment daily
+  - Flag: "Production schema doesn't match desired.json"
+  - Block deployments if critical drift detected
 
 ### 6. Catching Dangerous Migrations Before They Hit Prod
 
 **The Problem:**
-Dropping/renaming columns, changing types, adding NOT NULL with defaults, or running heavy UPDATE/DELETE can all be dangerous in production. It's easy to shoot yourself in the foot. Libraries like Strong Migrations exist solely to detect and block unsafe operations.
+Dropping columns, changing types, adding NOT NULL can all be dangerous in production. Easy to shoot yourself in the foot.
 
-**How Lockplane Helps Today:**
-- **Validation reports** flag risky operations with explanations
-- **Shadow DB testing** catches issues before they reach prod
-- **Explicit migration plans** force you to review SQL before applying
+**How pgroll Helps:**
+- Enforces safe patterns through its operation model
+- Can't drop columns in unsafe ways (expand/contract prevents this)
+
+**How Lockplane Helps:**
+- **Today:**
+  - Validation reports flag risky operations
+  - Shadow DB testing catches issues before prod
+  - Explicit migration plans force review
 
 **Roadmap:**
-- [ ] **Safety levels** - Configurable risk tolerance:
-  - `strict`: Block all potentially dangerous operations
-  - `moderate`: Warn but allow with confirmation (default)
-  - `permissive`: Log warnings only
-- [ ] **Dangerous operation detection**:
-  - DROP COLUMN / DROP TABLE without expand/contract
-  - ALTER COLUMN TYPE requiring table rewrite
-  - ADD CONSTRAINT without NOT VALID
-  - Backfills without batching on large tables
-  - Index creation without CONCURRENTLY
-- [ ] **Impact estimation** - Report "this will lock table X for ~30s based on shadow DB timing"
-- [ ] **Required review annotations** - Force explicit approval comments for dangerous operations
+- [ ] **Safety levels with pgroll recommendations**
+  - `strict`: Require pgroll for all breaking changes
+  - `moderate`: Warn "This could use pgroll for zero-downtime"
+  - `permissive`: Allow traditional migrations with confirmation
+
+- [ ] **Dangerous operation detection + pgroll suggestions**
+  - DROP COLUMN → "Use pgroll to safely deprecate this column first"
+  - ALTER COLUMN TYPE → "pgroll can do this with zero downtime"
+  - ADD NOT NULL → "pgroll handles backfill + constraint safely"
+  - Show side-by-side: traditional risk vs. pgroll safety
+
+- [ ] **Impact estimation**
+  - Test on shadow DB
+  - Report: "Traditional: locks table for 30s. pgroll: zero downtime"
+  - Help users make informed decisions
 
 ### 7. Testing Migrations Realistically (Prod-Like Data + CI)
 
 **The Problem:**
-Migrations pass in CI but fail or degrade performance on real prod datasets due to data volume, skew, or pathological rows/constraints. You need automated tests, continuous integration, and dev sandboxes with realistic data snapshots.
+Migrations pass in CI but fail on real prod datasets due to data volume, skew, or pathological rows.
 
-**How Lockplane Helps Today:**
-- **Shadow DB testing** - Test every migration on a prod-like database before applying to prod
-- **Environment isolation** - Each environment (dev/stage/prod) has its own config and shadow DB
-- **Validation reports** surface issues early
+**How pgroll Helps:**
+- Can test `pgroll start` on staging before production
+- Shadow schema versions don't affect production
+
+**How Lockplane Helps:**
+- **Today:**
+  - Shadow DB testing on prod-like data before applying anywhere
+  - Environment isolation (dev/stage/prod configs)
+  - Validation reports surface issues early
 
 **Roadmap:**
-- [ ] **CI integration guides** - Documented patterns for GitHub Actions, GitLab CI, CircleCI
-- [ ] **Schema test fixtures** - Generate test data that exercises edge cases (nullable columns, large text, Unicode, etc.)
-- [ ] **Performance regression detection** - Compare query plans and timing before/after migration on shadow DB
-- [ ] **Prod snapshot automation** - Tools to safely copy prod schema + anonymized sample data to staging
-- [ ] **Load testing mode** - Run migrations under simulated production load to measure impact
+- [ ] **Test pgroll migrations on shadow DB**
+  - Run `pgroll start` on shadow DB first
+  - Verify `up`/`down` expressions work with real data
+  - Measure trigger overhead and view query performance
+  - Test rollback path
 
-### 8. Cross-Team / Cross-Service Coordination and Ownership
+- [ ] **CI integration for Lockplane + pgroll workflow**
+  - Documented patterns for GitHub Actions, GitLab CI
+  - Auto-generate pgroll migrations in CI
+  - Test on shadow DB
+  - Comment on PR with safety report and pgroll YAML
+
+- [ ] **Performance regression detection**
+  - Compare query plans before/after migration
+  - Test queries through pgroll views vs. direct tables
+  - Warn: "View adds 10ms overhead to SELECT queries"
+
+### 8. Cross-Team / Cross-Service Coordination
 
 **The Problem:**
-In microservices or multi-team environments, many apps/ETL jobs/reporting systems depend on the same Postgres schema. Coordinating breaking changes and deprecations across them is socially and operationally hard. This is a cultural and coordination challenge, not just technical.
+Many apps/ETL jobs/reporting systems depend on the same Postgres schema. Coordinating breaking changes across teams is hard.
 
-**How Lockplane Helps Today:**
-- **Declarative schema** serves as a shared source of truth for all teams
-- **Migration plans** are reviewable artifacts that can be shared in PRs
-- **Explicit descriptions** for each operation explain *why* the change is being made
+**How pgroll Helps:**
+- Schema versioning allows teams to migrate independently
+- Old and new versions coexist during transition
+- Teams can test against new schema before committing
+
+**How Lockplane Helps:**
+- **Today:**
+  - Declarative schema serves as shared source of truth
+  - Migration plans are reviewable artifacts in PRs
+  - Explicit descriptions explain *why* changes are made
 
 **Roadmap:**
-- [ ] **Schema ownership annotations** - Document which team/service owns which tables:
+- [ ] **Schema ownership annotations in Lockplane JSON**
   ```json
   {
     "tables": [
       {
         "name": "users",
         "owner": "auth-team",
-        "consumers": ["api-service", "analytics-etl"]
+        "consumers": ["api-service", "analytics-etl"],
+        "breaking_change_notifications": ["#eng-auth", "#data-platform"]
       }
     ]
   }
   ```
-- [ ] **Breaking change notifications** - Detect schema changes that affect downstream consumers and generate alerts
-- [ ] **Deprecation timelines** - Mark columns/tables as deprecated with removal dates:
-  ```json
-  {
-    "name": "legacy_status",
-    "deprecated": true,
-    "removal_date": "2025-03-01",
-    "replacement": "status_v2"
-  }
-  ```
-- [ ] **Consumer impact analysis** - Scan application code/queries to identify which services will break
-- [ ] **Migration dependencies** - Express "service A must deploy before we can run migration B"
-- [ ] **Changelog generation** - Auto-generate human-readable schema change summaries for cross-team communication
+
+- [ ] **Deprecation timelines with pgroll coordination**
+  - Mark columns as deprecated with removal dates
+  - Generate pgroll migration that maintains both versions
+  - Notify consumers: "You have 30 days to migrate to new schema version"
+  - Auto-check: "3 services still using old schema version"
+
+- [ ] **Changelog generation**
+  - Human-readable summary of schema changes
+  - Explain pgroll migration phases
+  - Show which teams need to act: "API team: update to use new column"
 
 ---
 
 ## Additional Roadmap Items
+
+### pgroll Integration (Core Focus)
+
+- [ ] **Lockplane → pgroll migration generator**
+  - Parse Lockplane JSON schema diff
+  - Generate pgroll YAML/JSON with operations
+  - Map types, constraints, indexes to pgroll format
+  - Generate `up`/`down` SQL expressions for backfills
+
+- [ ] **pgroll → Lockplane schema importer**
+  - Read pgroll migration history
+  - Reconstruct desired schema state
+  - Import as Lockplane JSON
+  - Use case: "I'm using pgroll, want to add Lockplane tooling"
+
+- [ ] **Bidirectional sync**
+  - Keep Lockplane JSON in sync with pgroll migrations
+  - Watch pgroll migrations, update desired.json
+  - Detect manual pgroll migrations, incorporate into Lockplane
+
+- [ ] **pgroll operation coverage**
+  - Support all pgroll operations:
+    - create_table, drop_table, rename_table
+    - add_column, drop_column, alter_column, rename_column
+    - create_index, drop_index
+    - add_constraint, drop_constraint
+    - sql (raw SQL operations)
+  - Map each to Lockplane schema primitives
+
+- [ ] **pgroll execution helpers**
+  - `lockplane pgroll start` - wrap pgroll CLI
+  - `lockplane pgroll status` - show migration state
+  - `lockplane pgroll complete` - finalize with safety checks
+  - `lockplane pgroll rollback` - revert with analysis
 
 ### Database Support
 
 **Current:** PostgreSQL, SQLite, libSQL
 
 **Planned:**
-- [ ] MySQL/MariaDB support
-- [ ] CockroachDB support
-- [ ] SQLite → Postgres migration path
+- [ ] **Postgres (with pgroll)** - First-class integration, generate pgroll migrations
+- [ ] **Postgres (without pgroll)** - Traditional migrations for simple changes
+- [ ] SQLite / libSQL - Traditional migrations (no zero-downtime option)
+- [ ] MySQL/MariaDB - Explore gh-ost or pt-online-schema-change integration
+- [ ] CockroachDB - Research zero-downtime migration tools in ecosystem
+
+**Strategy:** For each database, integrate with its best-in-class migration tool rather than reinventing.
 
 ### Migration Management
 
-- [ ] **Migration history tracking** - Store applied migrations in DB (like rails_migrations table)
+- [ ] **Migration history tracking**
+  - For traditional migrations: store in `lockplane.migrations` table
+  - For pgroll: read from `pgroll.internal_schema`
+  - Unified view across both
+
 - [ ] **Idempotent migrations** - Safe to run multiple times
+
 - [ ] **Partial migrations** - Apply only specific tables or operations
-- [ ] **Migration squashing** - Combine many small migrations into one optimized migration
+
+- [ ] **Migration squashing** - Combine many small migrations into one optimized migration (useful before pgroll adoption)
 
 ### Developer Experience
 
-- [ ] **Interactive migration builder** - TUI for generating migrations step-by-step
-- [ ] **Schema visualization** - Generate ERD diagrams from desired.json
-- [ ] **Migration templates** - Common patterns (add column, split table, etc.)
-- [ ] **Watch mode** - Auto-regenerate plans when desired.json changes
+- [ ] **Interactive migration builder (TUI)**
+  - Step-by-step: define table, add columns, set constraints
+  - Generate both Lockplane JSON and pgroll YAML
+  - Preview migration plan before committing
+
+- [ ] **Schema visualization**
+  - Generate ERD diagrams from desired.json
+  - Show table relationships, foreign keys
+  - Annotate with ownership and pgroll migration status
+
+- [ ] **Migration templates**
+  - Common patterns: add column, split table, normalize data
+  - Generate Lockplane JSON + pgroll YAML from template
+  - Example: "Add soft delete column to table"
+
+- [ ] **Watch mode**
+  - Auto-regenerate plans when desired.json changes
+  - Show diff in terminal
+  - Instant feedback loop
+
+### Database Version Upgrades
+
+Help teams safely upgrade Postgres versions (12 → 13 → 14 → 15 → 16):
+
+- [ ] **Version compatibility checker**
+  - Analyze schema for deprecated features
+  - Check pgroll compatibility with new Postgres version
+  - Suggest rewrites for deprecated patterns
+
+- [ ] **Upgrade validation workflow**
+  1. Introspect current schema + pgroll state on old version
+  2. Test restore on new Postgres version in shadow DB
+  3. Verify pgroll operations work correctly
+  4. Compare query plans and performance
+  5. Generate compatibility report
+
+- [ ] **Extension compatibility**
+  - Track extension versions (PostGIS, pg_trgm, pgvector, timescaledb)
+  - Flag extensions needing updates before Postgres upgrade
+  - Generate upgrade sequence
 
 ### Integration & Ecosystem
 
-- [ ] **Prisma integration** - Import Prisma schema, export migrations
-- [ ] **Alembic integration** - Import/export for Python projects
-- [ ] **Supabase helpers** - First-class support for Supabase-specific features
+- [ ] **Prisma integration**
+  - Import Prisma schema → Lockplane JSON
+  - Export Lockplane migrations → Prisma migrations
+  - Or export Lockplane → pgroll for zero-downtime
+
+- [ ] **Alembic integration** (Python)
+  - Import Alembic schema
+  - Export to pgroll for zero-downtime Postgres
+
+- [ ] **Supabase helpers**
+  - First-class support for Supabase managed Postgres
+  - Guide: "Using pgroll with Supabase"
+  - Handle Supabase-specific tables (auth, storage)
+
+- [ ] **GitHub Actions**
+  - Pre-built workflow: generate pgroll migrations in CI
+  - Test on shadow DB
+  - Comment on PR with validation results
+  - Auto-merge if safety checks pass
+
 - [ ] **Terraform provider** - Manage schemas as infrastructure
-- [ ] **GitHub Actions** - Pre-built workflows for CI/CD
 
 ### Observability
 
-- [ ] **Migration metrics** - Track success/failure rates, duration, rollback frequency
-- [ ] **Schema health dashboard** - Visualize drift, migration status, risk levels across environments
-- [ ] **Alerting integrations** - Slack/PagerDuty notifications for dangerous operations
+- [ ] **Migration metrics**
+  - Track pgroll vs. traditional migration usage
+  - Success/failure rates, duration, rollback frequency
+  - Cost analysis: "pgroll adds 10ms query overhead but zero downtime"
 
-### Gradual Adoption & Migration Tools
+- [ ] **Schema health dashboard**
+  - Visualize drift, migration status, pgroll version status
+  - Show which environments have uncommitted migrations
+  - Track: "3 tables still on old pgroll schema version"
 
-#### pgroll Integration & Adoption Path
+- [ ] **Alerting integrations**
+  - Slack/PagerDuty notifications for dangerous operations
+  - Alert: "Production schema drifted from desired state"
+  - Alert: "pgroll migration stuck in incomplete state"
 
-[pgroll](https://github.com/xataio/pgroll) provides zero-downtime schema migrations with versioned schemas. Lockplane can complement pgroll and help teams adopt it gradually:
+---
 
-- [ ] **pgroll migration format export** - Convert Lockplane plans to pgroll migration format
-  - Export `desired.json` diffs as pgroll-compatible JSON migrations
-  - Map Lockplane operations to pgroll equivalents
-  - Generate versioned schema definitions
+## Documentation Strategy
 
-- [ ] **Hybrid migration mode** - Run both traditional and pgroll migrations side-by-side:
-  - Flag tables/schemas for pgroll management vs. traditional migrations
-  - Generate migration plans that respect pgroll-managed schemas
-  - Validate that changes don't conflict with pgroll versioning
+### Core Guides
 
-- [ ] **pgroll adoption guide** - Documentation and tooling for migration path:
-  - "Start with Lockplane, graduate to pgroll when you need zero-downtime"
-  - Conversion examples showing equivalent Lockplane → pgroll patterns
-  - Comparison matrix: when to use Lockplane vs. pgroll vs. both
+- [ ] **"Getting Started with Lockplane"** - Basic workflow, introspect → diff → plan → apply
+- [ ] **"When to Use pgroll"** - Decision matrix, examples of migrations that benefit
+- [ ] **"Lockplane + pgroll Tutorial"** - End-to-end workflow, schema change → pgroll generation → execution
+- [ ] **"Migrating from Prisma/Alembic/Flyway"** - Import existing schemas, adopt Lockplane + pgroll
+- [ ] **"Zero-Downtime Migration Patterns"** - Expand/contract recipes, pgroll best practices
 
-- [ ] **Schema version tracking** - Support pgroll's versioned schema model:
-  - Track which tables have multiple versions active
-  - Generate queries that work across schema versions
-  - Detect when old versions can be safely removed
+### Reference
 
-**Why this matters:** Teams shouldn't have to rip-and-replace their migration workflow. Lockplane can be the on-ramp to more sophisticated tools like pgroll, providing value at each stage of maturity.
+- [ ] **Lockplane JSON Schema Reference** - All fields, types, constraints
+- [ ] **pgroll Operation Mapping** - How Lockplane operations map to pgroll
+- [ ] **Safety Checker Rules** - What Lockplane validates, why it matters
+- [ ] **Command Reference** - All CLI commands with examples
 
-#### Database Version Upgrades
+---
 
-Help teams safely upgrade Postgres versions (e.g., 12 → 13 → 14 → 15 → 16):
+## Success Metrics
 
-- [ ] **Version compatibility checker** - Analyze schema for deprecated features:
-  - Detect incompatible types, functions, or syntax across Postgres versions
-  - Flag operations that behave differently in newer versions
-  - Suggest rewrites for deprecated patterns
+**Adoption goals:**
+1. Users start with Lockplane for schema authoring and validation
+2. Users graduate to pgroll when they need zero-downtime (with Lockplane generating migrations)
+3. Users continue using Lockplane for multi-database support (SQLite, MySQL)
+4. Users advocate for pgroll because Lockplane made it accessible
 
-- [ ] **Upgrade validation workflow**:
-  1. Introspect current schema on old Postgres version
-  2. Test restore/migration on new Postgres version in shadow DB
-  3. Compare query plans and performance
-  4. Generate compatibility report
-
-- [ ] **Pre-upgrade optimization** - Identify and fix issues before upgrading:
-  - Find unused indexes (bloat) to drop before pg_upgrade
-  - Detect tables that need VACUUM FULL
-  - Identify slow queries that might get worse (or better) in new version
-
-- [ ] **Extension compatibility** - Track extension version requirements:
-  - PostGIS, pg_trgm, pgvector, timescaledb, etc.
-  - Flag extensions that need updates before Postgres upgrade
-  - Generate upgrade sequence: "upgrade extension X, then Postgres, then extension Y"
-
-- [ ] **Post-upgrade tasks** - Generate checklist and automation:
-  - ANALYZE all tables to rebuild statistics
-  - Rebuild specific indexes that benefit from new version
-  - Update query hints or configurations
-  - Benchmark critical queries to verify performance
-
-- [ ] **Blue-green upgrade orchestration** - Generate plans for zero-downtime upgrades:
-  - Provision new Postgres version with pg_upgrade or logical replication
-  - Validate schema and data consistency
-  - Cutover sequence with rollback plan
-  - Monitor replication lag and performance during migration
-
-**Why this matters:** Major version upgrades are rare but high-risk. Teams often delay them due to complexity and fear of breaking changes. Automated validation and clear upgrade paths reduce that friction.
+**We succeed when:**
+- Teams say "Lockplane makes pgroll easy to adopt"
+- pgroll usage increases because Lockplane lowers the barrier
+- Users choose Lockplane + pgroll over proprietary migration tools
+- The Postgres ecosystem has better zero-downtime migration practices
 
 ---
 
 ## Future: lockplane-auth
 
-Define authentication rules once and target them to multiple data stores. `lockplane-auth` compiles a unified policy specification into row-level security policies for relational databases, Firestore security rules, or the closest equivalent that each supported database offers, ensuring consistent enforcement regardless of the underlying platform.
+Define authentication rules once and target them to multiple data stores. `lockplane-auth` compiles a unified policy specification into row-level security policies for relational databases, Firestore security rules, or the closest equivalent that each supported database offers.
 
-This extends Lockplane's philosophy of **write once, deploy everywhere** from schema management to security policies.
+This extends Lockplane's philosophy: **don't recreate best-in-class tools, help users adopt them**.
 
 ---
 
@@ -297,9 +540,10 @@ This extends Lockplane's philosophy of **write once, deploy everywhere** from sc
 See issues tagged with `roadmap` in the GitHub issue tracker. If you have ideas or want to tackle any of these items, open an issue to discuss the approach first.
 
 **Prioritization is driven by:**
-1. Production pain points (the 8 areas above)
-2. User requests and feedback
-3. Safety and correctness over convenience
-4. Real-world usage patterns
+1. **pgroll integration** - Core focus, highest priority
+2. Production pain points (the 8 areas above)
+3. User requests and feedback
+4. Multi-database support
+5. Developer experience improvements
 
-The goal is to make Postgres schema changes as safe and boring as deploying application code.
+**Our mission:** Make schema changes safe and boring. Help teams adopt pgroll. Don't reinvent wheels.
