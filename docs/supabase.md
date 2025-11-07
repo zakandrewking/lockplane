@@ -1,3 +1,10 @@
+---
+layout: default
+title: Using Lockplane with Supabase
+nav_order: 4
+has_children: true
+---
+
 # Using Lockplane with Supabase
 
 Supabase projects run on managed PostgreSQL. Lockplane gives you declarative schema control, safety checks, and reversible plans that complement Supabase's migration tooling.

@@ -1,3 +1,10 @@
+---
+layout: default
+title: Existing Supabase Project
+parent: Using Lockplane with Supabase
+nav_order: 2
+---
+
 # Using Lockplane with an Existing Supabase Project
 
 Add declarative schema control, safety checks, and reversible migrations to your existing Supabase project.

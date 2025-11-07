@@ -1,3 +1,10 @@
+---
+layout: default
+title: New Supabase Project
+parent: Using Lockplane with Supabase
+nav_order: 1
+---
+
 # Using Lockplane with a New Supabase Project
 
 Start your new Supabase project with declarative schema control from day one.
