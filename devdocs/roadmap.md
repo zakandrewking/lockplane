@@ -215,6 +215,73 @@ In microservices or multi-team environments, many apps/ETL jobs/reporting system
 - [ ] **Schema health dashboard** - Visualize drift, migration status, risk levels across environments
 - [ ] **Alerting integrations** - Slack/PagerDuty notifications for dangerous operations
 
+### Gradual Adoption & Migration Tools
+
+#### pgroll Integration & Adoption Path
+
+[pgroll](https://github.com/xataio/pgroll) provides zero-downtime schema migrations with versioned schemas. Lockplane can complement pgroll and help teams adopt it gradually:
+
+- [ ] **pgroll migration format export** - Convert Lockplane plans to pgroll migration format
+  - Export `desired.json` diffs as pgroll-compatible JSON migrations
+  - Map Lockplane operations to pgroll equivalents
+  - Generate versioned schema definitions
+
+- [ ] **Hybrid migration mode** - Run both traditional and pgroll migrations side-by-side:
+  - Flag tables/schemas for pgroll management vs. traditional migrations
+  - Generate migration plans that respect pgroll-managed schemas
+  - Validate that changes don't conflict with pgroll versioning
+
+- [ ] **pgroll adoption guide** - Documentation and tooling for migration path:
+  - "Start with Lockplane, graduate to pgroll when you need zero-downtime"
+  - Conversion examples showing equivalent Lockplane → pgroll patterns
+  - Comparison matrix: when to use Lockplane vs. pgroll vs. both
+
+- [ ] **Schema version tracking** - Support pgroll's versioned schema model:
+  - Track which tables have multiple versions active
+  - Generate queries that work across schema versions
+  - Detect when old versions can be safely removed
+
+**Why this matters:** Teams shouldn't have to rip-and-replace their migration workflow. Lockplane can be the on-ramp to more sophisticated tools like pgroll, providing value at each stage of maturity.
+
+#### Database Version Upgrades
+
+Help teams safely upgrade Postgres versions (e.g., 12 → 13 → 14 → 15 → 16):
+
+- [ ] **Version compatibility checker** - Analyze schema for deprecated features:
+  - Detect incompatible types, functions, or syntax across Postgres versions
+  - Flag operations that behave differently in newer versions
+  - Suggest rewrites for deprecated patterns
+
+- [ ] **Upgrade validation workflow**:
+  1. Introspect current schema on old Postgres version
+  2. Test restore/migration on new Postgres version in shadow DB
+  3. Compare query plans and performance
+  4. Generate compatibility report
+
+- [ ] **Pre-upgrade optimization** - Identify and fix issues before upgrading:
+  - Find unused indexes (bloat) to drop before pg_upgrade
+  - Detect tables that need VACUUM FULL
+  - Identify slow queries that might get worse (or better) in new version
+
+- [ ] **Extension compatibility** - Track extension version requirements:
+  - PostGIS, pg_trgm, pgvector, timescaledb, etc.
+  - Flag extensions that need updates before Postgres upgrade
+  - Generate upgrade sequence: "upgrade extension X, then Postgres, then extension Y"
+
+- [ ] **Post-upgrade tasks** - Generate checklist and automation:
+  - ANALYZE all tables to rebuild statistics
+  - Rebuild specific indexes that benefit from new version
+  - Update query hints or configurations
+  - Benchmark critical queries to verify performance
+
+- [ ] **Blue-green upgrade orchestration** - Generate plans for zero-downtime upgrades:
+  - Provision new Postgres version with pg_upgrade or logical replication
+  - Validate schema and data consistency
+  - Cutover sequence with rollback plan
+  - Monitor replication lag and performance during migration
+
+**Why this matters:** Major version upgrades are rare but high-risk. Teams often delay them due to complexity and fear of breaking changes. Automated validation and clear upgrade paths reduce that friction.
+
 ---
 
 ## Future: lockplane-auth
