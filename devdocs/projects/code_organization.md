@@ -7,22 +7,31 @@
 - [x] Phase 3a: Move internal/config (COMPLETE)
 - [x] Phase 3b: Move internal/parser (COMPLETE)
 - [x] Phase 3c: Move internal/testutil (COMPLETE)
-- [ ] Phase 3d: Move internal/schema (IN PROGRESS - blocked by circular dependencies)
-- [ ] Phase 3e: Move internal/planner
-- [ ] Phase 3f: Split main.go into cmd/ packages
-- [ ] Phase 4: Update build and test configuration
-- [ ] Phase 5: Update documentation
-- [ ] Phase 6: Verify and test
+- [x] Phase 3d: Document circular dependency challenges (COMPLETE)
+- [x] Phase 3e: Move internal/schema - pure functions (diff, hash) (COMPLETE)
+- [x] Phase 3f: Move internal/planner (types, planner, rollback) (COMPLETE)
+- [x] Phase 3g: Extract schema loading functions (COMPLETE)
+- [x] Phase 4: Update build and test configuration (COMPLETE)
+- [x] Phase 5: Update documentation (IN PROGRESS)
+- [ ] Phase 6: Final verification
 
-## Status: Partially Complete (3/6 packages moved)
+## Status: Code Organization Complete! 🎉
 
-### ✅ Completed Packages
+### ✅ All Internal Packages Moved
 1. **internal/config** - Config and environment resolution
 2. **internal/parser** - SQL parsing (PostgreSQL and SQLite)
 3. **internal/testutil** - Test database utilities
+4. **internal/schema** - Schema diffing, hashing, and file loading
+5. **internal/planner** - Migration plan generation and rollback
 
-### 🔄 Remaining Work
-The remaining packages have tight coupling with main.go and circular dependency issues that need careful handling.
+### 📝 Current Structure
+The code is now well-organized with clear module boundaries:
+- Main package: CLI handlers and database driver setup
+- Internal packages: Pure business logic with no circular dependencies
+- Database drivers: PostgreSQL and SQLite implementations
+
+### ⏭️ Future Work
+- Split main.go into cmd/ packages (deferred - not critical for initial organization)
 
 ## Context
 
@@ -432,3 +441,105 @@ Keep database introspection in main.go, move only:
 4. Leave database introspection in main.go for now
 5. Move planner.go, rollback.go → internal/planner/
 6. Update all imports
+
+---
+
+## Implementation Summary
+
+### Phase 3e: Move internal/schema (Pure Functions) ✅
+**Completed**: 2025-11-07
+
+Moved pure schema operations to internal/schema:
+- `diff.go` → `internal/schema/diff.go` - Schema diffing without database dependencies
+- `schema_hash.go` → `internal/schema/hash.go` - Schema hashing for migration validation
+- Fixed variable shadowing: renamed `schema` flag to `schemaFlag` in main.go
+- Added nil schema handling in hash function
+
+**Files Changed**: 8 files (main.go, planner.go, validation.go, 5 test files)
+**Tests**: All pass ✅
+**CI**: Pass ✅
+
+### Phase 3f: Move internal/planner ✅
+**Completed**: 2025-11-07
+
+Moved migration planning logic to internal/planner:
+- Created `internal/planner/types.go` - Plan, PlanStep, ExecutionResult
+- Moved `planner.go` → `internal/planner/planner.go` - Forward migration planning
+- Moved `rollback.go` → `internal/planner/rollback.go` - Rollback generation
+- Updated function signatures: `GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema, ...)`
+- Fixed type references in rollback.go using sed
+
+**Files Changed**: 10 files (main.go, json_schema.go, validate_plan.go, 7 test files)
+**Tests**: All pass ✅
+**CI**: Pass ✅
+
+### Phase 3g: Extract Schema Loading Functions ✅
+**Completed**: 2025-11-07
+
+Extracted pure file loading functions to internal/schema:
+- Created `internal/schema/loader.go`:
+  - LoadSchema, LoadSchemaWithOptions
+  - LoadSQLSchema, LoadSQLSchemaWithOptions, LoadSQLSchemaFromBytes
+  - loadSchemaFromDir
+  - detectDialectFromSQL, parseDialect, DriverNameToDialect
+  - LoadJSONSchema, ValidateJSONSchema
+- Created `internal/planner/loader.go`:
+  - LoadJSONPlan (moved here to avoid circular dependency)
+- Updated `json_schema.go` to keep only database introspection:
+  - isConnectionString, loadSchemaFromConnectionString
+  - LoadSchemaOrIntrospect, LoadSchemaOrIntrospectWithOptions
+- Fixed variable shadowing: `schema` → `loadedSchema` in multiple files
+
+**Key Design Decision**: Avoided circular dependency by moving LoadJSONPlan to internal/planner (since planner imports schema, schema cannot import planner)
+
+**Files Changed**: 9 files
+**Tests**: All pass ✅
+**CI**: Pass ✅
+
+### Final Structure
+
+```
+lockplane/
+├── main.go                          # CLI handlers, driver setup
+├── json_schema.go                   # Database introspection
+├── init_command.go                  # Init wizard
+├── validate_plan.go                 # Plan validation
+├── validate_sql.go                  # SQL validation
+├── validation.go                    # Schema validation
+├── internal/
+│   ├── config/                      # Configuration
+│   │   ├── config.go
+│   │   └── environment.go
+│   ├── parser/                      # SQL parsing
+│   │   ├── postgres.go
+│   │   └── sqlite.go
+│   ├── schema/                      # Schema operations
+│   │   ├── diff.go                  # Schema diffing
+│   │   ├── hash.go                  # Schema hashing
+│   │   └── loader.go                # File loading
+│   ├── planner/                     # Migration planning
+│   │   ├── types.go                 # Types
+│   │   ├── planner.go               # Forward planning
+│   │   ├── rollback.go              # Rollback generation
+│   │   └── loader.go                # Plan loading
+│   └── testutil/                    # Test utilities
+└── database/                        # Database drivers
+    ├── postgres/
+    └── sqlite/
+```
+
+### Benefits Achieved
+
+1. **Clear Module Boundaries**: Each package has a well-defined responsibility
+2. **No Circular Dependencies**: Clean import graph
+3. **Testability**: Internal packages can be tested independently
+4. **Maintainability**: Easier to understand and modify
+5. **Scalability**: Ready for future growth
+
+### Lessons Learned
+
+1. **Circular Dependencies**: When moving code between packages, always check for circular imports
+2. **Variable Shadowing**: Package names can shadow variables - use distinct names
+3. **Test Helpers**: Sometimes need to export functions for test usage (e.g., LoadSQLSchemaFromBytes)
+4. **Incremental Approach**: Moving code in small, testable increments reduces risk
+5. **Git History**: Using `git mv` preserves file history for future reference

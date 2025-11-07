@@ -71,17 +71,40 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
 
 ## Code Organization
 
-- `main.go` - CLI entry point and command handlers
-- `planner.go` - Migration plan generation
-- `rollback.go` - Rollback plan generation
-- `diff.go` - Schema diffing logic
-- `json_schema.go` - JSON schema loading and validation
+### Main Package
+- `main.go` - CLI entry point, command handlers, database driver setup
+- `json_schema.go` - Database introspection and connection string handling
 - `init_command.go` - Project initialization wizard
+- `validate_plan.go` - Plan validation command
+- `validate_sql.go` - SQL validation command
+- `validation.go` - Schema validation utilities
+
+### Internal Packages
+- `internal/schema/` - Schema operations (no database dependencies)
+  - `diff.go` - Schema diffing logic
+  - `hash.go` - Schema hashing for migration validation
+  - `loader.go` - File loading (JSON, SQL DDL) and dialect detection
+- `internal/planner/` - Migration planning
+  - `types.go` - Plan, PlanStep, ExecutionResult types
+  - `planner.go` - Forward migration plan generation
+  - `rollback.go` - Rollback plan generation
+  - `loader.go` - JSON plan loading and validation
+- `internal/parser/` - SQL DDL parsing utilities
+- `internal/config/` - Configuration file handling
+- `internal/testutil/` - Test utilities
+
+### Database Drivers
+- `database/` - Database driver interface and implementations
+  - `postgres/` - PostgreSQL driver
+  - `sqlite/` - SQLite/libSQL driver
+
+### Documentation & Examples
 - `docs/` - Documentation files
+- `devdocs/` - Development and design documents
 - `examples/` - Example schemas and plans
 - `testdata/` - Test fixtures
   - `testdata/plans-json/` - JSON migration plan fixtures
-  - `testdata/fixtures/` - SQL schema fixtures (being migrated to JSON)
+  - `testdata/fixtures/` - SQL schema fixtures
 
 ## Testing Requirements
 
