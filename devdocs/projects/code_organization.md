@@ -30,8 +30,33 @@ The code is now well-organized with clear module boundaries:
 - Internal packages: Pure business logic with no circular dependencies
 - Database drivers: PostgreSQL and SQLite implementations
 
-### ⏭️ Future Work
-- Split main.go into cmd/ packages (deferred - not critical for initial organization)
+### ⏭️ Future Work (Phase 7+)
+
+The following files remain in the root package and should be moved in future phases:
+
+**Validation Business Logic** (should move to internal/validation):
+- `validation.go` - Schema validation utilities
+- `validate_sql.go` - SQL validation command implementation
+- `validate_sql_enhanced.go` - Enhanced validation rules
+- `validate_sql_lsp.go` - LSP support for validation
+- `validate_sql_safety.go` - Safety checks for SQL
+
+**Command Handlers** (should move to internal/cmd or cmd/):
+- `init_command.go` - Init wizard (24KB)
+- `validate_plan.go` - Plan validation command handler
+- Parts of `main.go` - Command dispatch and handlers
+
+**Rationale for Deferring**:
+1. These files don't have circular dependency issues
+2. Current organization achieves the primary goal: separating business logic (internal/) from CLI (main package)
+3. Moving these can be done incrementally without risk
+4. Focus was on resolving circular dependencies first (schema, planner)
+
+**Recommended Next Steps**:
+1. Phase 7: Move validation.go and validate_sql_*.go → internal/validation/
+2. Phase 8: Move init_command.go → internal/cmd/init.go
+3. Phase 9: Extract command handlers from main.go → internal/cmd/
+4. Phase 10: Slim down main.go to pure CLI dispatch
 
 ## Context
 
