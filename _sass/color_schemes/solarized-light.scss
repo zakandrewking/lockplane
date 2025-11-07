@@ -66,3 +66,20 @@ $red-000: lighten($solar-red, 8%);
 $red-100: $solar-red;
 $red-200: mix($solar-red, $solar-orange, 50%);
 $red-300: darken($solar-red, 10%);
+
+// Override Just-the-Docs UI variables to apply Solarized colors
+$body-background-color: $solar-base3;
+$sidebar-color:         $solar-base2;
+$border-color:          darken($solar-base2, 12%);
+
+$body-text-color:       $solar-base00;
+$body-heading-color:    $solar-base01;
+
+$link-color:            $solar-blue;
+$btn-primary-color:     $solar-blue;
+$base-button-color:     $solar-base2;
+
+$code-background-color: $solar-base2;
+$search-background-color: $solar-base3;
+$table-background-color: $solar-base3;
+$feedback-color:        $solar-yellow;

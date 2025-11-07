@@ -2,6 +2,9 @@
 // Based on Ethan Schoonover's Solarized color palette
 // https://ethanschoonover.com/solarized/
 
+// Import the base dark scheme
+@import "./color_schemes/dark";
+
 // Canonical Solarized colors
 $solar-base03: #002b36;
 $solar-base02: #073642;
@@ -66,3 +69,20 @@ $red-000: lighten($solar-red, 8%);
 $red-100: $solar-red;
 $red-200: mix($solar-red, $solar-orange, 50%);
 $red-300: darken($solar-red, 10%);
+
+// Override Just-the-Docs UI variables to apply Solarized dark colors
+$body-background-color: $solar-base03;
+$sidebar-color:         $solar-base02;
+$border-color:          $solar-base01;
+
+$body-text-color:       $solar-base0;
+$body-heading-color:    $solar-base1;
+
+$link-color:            $solar-blue;
+$btn-primary-color:     $solar-blue;
+$base-button-color:     $solar-base02;
+
+$code-background-color: $solar-base02;
+$search-background-color: $solar-base03;
+$table-background-color: $solar-base03;
+$feedback-color:        $solar-yellow;
