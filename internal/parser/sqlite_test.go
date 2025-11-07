@@ -1,6 +1,6 @@
 //go:build ignore
 
-// TODO: Re-enable this test file after moving schema types to internal/schema
+// TODO: Re-enable this test file after moving schema types to internal/schema package
 
 package parser
 
