@@ -1,4 +1,4 @@
-package main
+package schema
 
 import (
 	"testing"
@@ -10,12 +10,12 @@ import (
 // different raw types but same logical types produce the same hash
 func TestComputeSchemaHash_LogicalTypeEquivalence(t *testing.T) {
 	// SQLite schema with INTEGER type
-	sqliteSchema := &Schema{
+	sqliteSchema := &database.Schema{
 		Dialect: database.DialectSQLite,
-		Tables: []Table{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{
 						Name:         "id",
 						Type:         "INTEGER",
@@ -43,12 +43,12 @@ func TestComputeSchemaHash_LogicalTypeEquivalence(t *testing.T) {
 	}
 
 	// PostgreSQL schema with pg_catalog.int4 type (normalized to integer)
-	postgresSchema := &Schema{
+	postgresSchema := &database.Schema{
 		Dialect: database.DialectPostgres,
-		Tables: []Table{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{
 						Name:         "id",
 						Type:         "integer",
@@ -94,11 +94,11 @@ func TestComputeSchemaHash_LogicalTypeEquivalence(t *testing.T) {
 // TestComputeSchemaHash_DifferentTypes verifies that schemas with
 // different logical types produce different hashes
 func TestComputeSchemaHash_DifferentTypes(t *testing.T) {
-	schema1 := &Schema{
-		Tables: []Table{
+	schema1 := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{
 						Name:         "id",
 						Type:         "integer",
@@ -110,11 +110,11 @@ func TestComputeSchemaHash_DifferentTypes(t *testing.T) {
 		},
 	}
 
-	schema2 := &Schema{
-		Tables: []Table{
+	schema2 := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{
 						Name:         "id",
 						Type:         "bigint",
@@ -144,16 +144,16 @@ func TestComputeSchemaHash_DifferentTypes(t *testing.T) {
 // TestComputeSchemaHash_Deterministic verifies that the same schema
 // produces the same hash consistently
 func TestComputeSchemaHash_Deterministic(t *testing.T) {
-	schema := &Schema{
-		Tables: []Table{
+	schema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "products",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", IsPrimaryKey: true},
 					{Name: "name", Type: "text", Nullable: false},
 					{Name: "price", Type: "numeric", Nullable: true},
 				},
-				Indexes: []Index{
+				Indexes: []database.Index{
 					{Name: "idx_name", Columns: []string{"name"}, Unique: false},
 				},
 			},
@@ -182,7 +182,7 @@ func TestComputeSchemaHash_NilSchema(t *testing.T) {
 		t.Fatalf("failed to compute nil schema hash: %v", err)
 	}
 
-	hash2, err := ComputeSchemaHash(&Schema{Tables: []Table{}})
+	hash2, err := ComputeSchemaHash(&database.Schema{Tables: []database.Table{}})
 	if err != nil {
 		t.Fatalf("failed to compute empty schema hash: %v", err)
 	}

@@ -4,15 +4,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/database/postgres"
+	"github.com/lockplane/lockplane/internal/schema"
 )
 
 func TestGeneratePlan_AddTable(t *testing.T) {
-	diff := &SchemaDiff{
-		AddedTables: []Table{
+	diff := &schema.SchemaDiff{
+		AddedTables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "email", Type: "text", Nullable: false},
 				},
@@ -45,8 +47,8 @@ func TestGeneratePlan_AddTable(t *testing.T) {
 }
 
 func TestGeneratePlan_DropTable(t *testing.T) {
-	diff := &SchemaDiff{
-		RemovedTables: []Table{
+	diff := &schema.SchemaDiff{
+		RemovedTables: []database.Table{
 			{Name: "old_table"},
 		},
 	}
@@ -68,11 +70,11 @@ func TestGeneratePlan_DropTable(t *testing.T) {
 }
 
 func TestGeneratePlan_AddColumn(t *testing.T) {
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				AddedColumns: []Column{
+				AddedColumns: []database.Column{
 					{Name: "age", Type: "integer", Nullable: true},
 				},
 			},
@@ -100,11 +102,11 @@ func TestGeneratePlan_AddColumn(t *testing.T) {
 }
 
 func TestGeneratePlan_DropColumn(t *testing.T) {
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				RemovedColumns: []Column{
+				RemovedColumns: []database.Column{
 					{Name: "deprecated_field"},
 				},
 			},
@@ -128,15 +130,15 @@ func TestGeneratePlan_DropColumn(t *testing.T) {
 }
 
 func TestGeneratePlan_ModifyColumn_Type(t *testing.T) {
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				ModifiedColumns: []ColumnDiff{
+				ModifiedColumns: []schema.ColumnDiff{
 					{
 						ColumnName: "age",
-						Old:        Column{Name: "age", Type: "integer", Nullable: true},
-						New:        Column{Name: "age", Type: "bigint", Nullable: true},
+						Old:        database.Column{Name: "age", Type: "integer", Nullable: true},
+						New:        database.Column{Name: "age", Type: "bigint", Nullable: true},
 						Changes:    []string{"type"},
 					},
 				},
@@ -162,15 +164,15 @@ func TestGeneratePlan_ModifyColumn_Type(t *testing.T) {
 
 func TestGeneratePlan_ModifyColumn_Nullable(t *testing.T) {
 	// Test setting NOT NULL
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				ModifiedColumns: []ColumnDiff{
+				ModifiedColumns: []schema.ColumnDiff{
 					{
 						ColumnName: "email",
-						Old:        Column{Name: "email", Type: "text", Nullable: true},
-						New:        Column{Name: "email", Type: "text", Nullable: false},
+						Old:        database.Column{Name: "email", Type: "text", Nullable: true},
+						New:        database.Column{Name: "email", Type: "text", Nullable: false},
 						Changes:    []string{"nullable"},
 					},
 				},
@@ -211,15 +213,15 @@ func TestGeneratePlan_ModifyColumn_Nullable(t *testing.T) {
 func TestGeneratePlan_ModifyColumn_Default(t *testing.T) {
 	defaultVal := "now()"
 
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				ModifiedColumns: []ColumnDiff{
+				ModifiedColumns: []schema.ColumnDiff{
 					{
 						ColumnName: "created_at",
-						Old:        Column{Name: "created_at", Type: "timestamp", Nullable: true},
-						New:        Column{Name: "created_at", Type: "timestamp", Nullable: true, Default: &defaultVal},
+						Old:        database.Column{Name: "created_at", Type: "timestamp", Nullable: true},
+						New:        database.Column{Name: "created_at", Type: "timestamp", Nullable: true, Default: &defaultVal},
 						Changes:    []string{"default"},
 					},
 				},
@@ -244,11 +246,11 @@ func TestGeneratePlan_ModifyColumn_Default(t *testing.T) {
 }
 
 func TestGeneratePlan_AddIndex(t *testing.T) {
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				AddedIndexes: []Index{
+				AddedIndexes: []database.Index{
 					{Name: "idx_users_email", Columns: []string{"email"}, Unique: true},
 				},
 			},
@@ -272,11 +274,11 @@ func TestGeneratePlan_AddIndex(t *testing.T) {
 }
 
 func TestGeneratePlan_DropIndex(t *testing.T) {
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				RemovedIndexes: []Index{
+				RemovedIndexes: []database.Index{
 					{Name: "idx_old"},
 				},
 			},
@@ -301,31 +303,31 @@ func TestGeneratePlan_DropIndex(t *testing.T) {
 
 func TestGeneratePlan_ComplexMigration(t *testing.T) {
 	// Test a complex migration with multiple operations
-	diff := &SchemaDiff{
-		AddedTables: []Table{
+	diff := &schema.SchemaDiff{
+		AddedTables: []database.Table{
 			{
 				Name: "posts",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "title", Type: "text", Nullable: false},
 				},
 			},
 		},
-		ModifiedTables: []TableDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				AddedColumns: []Column{
+				AddedColumns: []database.Column{
 					{Name: "age", Type: "integer", Nullable: true},
 				},
-				RemovedColumns: []Column{
+				RemovedColumns: []database.Column{
 					{Name: "old_field"},
 				},
-				AddedIndexes: []Index{
+				AddedIndexes: []database.Index{
 					{Name: "idx_users_age", Columns: []string{"age"}, Unique: false},
 				},
 			},
 		},
-		RemovedTables: []Table{
+		RemovedTables: []database.Table{
 			{Name: "deprecated_table"},
 		},
 	}
@@ -369,7 +371,7 @@ func TestGeneratePlan_ComplexMigration(t *testing.T) {
 }
 
 func TestGeneratePlan_EmptyDiff(t *testing.T) {
-	diff := &SchemaDiff{}
+	diff := &schema.SchemaDiff{}
 
 	driver := postgres.NewDriver()
 	plan, err := GeneratePlan(diff, driver)

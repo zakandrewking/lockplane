@@ -1,4 +1,4 @@
-package main
+package schema
 
 import (
 	"testing"
@@ -7,11 +7,11 @@ import (
 )
 
 func TestDiffSchemas_UsesLogicalTypes(t *testing.T) {
-	before := &Schema{
-		Tables: []Table{
+	before := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "todos",
-				Columns: []Column{
+				Columns: []database.Column{
 					{
 						Name:     "completed",
 						Type:     "INTEGER",
@@ -27,11 +27,11 @@ func TestDiffSchemas_UsesLogicalTypes(t *testing.T) {
 		},
 	}
 
-	after := &Schema{
-		Tables: []Table{
+	after := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "todos",
-				Columns: []Column{
+				Columns: []database.Column{
 					{
 						Name:     "completed",
 						Type:     "integer",
@@ -75,7 +75,7 @@ func TestSchemaDiff_IsEmpty(t *testing.T) {
 	}
 
 	nonEmptyDiff := &SchemaDiff{
-		AddedTables: []Table{{Name: "test"}},
+		AddedTables: []database.Table{{Name: "test"}},
 	}
 	if nonEmptyDiff.IsEmpty() {
 		t.Error("Expected non-empty diff to report as not empty")
@@ -90,7 +90,7 @@ func TestTableDiff_IsEmpty(t *testing.T) {
 
 	nonEmptyDiff := &TableDiff{
 		TableName:    "test",
-		AddedColumns: []Column{{Name: "col"}},
+		AddedColumns: []database.Column{{Name: "col"}},
 	}
 	if nonEmptyDiff.IsEmpty() {
 		t.Error("Expected non-empty table diff to report as not empty")

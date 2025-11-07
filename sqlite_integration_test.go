@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lockplane/lockplane/database"
+	"github.com/lockplane/lockplane/internal/schema"
 	_ "modernc.org/sqlite"
 )
 
@@ -36,7 +37,7 @@ CREATE TABLE tasks (
 	}
 
 	// Compute diff
-	diff := DiffSchemas(before, after)
+	diff := schema.DiffSchemas(before, after)
 
 	// Create SQLite driver for plan generation
 	driver, err := newDriver("sqlite")
@@ -100,7 +101,7 @@ CREATE TABLE users (
 	}
 
 	// Compute diff
-	diff := DiffSchemas(before, after)
+	diff := schema.DiffSchemas(before, after)
 
 	// Create SQLite driver for plan generation
 	driver, err := newDriver("sqlite")
@@ -172,7 +173,7 @@ CREATE INDEX idx_products_name ON products(name);
 	}
 
 	// Compute diff
-	diff := DiffSchemas(before, after)
+	diff := schema.DiffSchemas(before, after)
 
 	// Create SQLite driver for plan generation
 	driver, err := newDriver("sqlite")
@@ -253,7 +254,7 @@ CREATE TABLE notes (
 	}
 
 	// Compute diff
-	diff := DiffSchemas(before, after)
+	diff := schema.DiffSchemas(before, after)
 
 	// Create SQLite driver
 	driver, err := newDriver("sqlite")
@@ -279,7 +280,7 @@ CREATE TABLE notes (
 	}
 
 	// Generate rollback plan (reverse diff)
-	reverseDiff := DiffSchemas(after, before)
+	reverseDiff := schema.DiffSchemas(after, before)
 	rollbackPlan, err := GeneratePlanWithHash(reverseDiff, after, driver)
 	if err != nil {
 		t.Fatalf("failed to generate rollback plan: %v", err)
@@ -355,7 +356,7 @@ CREATE INDEX idx_books_author ON books(author_id);
 	}
 
 	// Generate plan between introspected and target
-	diff := DiffSchemas((*Schema)(introspectedSchema), targetSchema)
+	diff := schema.DiffSchemas((*Schema)(introspectedSchema), targetSchema)
 	plan, err := GeneratePlanWithHash(diff, (*Schema)(introspectedSchema), driver)
 	if err != nil {
 		t.Fatalf("failed to generate plan: %v", err)

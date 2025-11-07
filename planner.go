@@ -4,22 +4,23 @@ import (
 	"fmt"
 
 	"github.com/lockplane/lockplane/database"
+	"github.com/lockplane/lockplane/internal/schema"
 )
 
 // GeneratePlan creates a migration plan from a schema diff using the provided driver
-func GeneratePlan(diff *SchemaDiff, driver database.Driver) (*Plan, error) {
+func GeneratePlan(diff *schema.SchemaDiff, driver database.Driver) (*Plan, error) {
 	return GeneratePlanWithHash(diff, nil, driver)
 }
 
 // GeneratePlanWithHash creates a migration plan with a source schema hash using the provided driver
-func GeneratePlanWithHash(diff *SchemaDiff, sourceSchema *Schema, driver database.Driver) (*Plan, error) {
+func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *Schema, driver database.Driver) (*Plan, error) {
 	plan := &Plan{
 		Steps: []PlanStep{},
 	}
 
 	// Compute source schema hash if provided
 	if sourceSchema != nil {
-		hash, err := ComputeSchemaHash(sourceSchema)
+		hash, err := schema.ComputeSchemaHash(sourceSchema)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compute source schema hash: %w", err)
 		}

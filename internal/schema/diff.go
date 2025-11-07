@@ -1,43 +1,45 @@
-package main
+package schema
+
+import "github.com/lockplane/lockplane/database"
 
 // SchemaDiff represents all differences between two schemas
 type SchemaDiff struct {
-	AddedTables    []Table     `json:"added_tables,omitempty"`
-	RemovedTables  []Table     `json:"removed_tables,omitempty"`
-	ModifiedTables []TableDiff `json:"modified_tables,omitempty"`
+	AddedTables    []database.Table `json:"added_tables,omitempty"`
+	RemovedTables  []database.Table `json:"removed_tables,omitempty"`
+	ModifiedTables []TableDiff      `json:"modified_tables,omitempty"`
 }
 
 // TableDiff represents changes to a single table
 type TableDiff struct {
-	TableName          string       `json:"table_name"`
-	AddedColumns       []Column     `json:"added_columns,omitempty"`
-	RemovedColumns     []Column     `json:"removed_columns,omitempty"`
-	ModifiedColumns    []ColumnDiff `json:"modified_columns,omitempty"`
-	AddedIndexes       []Index      `json:"added_indexes,omitempty"`
-	RemovedIndexes     []Index      `json:"removed_indexes,omitempty"`
-	AddedForeignKeys   []ForeignKey `json:"added_foreign_keys,omitempty"`
-	RemovedForeignKeys []ForeignKey `json:"removed_foreign_keys,omitempty"`
+	TableName          string                `json:"table_name"`
+	AddedColumns       []database.Column     `json:"added_columns,omitempty"`
+	RemovedColumns     []database.Column     `json:"removed_columns,omitempty"`
+	ModifiedColumns    []ColumnDiff          `json:"modified_columns,omitempty"`
+	AddedIndexes       []database.Index      `json:"added_indexes,omitempty"`
+	RemovedIndexes     []database.Index      `json:"removed_indexes,omitempty"`
+	AddedForeignKeys   []database.ForeignKey `json:"added_foreign_keys,omitempty"`
+	RemovedForeignKeys []database.ForeignKey `json:"removed_foreign_keys,omitempty"`
 }
 
 // ColumnDiff represents changes to a single column
 type ColumnDiff struct {
-	ColumnName string   `json:"column_name"`
-	Old        Column   `json:"old"`
-	New        Column   `json:"new"`
-	Changes    []string `json:"changes"` // e.g. ["type", "nullable", "default"]
+	ColumnName string          `json:"column_name"`
+	Old        database.Column `json:"old"`
+	New        database.Column `json:"new"`
+	Changes    []string        `json:"changes"` // e.g. ["type", "nullable", "default"]
 }
 
 // DiffSchemas compares two schemas and returns their differences
-func DiffSchemas(current, desired *Schema) *SchemaDiff {
+func DiffSchemas(current, desired *database.Schema) *SchemaDiff {
 	diff := &SchemaDiff{}
 
 	// Build maps for quick lookup
-	currentTables := make(map[string]*Table)
+	currentTables := make(map[string]*database.Table)
 	for i := range current.Tables {
 		currentTables[current.Tables[i].Name] = &current.Tables[i]
 	}
 
-	desiredTables := make(map[string]*Table)
+	desiredTables := make(map[string]*database.Table)
 	for i := range desired.Tables {
 		desiredTables[desired.Tables[i].Name] = &desired.Tables[i]
 	}
@@ -68,18 +70,18 @@ func DiffSchemas(current, desired *Schema) *SchemaDiff {
 }
 
 // diffTables compares two tables and returns their differences
-func diffTables(current, desired *Table) *TableDiff {
+func diffTables(current, desired *database.Table) *TableDiff {
 	diff := &TableDiff{
 		TableName: current.Name,
 	}
 
 	// Build maps for columns
-	currentCols := make(map[string]*Column)
+	currentCols := make(map[string]*database.Column)
 	for i := range current.Columns {
 		currentCols[current.Columns[i].Name] = &current.Columns[i]
 	}
 
-	desiredCols := make(map[string]*Column)
+	desiredCols := make(map[string]*database.Column)
 	for i := range desired.Columns {
 		desiredCols[desired.Columns[i].Name] = &desired.Columns[i]
 	}
@@ -107,12 +109,12 @@ func diffTables(current, desired *Table) *TableDiff {
 	}
 
 	// Build maps for indexes
-	currentIdxs := make(map[string]*Index)
+	currentIdxs := make(map[string]*database.Index)
 	for i := range current.Indexes {
 		currentIdxs[current.Indexes[i].Name] = &current.Indexes[i]
 	}
 
-	desiredIdxs := make(map[string]*Index)
+	desiredIdxs := make(map[string]*database.Index)
 	for i := range desired.Indexes {
 		desiredIdxs[desired.Indexes[i].Name] = &desired.Indexes[i]
 	}
@@ -132,12 +134,12 @@ func diffTables(current, desired *Table) *TableDiff {
 	}
 
 	// Build maps for foreign keys
-	currentFKs := make(map[string]*ForeignKey)
+	currentFKs := make(map[string]*database.ForeignKey)
 	for i := range current.ForeignKeys {
 		currentFKs[current.ForeignKeys[i].Name] = &current.ForeignKeys[i]
 	}
 
-	desiredFKs := make(map[string]*ForeignKey)
+	desiredFKs := make(map[string]*database.ForeignKey)
 	for i := range desired.ForeignKeys {
 		desiredFKs[desired.ForeignKeys[i].Name] = &desired.ForeignKeys[i]
 	}
@@ -160,7 +162,7 @@ func diffTables(current, desired *Table) *TableDiff {
 }
 
 // diffColumns compares two columns and returns their differences
-func diffColumns(current, desired *Column) *ColumnDiff {
+func diffColumns(current, desired *database.Column) *ColumnDiff {
 	var changes []string
 
 	if current.LogicalType() != desired.LogicalType() {

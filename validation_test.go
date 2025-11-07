@@ -2,6 +2,9 @@ package main
 
 import (
 	"testing"
+
+	"github.com/lockplane/lockplane/database"
+	"github.com/lockplane/lockplane/internal/schema"
 )
 
 func stringPtr(s string) *string {
@@ -11,7 +14,7 @@ func stringPtr(s string) *string {
 func TestAddColumnValidator_NullableColumn(t *testing.T) {
 	validator := &AddColumnValidator{
 		TableName: "users",
-		Column: Column{
+		Column: database.Column{
 			Name:     "age",
 			Type:     "integer",
 			Nullable: true,
@@ -36,7 +39,7 @@ func TestAddColumnValidator_NullableColumn(t *testing.T) {
 func TestAddColumnValidator_NotNullWithDefault(t *testing.T) {
 	validator := &AddColumnValidator{
 		TableName: "users",
-		Column: Column{
+		Column: database.Column{
 			Name:     "status",
 			Type:     "text",
 			Nullable: false,
@@ -62,7 +65,7 @@ func TestAddColumnValidator_NotNullWithDefault(t *testing.T) {
 func TestAddColumnValidator_NotNullWithoutDefault(t *testing.T) {
 	validator := &AddColumnValidator{
 		TableName: "users",
-		Column: Column{
+		Column: database.Column{
 			Name:     "email",
 			Type:     "text",
 			Nullable: false,
@@ -89,7 +92,7 @@ func TestAddColumnValidator_NotNullWithoutDefault(t *testing.T) {
 func TestAddColumnValidator_NotNullWithEmptyDefault(t *testing.T) {
 	validator := &AddColumnValidator{
 		TableName: "users",
-		Column: Column{
+		Column: database.Column{
 			Name:     "email",
 			Type:     "text",
 			Nullable: false,
@@ -109,7 +112,7 @@ func TestAddColumnValidator_NotNullWithEmptyDefault(t *testing.T) {
 }
 
 func TestValidateAddedColumns(t *testing.T) {
-	columns := []Column{
+	columns := []database.Column{
 		{
 			Name:     "created_at",
 			Type:     "timestamp",
@@ -140,11 +143,11 @@ func TestValidateAddedColumns(t *testing.T) {
 }
 
 func TestValidateSchemaDiff_AddColumns(t *testing.T) {
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
 			{
 				TableName: "users",
-				AddedColumns: []Column{
+				AddedColumns: []database.Column{
 					{
 						Name:     "age",
 						Type:     "integer",
@@ -187,8 +190,8 @@ func TestValidateSchemaDiff_AddColumns(t *testing.T) {
 }
 
 func TestValidateSchemaDiff_NoChanges(t *testing.T) {
-	diff := &SchemaDiff{
-		ModifiedTables: []TableDiff{},
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{},
 	}
 
 	results := ValidateSchemaDiff(diff)
@@ -237,18 +240,18 @@ func TestAllReversible(t *testing.T) {
 }
 
 func TestAddForeignKeyValidator_ValidReference(t *testing.T) {
-	targetSchema := &Schema{
-		Tables: []Table{
+	targetSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "email", Type: "text", Nullable: false, IsPrimaryKey: false},
 				},
 			},
 			{
 				Name: "posts",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "user_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
 				},
@@ -283,11 +286,11 @@ func TestAddForeignKeyValidator_ValidReference(t *testing.T) {
 }
 
 func TestAddForeignKeyValidator_NonExistentTable(t *testing.T) {
-	targetSchema := &Schema{
-		Tables: []Table{
+	targetSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "posts",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "author_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
 				},
@@ -323,17 +326,17 @@ func TestAddForeignKeyValidator_NonExistentTable(t *testing.T) {
 }
 
 func TestAddForeignKeyValidator_NonExistentColumn(t *testing.T) {
-	targetSchema := &Schema{
-		Tables: []Table{
+	targetSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 				},
 			},
 			{
 				Name: "posts",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "user_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
 				},
@@ -364,15 +367,15 @@ func TestAddForeignKeyValidator_NonExistentColumn(t *testing.T) {
 }
 
 func TestValidateSchemaDiffWithSchema_ForeignKeys(t *testing.T) {
-	diff := &SchemaDiff{
-		AddedTables: []Table{
+	diff := &schema.SchemaDiff{
+		AddedTables: []database.Table{
 			{
 				Name: "posts",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "user_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
 				},
-				ForeignKeys: []ForeignKey{
+				ForeignKeys: []database.ForeignKey{
 					{
 						Name:              "fk_posts_user_id",
 						Columns:           []string{"user_id"},
@@ -384,21 +387,21 @@ func TestValidateSchemaDiffWithSchema_ForeignKeys(t *testing.T) {
 		},
 	}
 
-	targetSchema := &Schema{
-		Tables: []Table{
+	targetSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "users",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 				},
 			},
 			{
 				Name: "posts",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "user_id", Type: "integer", Nullable: false, IsPrimaryKey: false},
 				},
-				ForeignKeys: []ForeignKey{
+				ForeignKeys: []database.ForeignKey{
 					{
 						Name:              "fk_posts_user_id",
 						Columns:           []string{"user_id"},

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/lockplane/lockplane/internal/schema"
 )
 
 // ValidationResult contains the outcome of validating a migration operation
@@ -153,12 +155,12 @@ func ValidateAddedForeignKeys(tableName string, foreignKeys []ForeignKey, target
 
 // ValidateSchemaDiff validates an entire schema diff
 // It needs the target schema to validate foreign key references
-func ValidateSchemaDiff(diff *SchemaDiff) []ValidationResult {
+func ValidateSchemaDiff(diff *schema.SchemaDiff) []ValidationResult {
 	return ValidateSchemaDiffWithSchema(diff, nil)
 }
 
 // ValidateSchemaDiffWithSchema validates an entire schema diff with access to target schema
-func ValidateSchemaDiffWithSchema(diff *SchemaDiff, targetSchema *Schema) []ValidationResult {
+func ValidateSchemaDiffWithSchema(diff *schema.SchemaDiff, targetSchema *Schema) []ValidationResult {
 	var results []ValidationResult
 
 	// Validate added columns in modified tables

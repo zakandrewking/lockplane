@@ -16,6 +16,7 @@ import (
 	"github.com/lockplane/lockplane/database/postgres"
 	"github.com/lockplane/lockplane/database/sqlite"
 	"github.com/lockplane/lockplane/internal/config"
+	"github.com/lockplane/lockplane/internal/schema"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
 )
@@ -393,7 +394,7 @@ func runDiff(args []string) {
 	}
 
 	// Generate diff
-	diff := DiffSchemas(before, after)
+	diff := schema.DiffSchemas(before, after)
 
 	// Output diff as JSON
 	jsonBytes, err := json.MarshalIndent(diff, "", "  ")
@@ -452,7 +453,7 @@ func runPlan(args []string) {
 	}
 
 	// Generate diff first
-	var diff *SchemaDiff
+	var diff *schema.SchemaDiff
 	var before *Schema
 	var after *Schema
 
@@ -481,7 +482,7 @@ func runPlan(args []string) {
 		log.Fatalf("Failed to load to schema: %v", loadErr)
 	}
 
-	diff = DiffSchemas(before, after)
+	diff = schema.DiffSchemas(before, after)
 
 	// Validate the diff if requested
 	if *validate {
@@ -638,7 +639,7 @@ func runApply(args []string) {
 	fs := flag.NewFlagSet("apply", flag.ExitOnError)
 	target := fs.String("target", "", "Target database URL to apply migration to (overrides environment settings)")
 	targetEnvironment := fs.String("target-environment", "", "Named environment providing the target database connection (defaults to lockplane.toml)")
-	schema := fs.String("schema", "", "Desired schema file/directory (required for plan generation)")
+	schemaFlag := fs.String("schema", "", "Desired schema file/directory (required for plan generation)")
 	autoApprove := fs.Bool("auto-approve", false, "Skip interactive approval of migration plan")
 	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
 	shadowDBURL := fs.String("shadow-db", "", "Shadow database connection string (overrides environment settings)")
@@ -656,7 +657,7 @@ func runApply(args []string) {
 		os.Exit(1)
 	}
 
-	if value := strings.TrimSpace(*schema); value != "" && strings.HasPrefix(value, "--") {
+	if value := strings.TrimSpace(*schemaFlag); value != "" && strings.HasPrefix(value, "--") {
 		fmt.Fprintf(os.Stderr, "Error: --schema flag has invalid value %q\n\n", value)
 		fmt.Fprintf(os.Stderr, "Check that the preceding flag has its argument.\n\n")
 		os.Exit(1)
@@ -696,7 +697,7 @@ func runApply(args []string) {
 		}
 
 		// Warn if --schema was also provided (might be confusing)
-		if *schema != "" {
+		if *schemaFlag != "" {
 			fmt.Fprintf(os.Stderr, "Warning: Ignoring --schema flag when applying a pre-generated plan file\n")
 			fmt.Fprintf(os.Stderr, "         The plan file (%s) already contains the migration steps\n\n", planFile)
 		}
@@ -711,7 +712,7 @@ func runApply(args []string) {
 		fmt.Fprintf(os.Stderr, "📋 Loaded migration plan with %d steps from %s\n", len(plan.Steps), planFile)
 	} else {
 		// Generate plan mode - require --schema
-		schemaPath := strings.TrimSpace(*schema)
+		schemaPath := strings.TrimSpace(*schemaFlag)
 		if schemaPath == "" {
 			schemaPath = config.GetSchemaPath("", cfg, resolvedTarget, "")
 		}
@@ -740,7 +741,7 @@ func runApply(args []string) {
 		}
 
 		// Generate diff
-		diff := DiffSchemas(before, after)
+		diff := schema.DiffSchemas(before, after)
 
 		// Check if there are any changes
 		if diff.IsEmpty() {
@@ -868,7 +869,7 @@ func runApply(args []string) {
 		fmt.Fprintf(os.Stderr, "🔐 Validating source schema hash...\n")
 
 		// Compute hash of current state
-		currentHash, err := ComputeSchemaHash((*Schema)(currentSchema))
+		currentHash, err := schema.ComputeSchemaHash((*Schema)(currentSchema))
 		if err != nil {
 			log.Fatalf("Failed to compute current schema hash: %v", err)
 		}
