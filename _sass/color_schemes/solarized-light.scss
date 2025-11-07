@@ -1,0 +1,68 @@
+// Solarized Light color scheme for Just the Docs
+// Based on Ethan Schoonover's Solarized color palette
+// https://ethanschoonover.com/solarized/
+
+// Canonical Solarized colors
+$solar-base03: #002b36;
+$solar-base02: #073642;
+$solar-base01: #586e75;
+$solar-base00: #657b83;
+$solar-base0:  #839496;
+$solar-base1:  #93a1a1;
+$solar-base2:  #eee8d5;
+$solar-base3:  #fdf6e3;
+
+$solar-yellow:  #b58900;
+$solar-orange:  #cb4b16;
+$solar-red:     #dc322f;
+$solar-magenta: #d33682;
+$solar-violet:  #6c71c4;
+$solar-blue:    #268bd2;
+$solar-cyan:    #2aa198;
+$solar-green:   #859900;
+
+// Just the Docs base white
+$white: $solar-base3;
+
+// Dark greys (body text, headings, strong UI)
+$grey-dk-000: $solar-base00;
+$grey-dk-100: $solar-base01;
+$grey-dk-200: darken($solar-base01, 8%);
+$grey-dk-250: $solar-base02;
+$grey-dk-300: $solar-base03;
+
+// Light greys (backgrounds, borders, subtle UI)
+$grey-lt-000: $solar-base3;
+$grey-lt-100: $solar-base2;
+$grey-lt-200: darken($solar-base2, 6%);
+$grey-lt-300: darken($solar-base2, 12%);
+
+// Purples (mapped to violet/magenta)
+$purple-000: lighten($solar-violet, 10%);
+$purple-100: $solar-violet;
+$purple-200: mix($solar-violet, $solar-magenta, 50%);
+$purple-300: $solar-magenta;
+
+// Blues
+$blue-000:  lighten($solar-blue, 10%);
+$blue-100:  $solar-blue;
+$blue-200:  darken($solar-blue, 6%);
+$blue-300:  darken($solar-blue, 12%);
+
+// Greens
+$green-000: lighten($solar-green, 10%);
+$green-100: $solar-green;
+$green-200: darken($solar-green, 6%);
+$green-300: darken($solar-green, 12%);
+
+// Yellows (yellow → orange scale)
+$yellow-000: lighten($solar-yellow, 8%);
+$yellow-100: $solar-yellow;
+$yellow-200: mix($solar-yellow, $solar-orange, 50%);
+$yellow-300: $solar-orange;
+
+// Reds
+$red-000: lighten($solar-red, 8%);
+$red-100: $solar-red;
+$red-200: mix($solar-red, $solar-orange, 50%);
+$red-300: darken($solar-red, 10%);

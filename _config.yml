@@ -57,8 +57,9 @@ relative_links:
   collections: true
 
 # Just the Docs theme configuration
-# Color scheme: supports "dark", "light", or custom
-color_scheme: light
+# Color scheme: supports "dark", "light", "solarized-light", "solarized-dark", or custom
+# Available schemes: light, dark, solarized-light, solarized-dark
+color_scheme: solarized-light
 
 # Search
 search_enabled: true
