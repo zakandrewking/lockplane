@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
+
+	"github.com/lockplane/lockplane/internal/schema"
 )
 
 // ValidationIssue represents a validation error or warning
@@ -146,9 +148,9 @@ func runValidateSQL(args []string) {
 		}
 
 		// Also validate schema structure across all files
-		schema, err := LoadSchema(path)
+		loadedSchema, err := schema.LoadSchema(path)
 		if err == nil {
-			structureIssues := validateSchemaStructure(schema, path)
+			structureIssues := validateSchemaStructure(loadedSchema, path)
 			allIssues = append(allIssues, structureIssues...)
 		}
 	} else {
@@ -156,9 +158,9 @@ func runValidateSQL(args []string) {
 		allIssues = validateSQLFile(path)
 
 		// Also validate schema structure
-		schema, err := LoadSchema(path)
+		loadedSchema, err := schema.LoadSchema(path)
 		if err == nil {
-			structureIssues := validateSchemaStructure(schema, path)
+			structureIssues := validateSchemaStructure(loadedSchema, path)
 			allIssues = append(allIssues, structureIssues...)
 		}
 	}

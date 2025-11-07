@@ -183,7 +183,7 @@ func TestApplyPlan_CreateTable(t *testing.T) {
 	ctx := context.Background()
 
 	// Load plan from JSON
-	planPtr, err := LoadJSONPlan("testdata/plans-json/create_table.json")
+	planPtr, err := planner.LoadJSONPlan("testdata/plans-json/create_table.json")
 	if err != nil {
 		t.Fatalf("Failed to load plan: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 	}()
 
 	// Load plan from JSON
-	planPtr, err := LoadJSONPlan("testdata/plans-json/create_table.json")
+	planPtr, err := planner.LoadJSONPlan("testdata/plans-json/create_table.json")
 	if err != nil {
 		t.Fatalf("Failed to load plan: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 			}
 
 			// Load plan to add age column from JSON
-			planPtr, err := LoadJSONPlan("testdata/plans-json/add_column.json")
+			planPtr, err := planner.LoadJSONPlan("testdata/plans-json/add_column.json")
 			if err != nil {
 				t.Fatalf("Failed to load plan: %v", err)
 			}

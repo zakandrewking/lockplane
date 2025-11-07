@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/lockplane/lockplane/internal/planner"
 )
 
 // PlanValidationIssue represents a validation error or warning for plans
@@ -53,7 +55,7 @@ func runValidatePlan(args []string) {
 	path := fs.Arg(0)
 
 	// Load and validate the plan
-	_, err := LoadJSONPlan(path)
+	_, err := planner.LoadJSONPlan(path)
 	if err != nil {
 		if *formatFlag == "json" {
 			// Output as JSON for programmatic consumption

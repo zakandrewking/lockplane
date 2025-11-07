@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/lockplane/lockplane/database"
+	"github.com/lockplane/lockplane/internal/schema"
 )
 
 func TestValidateJSONSchema_Valid(t *testing.T) {
 	path := filepath.Join("examples", "schemas-json", "simple.json")
-	if err := ValidateJSONSchema(path); err != nil {
+	if err := schema.ValidateJSONSchema(path); err != nil {
 		t.Fatalf("Expected schema %s to be valid, got error: %v", path, err)
 	}
 }
@@ -23,7 +24,7 @@ func TestValidateJSONSchema_Invalid(t *testing.T) {
 		t.Fatalf("Failed to write invalid schema file: %v", err)
 	}
 
-	if err := ValidateJSONSchema(invalidPath); err == nil {
+	if err := schema.ValidateJSONSchema(invalidPath); err == nil {
 		t.Fatalf("Expected schema %s to be invalid", invalidPath)
 	}
 }
@@ -45,7 +46,7 @@ CREATE TABLE users (
 		t.Fatalf("Failed to write SQL fixture: %v", err)
 	}
 
-	actual, err := LoadSchema(sqlPath)
+	actual, err := schema.LoadSchema(sqlPath)
 	if err != nil {
 		t.Fatalf("LoadSchema returned error: %v", err)
 	}
@@ -137,20 +138,20 @@ CREATE TABLE todos (
 		t.Fatalf("Failed to write SQL fixture: %v", err)
 	}
 
-	schema, err := LoadSchemaWithOptions(sqlPath, &SchemaLoadOptions{Dialect: database.DialectSQLite})
+	loadedSchema, err := schema.LoadSchemaWithOptions(sqlPath, &schema.SchemaLoadOptions{Dialect: database.DialectSQLite})
 	if err != nil {
 		t.Fatalf("LoadSchemaWithOptions returned error: %v", err)
 	}
 
-	if schema.Dialect != database.DialectSQLite {
-		t.Fatalf("expected schema dialect sqlite, got %s", schema.Dialect)
+	if loadedSchema.Dialect != database.DialectSQLite {
+		t.Fatalf("expected schema dialect sqlite, got %s", loadedSchema.Dialect)
 	}
 
-	if len(schema.Tables) != 1 {
-		t.Fatalf("expected 1 table, got %d", len(schema.Tables))
+	if len(loadedSchema.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(loadedSchema.Tables))
 	}
 
-	todos := &schema.Tables[0]
+	todos := &loadedSchema.Tables[0]
 	completed := findColumnByName(t, todos, "completed")
 	if completed.Type != "INTEGER" {
 		t.Fatalf("expected completed type INTEGER, got %s", completed.Type)
@@ -194,7 +195,7 @@ ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
 		t.Fatalf("Failed to write SQL fixture: %v", err)
 	}
 
-	actual, err := LoadSchema(sqlPath)
+	actual, err := schema.LoadSchema(sqlPath)
 	if err != nil {
 		t.Fatalf("LoadSchema returned error: %v", err)
 	}
@@ -282,7 +283,7 @@ ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
 		t.Fatalf("Failed to write %s: %v", file2, err)
 	}
 
-	actual, err := LoadSchema(tmpDir)
+	actual, err := schema.LoadSchema(tmpDir)
 	if err != nil {
 		t.Fatalf("LoadSchema returned error: %v", err)
 	}

@@ -32,7 +32,7 @@ CREATE TABLE tasks (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 `
-	after, err := loadSQLSchemaFromBytes([]byte(afterDDL), &SchemaLoadOptions{Dialect: database.DialectSQLite})
+	after, err := schema.LoadSQLSchemaFromBytes([]byte(afterDDL), &schema.SchemaLoadOptions{Dialect: database.DialectSQLite})
 	if err != nil {
 		t.Fatalf("failed to parse after schema: %v", err)
 	}
@@ -83,7 +83,7 @@ CREATE TABLE users (
     email TEXT NOT NULL
 );
 `
-	before, err := loadSQLSchemaFromBytes([]byte(beforeDDL), &SchemaLoadOptions{Dialect: database.DialectSQLite})
+	before, err := schema.LoadSQLSchemaFromBytes([]byte(beforeDDL), &schema.SchemaLoadOptions{Dialect: database.DialectSQLite})
 	if err != nil {
 		t.Fatalf("failed to parse before schema: %v", err)
 	}
@@ -96,7 +96,7 @@ CREATE TABLE users (
     name TEXT
 );
 `
-	after, err := loadSQLSchemaFromBytes([]byte(afterDDL), &SchemaLoadOptions{Dialect: database.DialectSQLite})
+	after, err := schema.LoadSQLSchemaFromBytes([]byte(afterDDL), &schema.SchemaLoadOptions{Dialect: database.DialectSQLite})
 	if err != nil {
 		t.Fatalf("failed to parse after schema: %v", err)
 	}
@@ -168,7 +168,7 @@ CREATE TABLE products (
 
 CREATE INDEX idx_products_name ON products(name);
 `
-	after, err := loadSQLSchemaFromBytes([]byte(targetDDL), &SchemaLoadOptions{Dialect: database.DialectSQLite})
+	after, err := schema.LoadSQLSchemaFromBytes([]byte(targetDDL), &schema.SchemaLoadOptions{Dialect: database.DialectSQLite})
 	if err != nil {
 		t.Fatalf("failed to parse target schema: %v", err)
 	}
@@ -243,7 +243,7 @@ CREATE TABLE notes (
     content TEXT NOT NULL
 );
 `
-	before, err := loadSQLSchemaFromBytes([]byte(beforeDDL), &SchemaLoadOptions{Dialect: database.DialectSQLite})
+	before, err := schema.LoadSQLSchemaFromBytes([]byte(beforeDDL), &schema.SchemaLoadOptions{Dialect: database.DialectSQLite})
 	if err != nil {
 		t.Fatalf("failed to parse before schema: %v", err)
 	}
@@ -351,7 +351,7 @@ CREATE INDEX idx_books_author ON books(author_id);
 	// Parse the same DDL as target schema
 	targetDDL := `-- dialect: sqlite
 ` + schemaDDL
-	targetSchema, err := loadSQLSchemaFromBytes([]byte(targetDDL), &SchemaLoadOptions{Dialect: database.DialectSQLite})
+	targetSchema, err := schema.LoadSQLSchemaFromBytes([]byte(targetDDL), &schema.SchemaLoadOptions{Dialect: database.DialectSQLite})
 	if err != nil {
 		t.Fatalf("failed to parse target schema: %v", err)
 	}

@@ -86,11 +86,11 @@ type Column = database.Column
 type Index = database.Index
 type ForeignKey = database.ForeignKey
 
-func buildSchemaLoadOptions(input string, dialect database.Dialect) *SchemaLoadOptions {
+func buildSchemaLoadOptions(input string, dialect database.Dialect) *schema.SchemaLoadOptions {
 	if isConnectionString(input) || dialect == database.DialectUnknown {
 		return nil
 	}
-	return &SchemaLoadOptions{Dialect: dialect}
+	return &schema.SchemaLoadOptions{Dialect: dialect}
 }
 
 // detectDriver detects the database driver type from a connection string
@@ -373,11 +373,11 @@ func runDiff(args []string) {
 
 	var beforeFallback, afterFallback database.Dialect
 	if isConnectionString(beforeArg) {
-		beforeFallback = driverNameToDialect(detectDriver(beforeArg))
+		beforeFallback = schema.DriverNameToDialect(detectDriver(beforeArg))
 		afterFallback = beforeFallback
 	}
 	if isConnectionString(afterArg) {
-		afterFallback = driverNameToDialect(detectDriver(afterArg))
+		afterFallback = schema.DriverNameToDialect(detectDriver(afterArg))
 		if beforeFallback == database.DialectUnknown {
 			beforeFallback = afterFallback
 		}
@@ -460,13 +460,13 @@ func runPlan(args []string) {
 
 	var fromFallback, toFallback database.Dialect
 	if isConnectionString(fromInput) {
-		fromFallback = driverNameToDialect(detectDriver(fromInput))
+		fromFallback = schema.DriverNameToDialect(detectDriver(fromInput))
 		if !isConnectionString(toInput) {
 			toFallback = fromFallback
 		}
 	}
 	if isConnectionString(toInput) {
-		toFallback = driverNameToDialect(detectDriver(toInput))
+		toFallback = schema.DriverNameToDialect(detectDriver(toInput))
 		if fromFallback == database.DialectUnknown {
 			fromFallback = toFallback
 		}
@@ -592,7 +592,7 @@ func runRollback(args []string) {
 	}
 
 	// Load the forward plan
-	forwardPlan, err := LoadJSONPlan(*planPath)
+	forwardPlan, err := planner.LoadJSONPlan(*planPath)
 	if err != nil {
 		log.Fatalf("Failed to load forward plan: %v", err)
 	}
@@ -600,7 +600,7 @@ func runRollback(args []string) {
 	// Load the before schema (supports files, directories, or database connection strings)
 	var rollbackFallback database.Dialect
 	if isConnectionString(sourceInput) {
-		rollbackFallback = driverNameToDialect(detectDriver(sourceInput))
+		rollbackFallback = schema.DriverNameToDialect(detectDriver(sourceInput))
 	}
 
 	beforeSchema, err := LoadSchemaOrIntrospectWithOptions(sourceInput, buildSchemaLoadOptions(sourceInput, rollbackFallback))
@@ -704,7 +704,7 @@ func runApply(args []string) {
 		}
 
 		// Load plan from file
-		loadedPlan, err := LoadJSONPlan(planFile)
+		loadedPlan, err := planner.LoadJSONPlan(planFile)
 		if err != nil {
 			log.Fatalf("Failed to load migration plan: %v", err)
 		}
@@ -732,7 +732,7 @@ func runApply(args []string) {
 		}
 
 		planDriverType := detectDriver(targetConnStr)
-		planDialect := driverNameToDialect(planDriverType)
+		planDialect := schema.DriverNameToDialect(planDriverType)
 
 		// Load desired schema (this is the "to" state)
 		fmt.Fprintf(os.Stderr, "📖 Loading desired schema from %s...\n", schemaPath)
@@ -1000,7 +1000,7 @@ func runValidateSchema(args []string) {
 		os.Exit(1)
 	}
 
-	if err := ValidateJSONSchema(path); err != nil {
+	if err := schema.ValidateJSONSchema(path); err != nil {
 		log.Fatalf("Schema validation failed: %v", err)
 	}
 
@@ -1302,7 +1302,7 @@ func runConvert(args []string) {
 	}
 
 	// Load the schema
-	schema, err := LoadSchema(*input)
+	loadedSchema, err := schema.LoadSchema(*input)
 	if err != nil {
 		log.Fatalf("Failed to load schema: %v", err)
 	}
@@ -1311,7 +1311,7 @@ func runConvert(args []string) {
 	var outputData []byte
 	switch *toFormat {
 	case "json":
-		outputData, err = json.MarshalIndent(schema, "", "  ")
+		outputData, err = json.MarshalIndent(loadedSchema, "", "  ")
 		if err != nil {
 			log.Fatalf("Failed to marshal JSON: %v", err)
 		}
@@ -1321,7 +1321,7 @@ func runConvert(args []string) {
 		driver := postgres.NewDriver() // Use PostgreSQL SQL generator
 		var sqlBuilder strings.Builder
 
-		for _, table := range schema.Tables {
+		for _, table := range loadedSchema.Tables {
 			sql, _ := driver.CreateTable(table)
 			sqlBuilder.WriteString(sql)
 			sqlBuilder.WriteString(";\n\n")
