@@ -10,6 +10,7 @@ on:
       - 'devdocs/**'
       - '_config.yml'
       - '_includes/**'
+      - '_sass/**'
       - 'assets/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
