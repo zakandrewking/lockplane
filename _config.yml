@@ -11,15 +11,39 @@ remote_theme: just-the-docs/just-the-docs
 # Plugins
 plugins:
   - jekyll-remote-theme
-  - jekyll-readme-index
   - jekyll-relative-links
   - jekyll-titles-from-headings
   - jekyll-seo-tag
 
-# Use README.md as the home page (no nav link, just index)
-readme_index:
-  enabled: true
-  remove_originals: true
+exclude:
+  - AGENTS.md
+  - CLAUDE.md
+  - README.md
+  - RELEASE.md
+  - TESTING.md
+  - LICENSE
+  - llms.txt
+  - lockplane.toml.example
+  - go.mod
+  - go.sum
+  - pyproject.toml
+  - uv.lock
+  - Dockerfile.goreleaser
+  - lockplane
+  - claude-plugin/
+  - cmd/
+  - database/
+  - devdocs/
+  - diagnostic/
+  - dist/
+  - examples/
+  - internal/
+  - scenarios/
+  - schema-json/
+  - scripts/
+  - testdata/
+  - vscode-lockplane/
+  - "*.go"
 
 # Auto-use the first H1 on each page as its title
 titles_from_headings:
@@ -115,11 +139,6 @@ defaults:
       path: "docs"
     values:
       layout: "default"
-
-# Only include README.md and docs/ directory
-include:
-  - ./README.md
-  - ./docs/
 
 # Kramdown settings
 kramdown:
