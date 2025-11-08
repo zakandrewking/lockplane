@@ -64,6 +64,16 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.connectionError = nil
 		}
 		return m, nil
+
+	case fileCreationResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.state = StateError
+			return m, nil
+		}
+		m.result = msg.result
+		m.state = StateDone
+		return m, nil
 	}
 
 	return m, nil
@@ -117,6 +127,7 @@ func (m WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.state = StateTestConnection
+		m.testingConnection = true
 		return m, m.testConnection()
 
 	case StateTestConnection:
