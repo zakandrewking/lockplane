@@ -140,6 +140,16 @@ func runInit(args []string) {
 	}
 
 	if *yes {
+		existingPath, err := checkExistingConfig()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error checking for existing config: %v\n", err)
+			os.Exit(1)
+		}
+		if existingPath != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Config already exists at /%s. ", *existingPath)
+			_, _ = fmt.Fprintf(os.Stderr, "To use defaults, first delete the existing config file, and then run `lockplane init --yes` again.\n")
+			os.Exit(1)
+		}
 		result, err := bootstrapSchemaDirectory()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -182,7 +192,7 @@ func bootstrapSchemaDirectory() (*bootstrapResult, error) {
 
 	configPath := filepath.Join(defaultSchemaDir, lockplaneConfigFilename)
 	if info, err := os.Stat(configPath); err == nil && !info.IsDir() {
-		return nil, fmt.Errorf("%s already exists. Edit the existing file or delete it if you want to re-initialize", filepath.ToSlash(configPath))
+		return nil, fmt.Errorf("/%s already exists. Edit the existing file or delete it if you want to re-initialize", configPath)
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -328,23 +338,31 @@ func (m *initWizardModel) initInputs() {
 
 func (m *initWizardModel) Init() tea.Cmd {
 	// Check for existing config
-	return m.checkExistingConfig()
+	return m.checkExistingConfigWizard()
 }
 
-func (m *initWizardModel) checkExistingConfig() tea.Cmd {
+func checkExistingConfig() (*string, error) {
+	legacyPath := lockplaneConfigFilename
+	if _, err := os.Stat(legacyPath); err == nil {
+		return &legacyPath, nil
+	}
+	configPath := filepath.Join(defaultSchemaDir, lockplaneConfigFilename)
+	if _, err := os.Stat(configPath); err == nil {
+		return &configPath, nil
+	}
+	return nil, nil
+}
+
+func (m *initWizardModel) checkExistingConfigWizard() tea.Cmd {
 	return func() tea.Msg {
-		// Check schema/lockplane.toml first (preferred)
-		configPath := filepath.Join(defaultSchemaDir, lockplaneConfigFilename)
-		if _, err := os.Stat(configPath); err == nil {
-			return existingConfigMsg{Path: configPath}
+		existingPath, err := checkExistingConfig()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error checking for existing config: %v\n", err)
+			os.Exit(1)
 		}
-
-		// Check ./lockplane.toml (legacy)
-		legacyPath := lockplaneConfigFilename
-		if _, err := os.Stat(legacyPath); err == nil {
-			return existingConfigMsg{Path: legacyPath}
+		if existingPath != nil {
+			return existingConfigMsg{Path: *existingPath}
 		}
-
 		return noExistingConfigMsg{}
 	}
 }
@@ -739,7 +757,7 @@ func (m *initWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case StateWelcome:
 		m.state = StateCheckExisting
-		return m, m.checkExistingConfig()
+		return m, m.checkExistingConfigWizard()
 
 	case StateCheckExisting:
 		// User wants to add new environment
