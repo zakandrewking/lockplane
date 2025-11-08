@@ -13,12 +13,12 @@
 - [x] Review and approve design
 
 ### Phase 2: Core Implementation
-- [ ] Implement multi-step wizard model
-- [ ] Add environment collection flow
-- [ ] Add database type detection/selection
-- [ ] Add connection string validation
-- [ ] Generate lockplane.toml with custom environments
-- [ ] Generate corresponding .env files
+- [x] Implement multi-step wizard model
+- [x] Add environment collection flow
+- [x] Add database type detection/selection
+- [x] Add connection string validation
+- [x] Generate lockplane.toml with custom environments
+- [x] Generate corresponding .env files
 
 ### Phase 3: Enhanced Features
 - [ ] Add "detect from existing database" flow
