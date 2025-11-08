@@ -1,17 +1,20 @@
 # Driver-Based SQL Generation Refactor
 
-**Status**: In Progress
+**Status**: ✅ **COMPLETE**
 **Started**: 2024-11-03
-**Issue**: Lockplane generates PostgreSQL SQL for SQLite/libSQL databases
+**Completed**: 2025-11-08
+**Issue**: Lockplane was generating PostgreSQL SQL for SQLite/libSQL databases
 
 ## Problem Statement
 
-When users connect to SQLite or Turso/libSQL databases, Lockplane generates PostgreSQL-style SQL:
-- `ALTER TABLE ... ALTER COLUMN ... TYPE` (PostgreSQL syntax)
-- `pg_catalog.int4` (PostgreSQL type)
+When users generated migration plans from SQLite schema files, Lockplane generated PostgreSQL-style SQL:
+- `ALTER TABLE ... ALTER COLUMN ... TYPE` (PostgreSQL syntax - not supported by SQLite)
+- This caused SQLite migrations to fail with syntax errors
 - SQLite doesn't support most ALTER COLUMN operations
 
-**Root Cause**: The `GeneratePlan()` function uses hardcoded PostgreSQL SQL generation instead of using the driver-specific SQL generators.
+**Root Cause**: The plan command used `detectDriver()` on file paths (which defaulted to PostgreSQL), ignoring the schema's dialect field loaded from JSON or SQL comments.
+
+**Solution**: Check `after.Dialect` field first before falling back to `detectDriver()` for connection strings.
 
 ## Current Architecture
 
@@ -230,3 +233,71 @@ func TestGeneratePlan_SQLite(t *testing.T) {
 - Driver interface: `database/interface.go`
 - PostgreSQL generator: `database/postgres/generator.go`
 - SQLite generator: `database/sqlite/generator.go`
+
+---
+
+## Final Implementation Summary
+
+### What Was Completed
+
+✅ **Phase 1-4**: All function signatures updated, driver parameters added throughout
+✅ **Phase 5**: Added comprehensive tests comparing PostgreSQL vs SQLite SQL generation
+✅ **Phase 6**: Integration tested with real schema files (JSON and SQL DDL)
+✅ **Fix Applied**: Updated `runPlan()` in main.go to check `after.Dialect` before falling back to `detectDriver()`
+
+### Key Changes
+
+1. **main.go** (runPlan function):
+   ```go
+   // Now checks schema's Dialect field first
+   if after.Dialect != "" && after.Dialect != database.DialectUnknown {
+       targetDriverType = string(after.Dialect)
+   } else {
+       targetDriverType = detectDriver(toInput)  // fallback for connection strings
+   }
+   ```
+
+2. **internal/planner/planner_test.go**:
+   - Added `TestGeneratePlan_PostgreSQLvsSQLite` to verify drivers generate different SQL
+   - PostgreSQL generates: `ALTER TABLE ... ALTER COLUMN ... TYPE`
+   - SQLite generates: Comment about limitation (table recreation required)
+
+### Verification
+
+**Test Results:**
+- PostgreSQL plan with type change: ✅ Generates `ALTER COLUMN TYPE`
+- SQLite plan with type change: ✅ Generates limitation comment (correct behavior)
+- SQLite plan with column addition: ✅ Generates `ALTER TABLE ... ADD COLUMN` (supported operation)
+
+**Example Output:**
+```json
+{
+  "steps": [
+    {
+      "description": "SQLite limitation: Cannot modify column users.age (changes: type). Would require table recreation.",
+      "sql": "-- SQLite limitation: Cannot modify column users.age (changes: type). Would require table recreation."
+    }
+  ]
+}
+```
+
+### Impact
+
+- ✅ SQLite/libSQL users now get correct SQL or clear limitation messages
+- ✅ PostgreSQL users continue to get PostgreSQL-specific SQL
+- ✅ Dialect detection works for JSON schemas, SQL DDL files, and connection strings
+- ✅ All tests pass, CI green
+
+### Lessons Learned
+
+1. **Binary confusion**: Always use `./lockplane` or `go install` - `lockplane` may run stale binary from PATH
+2. **Logging**: `log.Printf` output doesn't appear by default - use `log.Fatalf` for debugging or check stderr explicitly
+3. **Type aliases**: `Schema = database.Schema` preserves all fields including Dialect during conversions
+4. **SQLite limitations**: Driver correctly returns comments for unsupported operations instead of invalid SQL
+
+### Next Steps
+
+The driver-based SQL generation is now complete and working correctly. Future enhancements could include:
+- Implement table recreation strategy for SQLite column modifications (currently just returns comment)
+- Add more dialect-specific optimizations
+- Support additional databases (MySQL, etc.)
