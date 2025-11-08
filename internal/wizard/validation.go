@@ -20,7 +20,8 @@ func ValidateEnvironmentName(name string) error {
 
 	// Must be alphanumeric or underscore
 	for _, ch := range name {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-') {
+		isValid := (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-'
+		if !isValid {
 			return fmt.Errorf("environment name must contain only letters, numbers, underscores, and hyphens")
 		}
 	}
