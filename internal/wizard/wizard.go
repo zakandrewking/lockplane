@@ -2,6 +2,7 @@ package wizard
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -21,7 +22,7 @@ func New() WizardModel {
 
 // Init initializes the wizard (Bubble Tea Init)
 func (m WizardModel) Init() tea.Cmd {
-	return nil
+	return checkForExistingConfig
 }
 
 // Update handles state transitions (Bubble Tea Update)
@@ -74,6 +75,18 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result = msg.result
 		m.state = StateDone
 		return m, nil
+
+	case existingConfigMsg:
+		if msg.path != "" {
+			// Found existing config
+			m.existingConfigPath = msg.path
+			m.existingEnvNames = msg.envNames
+			m.state = StateCheckExisting
+		} else {
+			// No existing config, go to welcome
+			m.state = StateWelcome
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -84,6 +97,8 @@ func (m WizardModel) View() string {
 	switch m.state {
 	case StateWelcome:
 		return m.renderWelcome()
+	case StateCheckExisting:
+		return m.renderCheckExisting()
 	case StateDatabaseType:
 		return m.renderDatabaseType()
 	case StateConnectionDetails:
@@ -110,6 +125,11 @@ func (m WizardModel) View() string {
 func (m WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case StateWelcome:
+		m.state = StateDatabaseType
+		return m, nil
+
+	case StateCheckExisting:
+		// User wants to add a new environment
 		m.state = StateDatabaseType
 		return m, nil
 
@@ -350,6 +370,53 @@ func (m WizardModel) createFiles() tea.Cmd {
 	}
 }
 
+type existingConfigMsg struct {
+	path     string
+	envNames []string
+}
+
+func checkForExistingConfig() tea.Msg {
+	// Check for config in schema/ (preferred)
+	configPath := "schema/lockplane.toml"
+	envNames, err := getEnvironmentNames(configPath)
+	if err == nil && len(envNames) > 0 {
+		return existingConfigMsg{path: configPath, envNames: envNames}
+	}
+
+	// Check for legacy config at root
+	configPath = "lockplane.toml"
+	envNames, err = getEnvironmentNames(configPath)
+	if err == nil && len(envNames) > 0 {
+		return existingConfigMsg{path: configPath, envNames: envNames}
+	}
+
+	// No existing config
+	return existingConfigMsg{}
+}
+
+func getEnvironmentNames(configPath string) ([]string, error) {
+	// Simple TOML parsing to extract environment names
+	// We look for [environments.NAME] sections
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var envNames []string
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[environments.") && strings.HasSuffix(line, "]") {
+			// Extract environment name from [environments.NAME]
+			envName := strings.TrimPrefix(line, "[environments.")
+			envName = strings.TrimSuffix(envName, "]")
+			envNames = append(envNames, envName)
+		}
+	}
+
+	return envNames, nil
+}
+
 // View renderers
 
 func (m WizardModel) renderWelcome() string {
@@ -364,6 +431,23 @@ func (m WizardModel) renderWelcome() string {
 		"  • Create environment-specific config files"))
 	b.WriteString("\n\n")
 	b.WriteString(renderStatusBar("Press Enter to continue, q to quit"))
+
+	return borderStyle.Render(b.String())
+}
+
+func (m WizardModel) renderCheckExisting() string {
+	var b strings.Builder
+
+	b.WriteString(renderHeader("Lockplane Init Wizard"))
+	b.WriteString("\n\n")
+	b.WriteString(renderSuccess("Found existing configuration!"))
+	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("Config: %s\n", m.existingConfigPath))
+	b.WriteString(fmt.Sprintf("Environments: %s\n", strings.Join(m.existingEnvNames, ", ")))
+	b.WriteString("\n")
+	b.WriteString(renderInfo("Would you like to add a new environment?"))
+	b.WriteString("\n\n")
+	b.WriteString(renderStatusBar("Press Enter to add new environment, q to quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -546,10 +630,15 @@ func (m WizardModel) renderDone() string {
 	}
 
 	b.WriteString("\n")
+	b.WriteString(renderInfo("Ready to introspect your database!\n" +
+		"  Run: lockplane introspect\n\n" +
+		"  This will capture your current schema and\n" +
+		"  save it to schema/schema.json"))
+	b.WriteString("\n\n")
 	b.WriteString("Next steps:\n")
-	b.WriteString("  1. Run: lockplane introspect\n")
-	b.WriteString("  2. Review: schema/lockplane.toml\n")
-	b.WriteString("  3. Ensure .env.* files are not committed\n")
+	b.WriteString("  1. Run introspection to capture current schema\n")
+	b.WriteString("  2. Review generated files\n")
+	b.WriteString("  3. Make schema changes and generate migration plans\n")
 
 	b.WriteString("\n\n")
 	b.WriteString(renderStatusBar("Press Enter to exit"))

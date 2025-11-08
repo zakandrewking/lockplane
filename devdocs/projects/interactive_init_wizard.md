@@ -21,8 +21,10 @@
 - [x] Generate corresponding .env files
 
 ### Phase 3: Enhanced Features
-- [ ] Add "detect from existing database" flow
-- [ ] Add connection string testing
+- [x] Add existing config detection and "add new environment" flow
+- [x] Add connection string testing (implemented in Phase 2)
+- [x] Enhanced introspect guidance after setup
+- [ ] Add connection retry/edit options for failed tests
 - [ ] Add schema path customization
 - [ ] Add templates for common setups (Supabase, local Postgres, SQLite)
 

@@ -24,6 +24,10 @@ const (
 type WizardModel struct {
 	state WizardState
 
+	// Existing config detection
+	existingConfigPath string
+	existingEnvNames   []string
+
 	// Current environment being configured
 	currentEnv   EnvironmentInput
 	environments []EnvironmentInput
