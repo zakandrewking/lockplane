@@ -6,7 +6,11 @@
 - [x] Document current init behavior
 - [x] Define wizard flow and UX
 - [x] Specify config file structure
-- [ ] Review and approve design
+- [x] Add visual design (colors, formatting)
+- [x] Design for all project stages (empty, existing config, existing DB)
+- [x] Add educational content (shadow DB, best practices)
+- [x] Design extensibility (security hardening, future features)
+- [x] Review and approve design
 
 ### Phase 2: Core Implementation
 - [ ] Implement multi-step wizard model
@@ -847,3 +851,486 @@ func TestConnection(connStr string, dbType string) error {
 4. **Cloud provider integration**: OAuth flows for Supabase, PlanetScale, etc.
 5. **Configuration validation**: `lockplane config check` command
 6. **Environment switching**: `lockplane use <env>` to change default
+
+---
+
+## New Design Requirements (2025-11-08)
+
+### 1. Visual Design - Nicer Colors & Formatting
+
+**Use terminal colors for better visual hierarchy and user experience:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 🔧 Lockplane Init Wizard                                    │ ← Cyan header
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ 📦 Database Type Selection                                  │ ← Bold section header
+│                                                             │
+│   What database are you using?                              │ ← Gray question text
+│     ► 1. PostgreSQL (recommended for production)            │ ← Green highlight for selection
+│       2. SQLite (simple, file-based)                        │
+│       3. libSQL/Turso (edge database)                       │
+│                                                             │
+│   💡 PostgreSQL provides the most features including        │ ← Blue info box
+│      shadow databases for safe migration testing.           │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│ ✓ Connection successful                                     │ ← Green success
+│ ⚠ Warning: Remote host without SSL                         │ ← Yellow warning
+│ ✗ Connection failed: could not connect to server           │ ← Red error
+│                                                             │
+│ 🔍 What is a shadow database?                               │ ← Collapsible help
+│    A shadow database is a temporary copy used to test       │ ← Dim gray help text
+│    migrations before applying them to your actual database. │
+│    This prevents data loss from failed migrations.          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+Arrow keys: navigate  │  Enter: select  │  ?: help  │  Ctrl+C: cancel
+← Dim status bar with keyboard shortcuts
+```
+
+**Color Palette:**
+- **Primary (Cyan)**: Headers, branding
+- **Success (Green)**: Checkmarks, successful connections, valid input
+- **Warning (Yellow)**: Warnings, non-critical issues
+- **Error (Red)**: Errors, failed connections, invalid input
+- **Info (Blue)**: Help text, educational content, tips
+- **Muted (Gray)**: Labels, secondary text, borders
+- **Highlight (Bright White/Bold)**: Selected items, current input focus
+
+**Icons & Symbols:**
+- ✓ Success
+- ✗ Error
+- ⚠ Warning
+- 💡 Tip/Info
+- 🔧 Tool/Action
+- 📦 Package/Database
+- 🔍 Help/Learn More
+- 🔒 Security
+- ⏳ In Progress (spinner)
+
+**Implementation:**
+- Use `github.com/charmbracelet/lipgloss` for styling
+- Use `github.com/charmbracelet/bubbles` for components (spinner, input, etc.)
+- Consistent spacing and alignment
+- Responsive to terminal width (graceful degradation)
+
+---
+
+### 2. Handle All Project Stages
+
+**The wizard must gracefully handle three scenarios:**
+
+#### Scenario A: Empty Project (First Time)
+```
+Current directory: /home/user/myapp
+├── (empty or just code files)
+
+Wizard behavior:
+1. Welcome message: "Let's set up Lockplane!"
+2. Create schema/ directory
+3. Create schema/lockplane.toml
+4. Generate .env.* files
+5. Update .gitignore
+6. Offer to run introspect
+
+Result:
+/home/user/myapp
+├── schema/
+│   └── lockplane.toml
+├── .env.local
+└── .gitignore (updated)
+```
+
+#### Scenario B: Existing Config (Add Environment)
+```
+Current directory: /home/user/myapp
+├── schema/
+│   └── lockplane.toml  ← EXISTS
+└── .env.local          ← EXISTS
+
+Wizard behavior:
+1. Detect existing config
+2. Show message: "Found existing config at schema/lockplane.toml"
+3. List current environments: "Environments: local"
+4. Ask: "Add a new environment? (Y/n)"
+   - Yes: Skip welcome, go to environment setup
+   - No: Exit gracefully with "No changes made"
+5. Add new environment to existing config
+6. Create new .env.{name} file
+7. Show summary: "Added 'staging' environment"
+
+Result (if added 'staging'):
+/home/user/myapp
+├── schema/
+│   └── lockplane.toml  (updated with staging env)
+├── .env.local
+└── .env.staging        (new)
+```
+
+#### Scenario C: Database Already Running (Import/Connect)
+```
+Current state: User has PostgreSQL running on localhost:5432
+
+Wizard behavior:
+1. During database type selection, offer:
+   "Do you have a database already running? (Y/n)"
+
+2. If Yes:
+   a. "Let me help you connect to it"
+   b. Prompt for connection details
+   c. TEST CONNECTION immediately
+   d. On success: "✓ Connected to PostgreSQL 15.3"
+   e. Ask: "Introspect existing schema now? (Y/n)"
+
+3. If user chooses to introspect:
+   a. Run introspection
+   b. Show: "Found 5 tables: users, posts, comments, tags, categories"
+   c. Ask: "Save schema to schema/schema.json? (Y/n)"
+   d. Generate schema file
+   e. Show next steps: "Schema saved. Ready to manage migrations!"
+
+4. If user skips introspection:
+   a. Create config for empty schema
+   b. Show: "Config created. Run 'lockplane introspect' when ready"
+
+Enhanced flow:
+┌─────────────────────────────────────────────────────────────┐
+│ 📦 Database Setup                                           │
+│                                                             │
+│   Do you have a PostgreSQL database already running?        │
+│     ● Yes - Connect to existing database                    │
+│     ○ No - Set up for future database                       │
+│                                                             │
+│   💡 If you have a database running, I can connect to it    │
+│      and introspect your existing schema right now!         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Detection & Recovery:**
+- Check for lockplane.toml in schema/ and ./
+- Check for .env.* files
+- Offer to import/merge if partial setup found
+- Never overwrite without confirmation
+- Always show "what will change" before proceeding
+
+---
+
+### 3. Educational Content & Help
+
+**Integrate learning into the wizard - teach while configuring:**
+
+#### Inline Tips (Context-Aware)
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 🔒 Shadow Database Setup                                    │
+│                                                             │
+│   Shadow DB: localhost:5433/lockplane_shadow                │
+│   ✓ Auto-configured (PostgreSQL only)                       │
+│                                                             │
+│   💡 What is a shadow database?                             │
+│      A shadow database is a temporary, isolated copy of     │
+│      your database used to test migrations safely.          │
+│                                                             │
+│      How it works:                                          │
+│      1. Apply migration to shadow DB first                  │
+│      2. Verify it succeeds without errors                   │
+│      3. Only then apply to your real database               │
+│      4. Prevents data loss from failed migrations           │
+│                                                             │
+│      ⚠ SQLite doesn't use shadow DBs (creates file clutter) │
+│      ℹ Turso doesn't support shadow DBs (edge databases)    │
+│                                                             │
+│   Press 'h' for more help, Enter to continue                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Educational Moments (Strategic)
+
+**Moment 1: First Environment Setup**
+```
+💡 TIP: Environments
+   Lockplane supports multiple environments (local, staging, prod).
+
+   • local: Your development database on localhost
+   • staging: Pre-production testing database
+   • production: Live database (use with caution!)
+
+   You can add more environments later with: lockplane init
+```
+
+**Moment 2: Connection String Security**
+```
+🔒 SECURITY: Why .env files?
+
+   Database credentials should NEVER be committed to git.
+
+   ✓ lockplane.toml - Safe to commit (no secrets)
+   ✗ .env.* - Never commit (contains passwords)
+
+   We'll automatically add .env.* to .gitignore for you.
+```
+
+**Moment 3: SSL Mode**
+```
+🔐 SSL Connections
+
+   Detected remote host: db.example.com
+   → Using sslmode=require (encrypted connection)
+
+   ℹ localhost connections use sslmode=disable (faster, still secure)
+   ⚠ Never use sslmode=disable for remote databases!
+```
+
+**Moment 4: Migration Safety**
+```
+✓ Connection successful!
+
+💡 Best Practice: Test migrations safely
+
+   1. Shadow DB validates migrations before applying
+   2. Rollback plans generated automatically
+   3. Always test in staging before production
+
+   Your setup: Shadow DB enabled ✓
+   Learn more: https://lockplane.dev/docs/shadow-db
+```
+
+#### Expandable Help (Press '?' anytime)
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 📚 Help: Database Connection                                │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ PostgreSQL Connection String Format:                        │
+│   postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=X  │
+│                                                             │
+│ Examples:                                                   │
+│   Local:     postgresql://user:pass@localhost:5432/mydb    │
+│   Supabase:  postgresql://postgres:***@aws-0-us-west.      │
+│              pooler.supabase.com:6543/postgres             │
+│                                                             │
+│ Common Issues:                                              │
+│   ✗ "connection refused" → Database not running            │
+│   ✗ "authentication failed" → Wrong password               │
+│   ✗ "database does not exist" → Create DB first            │
+│                                                             │
+│ Press 'b' to go back, 'q' to quit                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Help System Implementation:**
+- Press '?' at any step shows contextual help
+- Help is step-specific (relevant to current question)
+- Links to docs for deeper learning
+- Examples for every input type
+- Common pitfalls and solutions
+
+---
+
+### 4. Extensibility Design - Future Features
+
+**Design the wizard to be easily extensible for future capabilities:**
+
+#### Plugin Architecture
+```go
+// Extensible validator system
+type Validator interface {
+    Name() string
+    Description() string
+    Validate(ctx context.Context, env *Environment) ValidationResult
+    Required() bool  // true = must pass, false = warning only
+}
+
+// Example validators (now and future)
+var validators = []Validator{
+    &ConnectionValidator{},           // Phase 2 (now)
+    &ShadowDBValidator{},              // Phase 2 (now)
+    &SecurityHardeningValidator{},     // Future
+    &PerformanceValidator{},           // Future
+    &BackupConfigValidator{},          // Future
+    &SSLCertificateValidator{},        // Future
+}
+
+// Future: Security Hardening Validator
+type SecurityHardeningValidator struct{}
+
+func (v *SecurityHardeningValidator) Validate(ctx context.Context, env *Environment) ValidationResult {
+    checks := []Check{
+        checkPasswordPolicy(ctx, env),
+        checkRolePermissions(ctx, env),
+        checkEncryptionAtRest(ctx, env),
+        checkAuditLogging(ctx, env),
+        checkConnectionLimits(ctx, env),
+    }
+
+    return ValidationResult{
+        Validator: "Security Hardening",
+        Checks:    checks,
+        Level:     WarningLevel,  // Don't block init, just inform
+    }
+}
+
+// Wizard shows results:
+// 🔒 Security Hardening Check
+//    ✓ Password policy: Strong (min 12 chars)
+//    ⚠ Role permissions: postgres user has superuser
+//    ✗ Encryption at rest: Not enabled
+//    ⚠ Audit logging: Not configured
+//    ✓ Connection limits: 100 (reasonable)
+//
+//    💡 Improve security: lockplane security harden
+```
+
+#### Wizard Step Plugin System
+```go
+// Extensible step system
+type WizardStep interface {
+    Name() string
+    Enabled(ctx *WizardContext) bool  // Conditional steps
+    Render(model *WizardModel) string
+    Update(msg tea.Msg, model *WizardModel) (*WizardModel, tea.Cmd)
+    Validate(model *WizardModel) error
+}
+
+// Core steps (Phase 2-3)
+var coreSteps = []WizardStep{
+    &WelcomeStep{},
+    &DatabaseTypeStep{},
+    &ConnectionDetailsStep{},
+    &TestConnectionStep{},
+    &SummaryStep{},
+}
+
+// Optional/future steps (enabled by flags or config)
+var optionalSteps = []WizardStep{
+    &IntrospectStep{enabled: func(ctx) bool {
+        return ctx.ConnectionSuccessful && ctx.UserWantsIntrospect
+    }},
+
+    &SecurityCheckStep{enabled: func(ctx) bool {
+        return ctx.Flags.CheckSecurity  // --check-security flag
+    }},
+
+    &BackupConfigStep{enabled: func(ctx) bool {
+        return ctx.DatabaseType == "postgres" && ctx.Flags.SetupBackups
+    }},
+
+    &PerformanceBaselineStep{enabled: func(ctx) bool {
+        return ctx.Flags.Benchmark  // --benchmark flag
+    }},
+}
+
+// Easy to add new steps without modifying core wizard
+```
+
+#### Template System for Database Types
+```go
+// Easily add new database types
+type DatabaseTemplate interface {
+    Name() string
+    DisplayName() string
+    Icon() string
+    ConnectionFields() []Field
+    Validators() []Validator
+    DefaultShadowDB() bool
+    GenerateConnectionString(fields map[string]string) string
+    HelpText() string
+}
+
+// Current templates
+var databaseTemplates = map[string]DatabaseTemplate{
+    "postgres": &PostgreSQLTemplate{},
+    "sqlite":   &SQLiteTemplate{},
+    "libsql":   &LibSQLTemplate{},
+}
+
+// Easy to add future databases
+// "mysql":      &MySQLTemplate{},      // Future
+// "cockroach":  &CockroachTemplate{},  // Future
+// "yugabyte":   &YugabyteTemplate{},   // Future
+```
+
+#### Feature Flags for Progressive Enhancement
+```go
+type FeatureFlags struct {
+    // Current features (always on)
+    ConnectionTesting    bool  // true
+    ShadowDBSetup       bool  // true
+    GitignoreUpdate     bool  // true
+
+    // Future features (opt-in via flags)
+    SecurityHardening   bool  // --check-security
+    BackupConfiguration bool  // --setup-backups
+    PerformanceTuning   bool  // --tune-performance
+    MultiRegionSetup    bool  // --multi-region
+
+    // Experimental features (hidden)
+    AutoSchemaImport    bool  // --experimental-import
+    CloudProvisioning   bool  // --experimental-cloud
+}
+
+// Usage:
+// lockplane init                           (basic)
+// lockplane init --check-security          (with security checks)
+// lockplane init --setup-backups           (with backup config)
+// lockplane init --experimental-import     (auto-import from Prisma/etc)
+```
+
+#### Post-Init Hook System
+```go
+// Allow running actions after successful init
+type PostInitHook interface {
+    Name() string
+    ShouldRun(ctx *WizardContext) bool
+    Run(ctx context.Context, cfg *Config) error
+    RollbackOnError() bool
+}
+
+var postInitHooks = []PostInitHook{
+    &GitignoreUpdateHook{},           // Always run
+    &IntrospectHook{},                // If user opts in
+    &SecurityCheckHook{},             // If --check-security
+    &CreateInitialMigrationHook{},    // If schema exists
+    &SetupCIWorkflowHook{},           // If --setup-ci
+    &InstallPreCommitHookHook{},      // If --setup-hooks
+}
+
+// Example future hook:
+type SecurityCheckHook struct{}
+
+func (h *SecurityCheckHook) ShouldRun(ctx *WizardContext) bool {
+    return ctx.Flags.CheckSecurity
+}
+
+func (h *SecurityCheckHook) Run(ctx context.Context, cfg *Config) error {
+    fmt.Println("\n🔒 Running security hardening checks...")
+
+    results := runSecurityChecks(ctx, cfg)
+    displaySecurityReport(results)
+
+    if hasHighRiskIssues(results) {
+        fmt.Println("\n⚠ High-risk security issues found")
+        fmt.Println("  Run: lockplane security harden")
+    }
+
+    return nil
+}
+```
+
+**Extensibility Benefits:**
+1. Add new features without breaking existing wizard
+2. Optional features don't clutter basic flow
+3. Easy to experiment with new capabilities
+4. Backward compatible (new steps are opt-in)
+5. Clear separation of concerns
+
+**Future Feature Examples:**
+- `lockplane init --check-security` → Security hardening validation
+- `lockplane init --setup-backups` → Configure automated backups
+- `lockplane init --tune-performance` → Analyze and suggest DB tuning
+- `lockplane init --setup-ci` → Generate GitHub Actions workflow
+- `lockplane init --multi-region` → Configure multi-region deployment
