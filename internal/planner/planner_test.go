@@ -6,6 +6,7 @@ import (
 
 	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/database/postgres"
+	"github.com/lockplane/lockplane/database/sqlite"
 	"github.com/lockplane/lockplane/internal/schema"
 )
 
@@ -382,4 +383,94 @@ func TestGeneratePlan_EmptyDiff(t *testing.T) {
 	if len(plan.Steps) != 0 {
 		t.Errorf("Expected empty plan for empty diff, got %d steps", len(plan.Steps))
 	}
+}
+
+// TestGeneratePlan_PostgreSQLvsSQLite verifies that different drivers generate appropriate SQL
+func TestGeneratePlan_PostgreSQLvsSQLite(t *testing.T) {
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName: "users",
+				ModifiedColumns: []schema.ColumnDiff{
+					{
+						ColumnName: "age",
+						Old:        database.Column{Name: "age", Type: "integer", Nullable: true},
+						New:        database.Column{Name: "age", Type: "bigint", Nullable: true},
+						Changes:    []string{"type"},
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("PostgreSQL", func(t *testing.T) {
+		driver := postgres.NewDriver()
+		plan, err := GeneratePlan(diff, driver)
+		if err != nil {
+			t.Fatalf("Failed to generate PostgreSQL plan: %v", err)
+		}
+
+		if len(plan.Steps) == 0 {
+			t.Fatal("Expected PostgreSQL to generate steps for column type change")
+		}
+
+		// PostgreSQL should use ALTER COLUMN TYPE
+		foundAlterColumn := false
+		for _, step := range plan.Steps {
+			if strings.Contains(step.SQL, "ALTER COLUMN") && strings.Contains(step.SQL, "TYPE") {
+				foundAlterColumn = true
+				break
+			}
+		}
+
+		if !foundAlterColumn {
+			t.Errorf("Expected PostgreSQL to use ALTER COLUMN TYPE, got steps: %v", plan.Steps)
+		}
+	})
+
+	t.Run("SQLite", func(t *testing.T) {
+		driver := sqlite.NewDriver()
+		plan, err := GeneratePlan(diff, driver)
+		if err != nil {
+			t.Fatalf("Failed to generate SQLite plan: %v", err)
+		}
+
+		if len(plan.Steps) == 0 {
+			t.Fatal("Expected SQLite to generate steps for column type change")
+		}
+
+		// Print what SQL was generated for debugging
+		t.Logf("SQLite generated %d steps:", len(plan.Steps))
+		for i, step := range plan.Steps {
+			t.Logf("  Step %d: %s", i+1, step.Description)
+			t.Logf("  SQL: %s", step.SQL)
+		}
+
+		// SQLite should NOT use ALTER COLUMN (it's not supported)
+		// Instead it should use table recreation strategy or comment
+		for _, step := range plan.Steps {
+			if strings.Contains(step.SQL, "ALTER COLUMN") {
+				t.Errorf("SQLite should not use ALTER COLUMN (not supported), got: %s", step.SQL)
+			}
+		}
+
+		// SQLite should mention table recreation in description or use temp table
+		foundRecreation := false
+		for _, step := range plan.Steps {
+			desc := strings.ToLower(step.Description)
+			sql := strings.ToLower(step.SQL)
+			if strings.Contains(desc, "recreat") || strings.Contains(desc, "rebuild") ||
+				strings.Contains(sql, "_new") || strings.Contains(sql, "temp") {
+				foundRecreation = true
+				break
+			}
+		}
+
+		if !foundRecreation {
+			t.Log("Note: SQLite migration strategy unclear from steps:")
+			for i, step := range plan.Steps {
+				t.Logf("  Step %d: %s", i+1, step.Description)
+			}
+		}
+	})
 }

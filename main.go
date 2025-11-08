@@ -535,7 +535,15 @@ func runPlan(args []string) {
 
 	// Detect database driver from target schema (the "to" state)
 	// We generate SQL for the target database type
-	targetDriverType := detectDriver(toInput)
+	// First check if the schema has a dialect set (from SQL file or JSON)
+	var targetDriverType string
+	if after.Dialect != "" && after.Dialect != database.DialectUnknown {
+		// Use the dialect from the loaded schema
+		targetDriverType = string(after.Dialect)
+	} else {
+		// Fall back to detecting from connection string/path
+		targetDriverType = detectDriver(toInput)
+	}
 	targetDriver, err := newDriver(targetDriverType)
 	if err != nil {
 		log.Fatalf("Failed to create database driver: %v", err)
