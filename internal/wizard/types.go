@@ -36,6 +36,7 @@ type WizardModel struct {
 	testingConnection    bool
 	connectionTestResult string
 	connectionError      error
+	retryChoice          int // 0=retry, 1=edit, 2=quit
 
 	// Input fields (using bubbletea textinput)
 	inputs     []textinput.Model

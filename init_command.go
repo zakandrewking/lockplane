@@ -40,12 +40,24 @@ func runInit(args []string) {
 
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: lockplane init [--yes]\n\n")
-		_, _ = fmt.Fprintf(os.Stderr, "Launch the interactive Lockplane project wizard. The wizard bootstraps\n")
-		_, _ = fmt.Fprintf(os.Stderr, "the schema/ directory and creates schema/lockplane.toml.\n")
-		_, _ = fmt.Fprintf(os.Stderr, "Use --yes to accept defaults without prompts.\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Interactive wizard for setting up Lockplane in your project.\n\n")
+		_, _ = fmt.Fprintf(os.Stderr, "The wizard guides you through:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Database type selection (PostgreSQL, SQLite, libSQL/Turso)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Connection details with smart defaults\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Connection testing to verify credentials\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Multiple environment setup (local, staging, production)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Automatic shadow DB configuration (PostgreSQL)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Secure file generation (.env.* with 0600 permissions)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "\nFeatures:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Detects existing configs and offers to add environments\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Auto-configures SSL (disabled=localhost, required=remote)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Tests connections before saving\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  • Updates .gitignore to protect credentials\n")
+		_, _ = fmt.Fprintf(os.Stderr, "\nFlags:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --yes    Skip wizard, use defaults (for CI/automation)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init --yes\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init           # Interactive wizard\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init --yes     # Non-interactive, defaults only\n")
 	}
 
 	if err := fs.Parse(args); err != nil {

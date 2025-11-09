@@ -133,15 +133,38 @@ For more information on `.lp.sql` files, run `lockplane validate sql --help`.
 Now that we have a schema, we can generate a migration plan to apply it to our
 database.
 
-NOTE: Starting from scratch? Run `lockplane init` (or `lockplane init --yes`) to
-launch the wizard and create the default `schema/` directory plus
-`schema/lockplane.toml`.
+### Quick Setup: Interactive Wizard
 
-### Configure your database environment
+The easiest way to get started is with the interactive wizard:
 
-Lockplane reads connection strings from named environments. Create a
-`schema/lockplane.toml` (created by the wizard) and define a default environment.
-If you're setting it up manually, use the sample at `lockplane.toml.example`.
+```bash
+lockplane init
+```
+
+The wizard will guide you through:
+- **Database type selection**: Choose PostgreSQL, SQLite, or libSQL/Turso
+- **Connection details**: Enter your database credentials with smart defaults
+- **Connection testing**: Verify your database is reachable before proceeding
+- **Environment setup**: Configure multiple environments (local, staging, production)
+- **Shadow DB configuration**: Automatically set up shadow databases for safe migrations (PostgreSQL only)
+- **File generation**: Creates `schema/lockplane.toml` and `.env.*` files with secure permissions
+
+**Features:**
+- Detects existing configurations and offers to add new environments
+- Auto-configures SSL mode (disabled for localhost, required for remote hosts)
+- Tests connections before saving to catch errors early
+- Updates `.gitignore` to protect your credentials
+- Provides clear next steps after setup
+
+**Non-interactive mode** (for CI/scripts):
+```bash
+lockplane init --yes  # Use all defaults
+```
+
+### Manual Configuration (Alternative)
+
+If you prefer manual setup, create a `schema/lockplane.toml` file.
+You can also use the sample at `lockplane.toml.example` as a starting point.
 
 ```toml
 default_environment = "local"

@@ -157,9 +157,24 @@ func (m WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.environments = append(m.environments, m.currentEnv)
 			// Reset current environment
 			m.currentEnv = EnvironmentInput{}
-		} else {
-			// Go back to connection details to fix
-			m.state = StateConnectionDetails
+			return m, nil
+		} else if m.connectionTestResult == "failed" {
+			// Handle retry choice
+			switch m.retryChoice {
+			case 0: // Retry
+				m.connectionTestResult = ""
+				m.connectionError = nil
+				m.testingConnection = true
+				return m, m.testConnection()
+			case 1: // Edit
+				m.state = StateConnectionDetails
+				m.connectionTestResult = ""
+				m.connectionError = nil
+				m.retryChoice = 0
+				return m, nil
+			case 2: // Quit
+				return m, tea.Quit
+			}
 		}
 		return m, nil
 
@@ -192,6 +207,10 @@ func (m WizardModel) handleUp() (tea.Model, tea.Cmd) {
 			m.focusIndex--
 			m.updateInputFocus()
 		}
+	case StateTestConnection:
+		if m.connectionTestResult == "failed" && m.retryChoice > 0 {
+			m.retryChoice--
+		}
 	}
 	return m, nil
 }
@@ -206,6 +225,10 @@ func (m WizardModel) handleDown() (tea.Model, tea.Cmd) {
 		if m.focusIndex < len(m.inputs)-1 {
 			m.focusIndex++
 			m.updateInputFocus()
+		}
+	case StateTestConnection:
+		if m.connectionTestResult == "failed" && m.retryChoice < 2 {
+			m.retryChoice++
 		}
 	}
 	return m, nil
@@ -547,11 +570,27 @@ func (m WizardModel) renderTestConnection() string {
 			b.WriteString(errorStyle.Render("Error: " + m.connectionError.Error()))
 		}
 		b.WriteString("\n\n")
-		b.WriteString("Please check your connection details and try again.")
+		b.WriteString("What would you like to do?\n\n")
+
+		// Retry option
+		b.WriteString(renderOption(0, m.retryChoice == 0, "Retry connection"))
+		b.WriteString("\n")
+
+		// Edit option
+		b.WriteString(renderOption(1, m.retryChoice == 1, "Edit connection details"))
+		b.WriteString("\n")
+
+		// Quit option
+		b.WriteString(renderOption(2, m.retryChoice == 2, "Quit wizard"))
+		b.WriteString("\n")
 	}
 
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to continue"))
+	if m.connectionTestResult == "failed" {
+		b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  q: quit"))
+	} else {
+		b.WriteString(renderStatusBar("Press Enter to continue"))
+	}
 
 	return borderStyle.Render(b.String())
 }
