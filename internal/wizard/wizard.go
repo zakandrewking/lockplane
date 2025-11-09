@@ -151,14 +151,15 @@ func (m WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		return m, m.testConnection()
 
 	case StateTestConnection:
-		if m.connectionTestResult == "success" {
+		switch m.connectionTestResult {
+		case "success":
 			m.state = StateAddAnother
 			// Save the current environment
 			m.environments = append(m.environments, m.currentEnv)
 			// Reset current environment
 			m.currentEnv = EnvironmentInput{}
 			return m, nil
-		} else if m.connectionTestResult == "failed" {
+		case "failed":
 			// Handle retry choice
 			switch m.retryChoice {
 			case 0: // Retry
