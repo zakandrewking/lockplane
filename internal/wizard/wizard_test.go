@@ -27,7 +27,7 @@ func TestHandleEnterWelcome(t *testing.T) {
 	m.state = StateWelcome
 
 	newModel, _ := m.handleEnter()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 
 	if m.state != StateDatabaseType {
 		t.Errorf("expected state to be StateDatabaseType after Enter on Welcome, got %v", m.state)
@@ -40,7 +40,7 @@ func TestHandleEnterDatabaseType(t *testing.T) {
 	m.dbTypeIndex = 0 // PostgreSQL
 
 	newModel, _ := m.handleEnter()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 
 	if m.state != StateConnectionDetails {
 		t.Errorf("expected state to be StateConnectionDetails after selecting database type, got %v", m.state)
@@ -62,21 +62,21 @@ func TestHandleUpDown(t *testing.T) {
 
 	// Test down
 	newModel, _ := m.handleDown()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 	if m.dbTypeIndex != 1 {
 		t.Errorf("expected dbTypeIndex to be 1 after down, got %d", m.dbTypeIndex)
 	}
 
 	// Test up
 	newModel, _ = m.handleUp()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 	if m.dbTypeIndex != 0 {
 		t.Errorf("expected dbTypeIndex to be 0 after up, got %d", m.dbTypeIndex)
 	}
 
 	// Test up at boundary (should stay at 0)
 	newModel, _ = m.handleUp()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 	if m.dbTypeIndex != 0 {
 		t.Errorf("expected dbTypeIndex to stay at 0 at boundary, got %d", m.dbTypeIndex)
 	}
@@ -90,14 +90,14 @@ func TestConnectionRetryChoices(t *testing.T) {
 
 	// Test down navigation
 	newModel, _ := m.handleDown()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 	if m.retryChoice != 1 {
 		t.Errorf("expected retryChoice to be 1, got %d", m.retryChoice)
 	}
 
 	// Test up navigation
 	newModel, _ = m.handleUp()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 	if m.retryChoice != 0 {
 		t.Errorf("expected retryChoice to be 0, got %d", m.retryChoice)
 	}
@@ -111,7 +111,7 @@ func TestHandleEnterTestConnectionSuccess(t *testing.T) {
 	m.currentEnv.DatabaseType = "postgres"
 
 	newModel, _ := m.handleEnter()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 
 	if m.state != StateAddAnother {
 		t.Errorf("expected state to be StateAddAnother after successful connection, got %v", m.state)
@@ -133,7 +133,7 @@ func TestHandleEnterTestConnectionFailedRetry(t *testing.T) {
 	m.retryChoice = 0 // Retry
 
 	newModel, cmd := m.handleEnter()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 
 	if m.connectionTestResult != "" {
 		t.Errorf("expected connectionTestResult to be reset for retry, got %s", m.connectionTestResult)
@@ -155,7 +155,7 @@ func TestHandleEnterTestConnectionFailedEdit(t *testing.T) {
 	m.retryChoice = 1 // Edit
 
 	newModel, _ := m.handleEnter()
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 
 	if m.state != StateConnectionDetails {
 		t.Errorf("expected state to be StateConnectionDetails when editing, got %v", m.state)
@@ -195,7 +195,7 @@ func TestExistingConfigDetection(t *testing.T) {
 	}
 
 	newModel, _ := m.Update(msg)
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 
 	if m.state != StateCheckExisting {
 		t.Errorf("expected state to be StateCheckExisting, got %v", m.state)
@@ -217,7 +217,7 @@ func TestNoExistingConfig(t *testing.T) {
 	msg := existingConfigMsg{}
 
 	newModel, _ := m.Update(msg)
-	m = newModel.(WizardModel)
+	m = *newModel.(*WizardModel)
 
 	if m.state != StateWelcome {
 		t.Errorf("expected state to be StateWelcome when no config exists, got %v", m.state)
