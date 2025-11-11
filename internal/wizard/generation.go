@@ -176,7 +176,14 @@ func generateEnvFile(path string, env EnvironmentInput) error {
 	case "libsql":
 		connStr := BuildLibSQLConnectionString(env)
 		b.WriteString("# libSQL/Turso connection (remote edge database)\n")
-		b.WriteString(fmt.Sprintf("DATABASE_URL=%s\n\n", connStr))
+		b.WriteString(fmt.Sprintf("DATABASE_URL=%s\n", connStr))
+
+		// Add auth token as separate variable for better security and flexibility
+		if env.AuthToken != "" {
+			b.WriteString(fmt.Sprintf("LIBSQL_DB_TOKEN=%s\n\n", env.AuthToken))
+		} else {
+			b.WriteString("LIBSQL_DB_TOKEN=\n\n")
+		}
 
 		shadowConnStr := BuildLibSQLShadowConnectionString(env)
 		b.WriteString("# Shadow database (local SQLite for validation - safe migrations)\n")
@@ -197,12 +204,13 @@ func createOrUpdateEnvExample() error {
 		existingContent = string(data)
 	}
 
-	// Check if DATABASE_URL and SHADOW_DATABASE_URL already exist
+	// Check if required variables already exist
 	hasDatabaseURL := strings.Contains(existingContent, "DATABASE_URL=")
 	hasShadowDatabaseURL := strings.Contains(existingContent, "SHADOW_DATABASE_URL=")
+	hasLibSQLToken := strings.Contains(existingContent, "LIBSQL_DB_TOKEN=")
 
-	// If both already exist, nothing to do
-	if hasDatabaseURL && hasShadowDatabaseURL {
+	// If all variables already exist, nothing to do
+	if hasDatabaseURL && hasShadowDatabaseURL && hasLibSQLToken {
 		return nil
 	}
 
@@ -228,6 +236,12 @@ func createOrUpdateEnvExample() error {
 	// Add SHADOW_DATABASE_URL if missing
 	if !hasShadowDatabaseURL {
 		b.WriteString("SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/database_shadow?sslmode=disable\n")
+	}
+
+	// Add LIBSQL_DB_TOKEN if missing
+	if !hasLibSQLToken {
+		b.WriteString("# libSQL/Turso auth token (only needed for libSQL databases)\n")
+		b.WriteString("LIBSQL_DB_TOKEN=your_turso_auth_token_here\n")
 	}
 
 	// Append to existing content

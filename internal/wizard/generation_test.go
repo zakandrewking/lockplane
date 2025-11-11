@@ -169,6 +169,10 @@ func TestGenerateFiles(t *testing.T) {
 	if !strings.Contains(exampleStr, "SHADOW_DATABASE_URL=") {
 		t.Error(".env.example should contain SHADOW_DATABASE_URL")
 	}
+
+	if !strings.Contains(exampleStr, "LIBSQL_DB_TOKEN=") {
+		t.Error(".env.example should contain LIBSQL_DB_TOKEN")
+	}
 }
 
 func TestUpdateGitignoreExisting(t *testing.T) {
@@ -463,6 +467,10 @@ func TestCreateOrUpdateEnvExampleNew(t *testing.T) {
 	if !strings.Contains(contentStr, "Lockplane") {
 		t.Error(".env.example should contain Lockplane header")
 	}
+
+	if !strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
+		t.Error(".env.example should contain LIBSQL_DB_TOKEN")
+	}
 }
 
 func TestCreateOrUpdateEnvExampleUpdate(t *testing.T) {
@@ -513,6 +521,10 @@ func TestCreateOrUpdateEnvExampleUpdate(t *testing.T) {
 	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=") {
 		t.Error(".env.example should contain SHADOW_DATABASE_URL")
 	}
+
+	if !strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
+		t.Error(".env.example should contain LIBSQL_DB_TOKEN")
+	}
 }
 
 func TestCreateOrUpdateEnvExampleIdempotent(t *testing.T) {
@@ -531,8 +543,8 @@ func TestCreateOrUpdateEnvExampleIdempotent(t *testing.T) {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
 
-	// Create .env.example that already has both fields
-	existingContent := "DATABASE_URL=postgres://localhost/db\nSHADOW_DATABASE_URL=postgres://localhost/shadow\n"
+	// Create .env.example that already has all fields
+	existingContent := "DATABASE_URL=postgres://localhost/db\nSHADOW_DATABASE_URL=postgres://localhost/shadow\nLIBSQL_DB_TOKEN=token123\n"
 	if err := os.WriteFile(".env.example", []byte(existingContent), 0644); err != nil {
 		t.Fatalf("failed to create .env.example: %v", err)
 	}
@@ -550,18 +562,108 @@ func TestCreateOrUpdateEnvExampleIdempotent(t *testing.T) {
 
 	contentStr := string(content)
 	if contentStr != existingContent {
-		t.Error(".env.example should not be modified when it already has both fields")
+		t.Errorf(".env.example should not be modified when it already has all fields\nExpected:\n%s\nGot:\n%s", existingContent, contentStr)
 	}
 
 	// Should not duplicate fields
-	databaseURLCount := strings.Count(contentStr, "DATABASE_URL=")
+	// Check for standalone DATABASE_URL (not part of SHADOW_DATABASE_URL)
+	lines := strings.Split(contentStr, "\n")
+	databaseURLCount := 0
+	shadowURLCount := 0
+	libsqlTokenCount := 0
+	for _, line := range lines {
+		if strings.HasPrefix(line, "DATABASE_URL=") {
+			databaseURLCount++
+		}
+		if strings.HasPrefix(line, "SHADOW_DATABASE_URL=") {
+			shadowURLCount++
+		}
+		if strings.HasPrefix(line, "LIBSQL_DB_TOKEN=") {
+			libsqlTokenCount++
+		}
+	}
+
 	if databaseURLCount != 1 {
 		t.Errorf("DATABASE_URL appears %d times, want 1", databaseURLCount)
 	}
 
-	shadowURLCount := strings.Count(contentStr, "SHADOW_DATABASE_URL=")
 	if shadowURLCount != 1 {
 		t.Errorf("SHADOW_DATABASE_URL appears %d times, want 1", shadowURLCount)
+	}
+
+	if libsqlTokenCount != 1 {
+		t.Errorf("LIBSQL_DB_TOKEN appears %d times, want 1", libsqlTokenCount)
+	}
+}
+
+func TestGenerateLibSQLEnvironment(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("failed to change back to original directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+
+	// Create libSQL environment
+	environments := []EnvironmentInput{
+		{
+			Name:         "production",
+			DatabaseType: "libsql",
+			URL:          "libsql://mydb-myorg.turso.io",
+			AuthToken:    "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.test.token",
+		},
+	}
+
+	result, err := GenerateFiles(environments)
+	if err != nil {
+		t.Fatalf("GenerateFiles() error = %v", err)
+	}
+
+	// Verify .env.production was created
+	if _, err := os.Stat(".env.production"); os.IsNotExist(err) {
+		t.Error(".env.production was not created")
+	}
+
+	// Verify .env.production content
+	envContent, err := os.ReadFile(".env.production")
+	if err != nil {
+		t.Fatalf("failed to read .env.production: %v", err)
+	}
+
+	envStr := string(envContent)
+	if !strings.Contains(envStr, "DATABASE_URL=libsql://mydb-myorg.turso.io?authToken=") {
+		t.Error(".env.production should contain libSQL DATABASE_URL with authToken")
+	}
+
+	if !strings.Contains(envStr, "LIBSQL_DB_TOKEN=eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.test.token") {
+		t.Error(".env.production should contain LIBSQL_DB_TOKEN")
+	}
+
+	if !strings.Contains(envStr, "SHADOW_DATABASE_URL=sqlite://schema/turso_shadow.db") {
+		t.Error(".env.production should contain shadow database URL")
+	}
+
+	// Verify .env.example was created and contains LIBSQL_DB_TOKEN
+	if !result.EnvExampleCreated {
+		t.Error("expected .env.example to be created")
+	}
+
+	exampleContent, err := os.ReadFile(".env.example")
+	if err != nil {
+		t.Fatalf("failed to read .env.example: %v", err)
+	}
+
+	exampleStr := string(exampleContent)
+	if !strings.Contains(exampleStr, "LIBSQL_DB_TOKEN=") {
+		t.Error(".env.example should contain LIBSQL_DB_TOKEN")
 	}
 }
 
