@@ -2,29 +2,29 @@
 
 ## Progress Checklist
 
-- [ ] Phase 1: Design and Schema Updates
-  - [ ] Update PlanStep structure to support SQL array
-  - [ ] Update JSON schema for plans
-  - [ ] Update plan validation
-- [ ] Phase 2: Core Implementation
-  - [ ] Update planner to use new step structure
-  - [ ] Update SQLite generator methods
-  - [ ] Update Postgres generator (verify single-statement compatibility)
-  - [ ] Update plan loader/writer
-- [ ] Phase 3: Execution Engine Updates
-  - [ ] Update applyPlan to handle SQL arrays
-  - [ ] Update dryRunPlan to handle SQL arrays
-  - [ ] Add proper transaction handling for multi-statement steps
-  - [ ] Handle step-level rollback on failure
-- [ ] Phase 4: Testing
-  - [ ] Unit tests for new PlanStep structure
-  - [ ] Integration tests for SQLite FK operations
-  - [ ] Integration tests for multi-statement execution
-  - [ ] Rollback tests
-- [ ] Phase 5: Documentation
-  - [ ] Update plan.json schema documentation
-  - [ ] Update examples with new format
-  - [ ] Document atomic operation patterns
+- [x] Phase 1: Design and Schema Updates
+  - [x] Update PlanStep structure to support SQL array
+  - [x] Update JSON schema for plans
+  - [x] Update plan validation
+- [x] Phase 2: Core Implementation
+  - [x] Update planner to use new step structure
+  - [x] Update SQLite generator methods
+  - [x] Update Postgres generator (verify single-statement compatibility)
+  - [x] Update plan loader/writer
+- [x] Phase 3: Execution Engine Updates
+  - [x] Update applyPlan to handle SQL arrays
+  - [x] Update dryRunPlan to handle SQL arrays
+  - [x] Add proper transaction handling for multi-statement steps
+  - [x] Handle step-level rollback on failure
+- [x] Phase 4: Testing
+  - [x] Unit tests for new PlanStep structure
+  - [x] Integration tests for SQLite FK operations
+  - [x] Integration tests for multi-statement execution
+  - [x] Rollback tests
+- [x] Phase 5: Documentation
+  - [x] Update plan.json schema documentation
+  - [x] Update examples with new format (via test fixtures)
+  - [x] Document atomic operation patterns (in this file)
 
 ## Context
 
