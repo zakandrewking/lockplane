@@ -164,4 +164,20 @@ type Driver interface {
 
 	// SupportsFeature checks if the database supports a specific feature
 	SupportsFeature(feature string) bool
+
+	// Schema support (PostgreSQL only)
+	// SupportsSchemas returns true if the database supports schema namespaces
+	SupportsSchemas() bool
+
+	// CreateSchema creates a schema in the database (no-op if not supported)
+	CreateSchema(ctx context.Context, db *sql.DB, schemaName string) error
+
+	// SetSchema sets the current schema/search path (no-op if not supported)
+	SetSchema(ctx context.Context, db *sql.DB, schemaName string) error
+
+	// DropSchema drops a schema from the database (no-op if not supported)
+	DropSchema(ctx context.Context, db *sql.DB, schemaName string, cascade bool) error
+
+	// ListSchemas returns all schema names in the database (empty if not supported)
+	ListSchemas(ctx context.Context, db *sql.DB) ([]string, error)
 }

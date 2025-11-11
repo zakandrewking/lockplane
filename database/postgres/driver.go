@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"github.com/lockplane/lockplane/database"
 )
@@ -119,4 +121,82 @@ func (d *Driver) FormatColumnDefinition(col database.Column) string {
 
 func (d *Driver) ParameterPlaceholder(position int) string {
 	return d.Generator.ParameterPlaceholder(position)
+}
+
+// SupportsSchemas returns true for PostgreSQL (supports schema namespaces)
+func (d *Driver) SupportsSchemas() bool {
+	return true
+}
+
+// CreateSchema creates a schema in PostgreSQL
+func (d *Driver) CreateSchema(ctx context.Context, db *sql.DB, schemaName string) error {
+	// Use quoted identifier to prevent SQL injection
+	query := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", quoteIdentifier(schemaName))
+	_, err := db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to create schema %q: %w", schemaName, err)
+	}
+	return nil
+}
+
+// SetSchema sets the current search path to the specified schema
+func (d *Driver) SetSchema(ctx context.Context, db *sql.DB, schemaName string) error {
+	// Use quoted identifier to prevent SQL injection
+	query := fmt.Sprintf("SET search_path TO %s", quoteIdentifier(schemaName))
+	_, err := db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to set search path to %q: %w", schemaName, err)
+	}
+	return nil
+}
+
+// DropSchema drops a schema from PostgreSQL
+func (d *Driver) DropSchema(ctx context.Context, db *sql.DB, schemaName string, cascade bool) error {
+	// Use quoted identifier to prevent SQL injection
+	cascadeStr := ""
+	if cascade {
+		cascadeStr = " CASCADE"
+	}
+	query := fmt.Sprintf("DROP SCHEMA IF EXISTS %s%s", quoteIdentifier(schemaName), cascadeStr)
+	_, err := db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to drop schema %q: %w", schemaName, err)
+	}
+	return nil
+}
+
+// ListSchemas returns all schema names in the database
+func (d *Driver) ListSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT schema_name
+		FROM information_schema.schemata
+		WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+		ORDER BY schema_name
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list schemas: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var schemas []string
+	for rows.Next() {
+		var schemaName string
+		if err := rows.Scan(&schemaName); err != nil {
+			return nil, fmt.Errorf("failed to scan schema name: %w", err)
+		}
+		schemas = append(schemas, schemaName)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating schemas: %w", err)
+	}
+
+	return schemas, nil
+}
+
+// quoteIdentifier quotes a PostgreSQL identifier to prevent SQL injection
+func quoteIdentifier(identifier string) string {
+	// Replace any double quotes with escaped double quotes
+	escaped := strings.ReplaceAll(identifier, `"`, `""`)
+	return fmt.Sprintf(`"%s"`, escaped)
 }

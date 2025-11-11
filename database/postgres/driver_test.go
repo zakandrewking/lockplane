@@ -243,3 +243,49 @@ func TestDriver_ParameterPlaceholder(t *testing.T) {
 		t.Errorf("Expected '$1', got '%s'", result)
 	}
 }
+
+func TestDriver_SupportsSchemas(t *testing.T) {
+	driver := NewDriver()
+
+	if !driver.SupportsSchemas() {
+		t.Error("Expected PostgreSQL driver to support schemas")
+	}
+}
+
+func TestQuoteIdentifier(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple identifier",
+			input:    "lockplane_shadow",
+			expected: `"lockplane_shadow"`,
+		},
+		{
+			name:     "identifier with double quotes",
+			input:    `my"schema"name`,
+			expected: `"my""schema""name"`,
+		},
+		{
+			name:     "identifier with special chars",
+			input:    "my-schema-123",
+			expected: `"my-schema-123"`,
+		},
+		{
+			name:     "empty identifier",
+			input:    "",
+			expected: `""`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := quoteIdentifier(tt.input)
+			if result != tt.expected {
+				t.Errorf("quoteIdentifier(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

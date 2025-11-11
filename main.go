@@ -988,6 +988,8 @@ func runApply(args []string) {
 	var shadowDB *sql.DB
 	if !*skipShadow {
 		shadowConnStr := strings.TrimSpace(*shadowDBURL)
+		var shadowSchema string
+
 		if shadowConnStr == "" {
 			shadowEnvName := strings.TrimSpace(*shadowEnvironment)
 			if shadowEnvName == "" {
@@ -998,9 +1000,18 @@ func runApply(args []string) {
 				log.Fatalf("Failed to resolve shadow environment: %v", err)
 			}
 			shadowConnStr = resolvedShadow.ShadowDatabaseURL
-			if shadowConnStr == "" {
+			shadowSchema = resolvedShadow.ShadowSchema
+
+			// For SQLite/libSQL, default to :memory: if no shadow DB configured
+			if shadowConnStr == "" && (mainDriverType == "sqlite" || mainDriverType == "sqlite3" || mainDriverType == "libsql") {
+				shadowConnStr = ":memory:"
+				_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "ℹ️  Using in-memory shadow database (fast, zero config)\n")
+			} else if shadowConnStr == "" {
 				fmt.Fprintf(os.Stderr, "Error: no shadow database configured for environment %q.\n", resolvedShadow.Name)
-				fmt.Fprintf(os.Stderr, "Add SHADOW_DATABASE_URL to .env.%s or provide --shadow-db.\n", resolvedShadow.Name)
+				fmt.Fprintf(os.Stderr, "Options:\n")
+				fmt.Fprintf(os.Stderr, "  - Add SHADOW_DATABASE_URL to .env.%s\n", resolvedShadow.Name)
+				fmt.Fprintf(os.Stderr, "  - Add SHADOW_SCHEMA=lockplane_shadow (PostgreSQL only)\n")
+				fmt.Fprintf(os.Stderr, "  - Provide --shadow-db flag\n")
 				os.Exit(1)
 			}
 		}
@@ -1008,8 +1019,8 @@ func runApply(args []string) {
 		// Detect shadow database driver type
 		shadowDriverType := detectDriver(shadowConnStr)
 
-		// For SQLite shadow DB, check if the database file exists and create it if needed
-		if shadowDriverType == "sqlite" || shadowDriverType == "sqlite3" {
+		// For SQLite shadow DB (not :memory:), check if the database file exists and create it if needed
+		if (shadowDriverType == "sqlite" || shadowDriverType == "sqlite3") && shadowConnStr != ":memory:" {
 			if err := ensureSQLiteDatabase(shadowConnStr, "shadow", false); err != nil {
 				log.Fatalf("Failed to ensure shadow database: %v", err)
 			}
@@ -1026,7 +1037,29 @@ func runApply(args []string) {
 			log.Fatalf("Failed to ping shadow database: %v", err)
 		}
 
-		_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow database...\n")
+		// If shadow schema is configured and driver supports it, set up the schema
+		if shadowSchema != "" && mainDriver.SupportsSchemas() {
+			// Create shadow schema if it doesn't exist
+			if err := mainDriver.CreateSchema(ctx, shadowDB, shadowSchema); err != nil {
+				log.Fatalf("Failed to create shadow schema: %v", err)
+			}
+
+			// Set search path to shadow schema
+			if err := mainDriver.SetSchema(ctx, shadowDB, shadowSchema); err != nil {
+				log.Fatalf("Failed to set shadow schema: %v", err)
+			}
+
+			// Show clear message about what we're doing
+			if shadowConnStr == targetConnStr {
+				_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow schema %q (same database)...\n", shadowSchema)
+			} else {
+				_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow schema %q in separate database...\n", shadowSchema)
+			}
+		} else if shadowConnStr == ":memory:" {
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on in-memory shadow database...\n")
+		} else {
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow database...\n")
+		}
 	} else {
 		_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "⚠️  Skipping shadow DB validation (--skip-shadow)\n")
 	}
@@ -1207,6 +1240,14 @@ func printApplyUsage() {
 	fmt.Fprintf(os.Stderr, "  --shadow-db <url>      Shadow database URL (overrides environment settings)\n")
 	fmt.Fprintf(os.Stderr, "  --shadow-environment <name>\n")
 	fmt.Fprintf(os.Stderr, "                         Environment providing the shadow database connection\n\n")
+	fmt.Fprintf(os.Stderr, "Shadow Database Configuration:\n")
+	fmt.Fprintf(os.Stderr, "  PostgreSQL:\n")
+	fmt.Fprintf(os.Stderr, "    - Set SHADOW_SCHEMA=lockplane_shadow to use a schema (simple, same database)\n")
+	fmt.Fprintf(os.Stderr, "    - Set SHADOW_DATABASE_URL for a separate database (traditional)\n")
+	fmt.Fprintf(os.Stderr, "    - Combine both for schema in a different database (flexible)\n")
+	fmt.Fprintf(os.Stderr, "  SQLite/libSQL:\n")
+	fmt.Fprintf(os.Stderr, "    - Automatically uses :memory: (fast, zero config, free)\n")
+	fmt.Fprintf(os.Stderr, "    - Override with SHADOW_SQLITE_DB_PATH if debugging needed\n\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
 	fmt.Fprintf(os.Stderr, "  lockplane apply --target-environment local --schema schema/\n")
 	fmt.Fprintf(os.Stderr, "  lockplane apply migration.json --target-environment local\n")
@@ -1314,9 +1355,21 @@ ENVIRONMENTS:
     Database: postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable
     Shadow:   postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable
 
+SHADOW DATABASE STRATEGIES:
+  PostgreSQL:
+    - Use SHADOW_SCHEMA=lockplane_shadow for simple local development (same database)
+    - Use SHADOW_DATABASE_URL for maximum isolation (separate database)
+    - Combine both for flexible production workflows (different database + schema)
+
+  SQLite/libSQL/Turso:
+    - Automatically uses :memory: (zero configuration, fastest option)
+    - Override with SHADOW_SQLITE_DB_PATH only if debugging needed
+    - For libSQL/Turso: saves 50% cost by testing locally with :memory:
+
 SUPPORTED DATABASES:
   - PostgreSQL (full support)
   - SQLite (with some limitations on ALTER operations)
+  - libSQL/Turso (SQLite-compatible, remote database)
 
 For more information: https://github.com/lockplane/lockplane
 `)

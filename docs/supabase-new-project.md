@@ -33,11 +33,23 @@ Create `.env.supabase` (ignored by Git) with the credentials you copied:
 ```bash
 cat <<'EOF' > .env.supabase
 DATABASE_URL=postgres://postgres:<password>@<host>:5432/postgres
-SHADOW_DATABASE_URL=postgres://postgres:<password>@<host>:6543/postgres
+# Option 1: Use a schema in the same database (recommended for local dev)
+SHADOW_SCHEMA=lockplane_shadow
+# Option 2: Use local Supabase for shadow testing (recommended for production)
+# SHADOW_DATABASE_URL=postgres://postgres:postgres@localhost:54322/postgres
+# SHADOW_SCHEMA=lockplane_shadow
+# Option 3: Use a separate Supabase project (traditional, more expensive)
+# SHADOW_DATABASE_URL=postgres://postgres:<password>@<host>:6543/postgres
 EOF
 ```
 
-Since Supabase blocks direct database creation, point the shadow URL at a separate Supabase project or a local Postgres container. For local testing: `docker compose up supabase-shadow` using the sample `docker-compose.yml` in this repo.
+**Shadow Database Options:**
+
+- **Schema-based (Recommended for Local Dev):** Set `SHADOW_SCHEMA=lockplane_shadow` to use a schema in the same database. Simple, zero additional setup.
+
+- **Local Supabase + Schema (Recommended for Production):** Point shadow at your local Supabase instance (`localhost:54322`) with a schema. This lets you test production migrations safely.
+
+- **Separate Supabase Project:** Use a separate Supabase project for shadow testing, but this doubles your database costs. Only needed for highest security environments.
 
 ### 2. Create Your Schema
 
