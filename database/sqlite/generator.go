@@ -25,7 +25,17 @@ func (g *Generator) CreateTable(table database.Table) (string, string) {
 	for i, col := range table.Columns {
 		sb.WriteString("  ")
 		sb.WriteString(g.FormatColumnDefinition(col))
-		if i < len(table.Columns)-1 {
+		if i < len(table.Columns)-1 || len(table.ForeignKeys) > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString("\n")
+	}
+
+	// Add foreign key constraints
+	for i, fk := range table.ForeignKeys {
+		sb.WriteString("  ")
+		sb.WriteString(g.FormatForeignKeyConstraint(fk))
+		if i < len(table.ForeignKeys)-1 {
 			sb.WriteString(",")
 		}
 		sb.WriteString("\n")
@@ -113,22 +123,23 @@ func (g *Generator) DropIndex(tableName string, idx database.Index) (string, str
 }
 
 // AddForeignKey generates SQLite SQL to add a foreign key
-// Note: SQLite only supports foreign keys defined at table creation
+// SQLite doesn't support ALTER TABLE ADD FOREIGN KEY, so we use table recreation
 func (g *Generator) AddForeignKey(tableName string, fk database.ForeignKey) (string, string) {
-	// SQLite doesn't support ALTER TABLE ADD FOREIGN KEY
-	// Foreign keys must be defined at table creation
-	description := fmt.Sprintf("SQLite limitation: Cannot add foreign key %s to existing table %s. "+
-		"Foreign keys must be defined at table creation.", fk.Name, tableName)
-	sql := fmt.Sprintf("-- %s", description)
+	// Note: This returns the foreign key constraint definition that will be used
+	// during table recreation. The actual table recreation logic is handled by
+	// RecreateTableWithForeignKey which generates multiple steps.
+	description := fmt.Sprintf("Add foreign key %s to table %s (requires table recreation)", fk.Name, tableName)
+	sql := g.FormatForeignKeyConstraint(fk)
 	return sql, description
 }
 
 // DropForeignKey generates SQLite SQL to drop a foreign key
+// SQLite doesn't support ALTER TABLE DROP CONSTRAINT, so we use table recreation
 func (g *Generator) DropForeignKey(tableName string, fk database.ForeignKey) (string, string) {
-	// SQLite doesn't support ALTER TABLE DROP CONSTRAINT
-	description := fmt.Sprintf("SQLite limitation: Cannot drop foreign key %s from table %s. "+
-		"Would require table recreation.", fk.Name, tableName)
-	sql := fmt.Sprintf("-- %s", description)
+	// Note: This returns a comment. The actual table recreation logic is handled by
+	// RecreateTableWithoutForeignKey which generates multiple steps.
+	description := fmt.Sprintf("Drop foreign key %s from table %s (requires table recreation)", fk.Name, tableName)
+	sql := fmt.Sprintf("-- Drop foreign key %s", fk.Name)
 	return sql, description
 }
 
@@ -155,6 +166,121 @@ func (g *Generator) FormatColumnDefinition(col database.Column) string {
 	}
 
 	return sb.String()
+}
+
+// FormatForeignKeyConstraint formats a foreign key constraint for CREATE TABLE
+func (g *Generator) FormatForeignKeyConstraint(fk database.ForeignKey) string {
+	var sb strings.Builder
+
+	// CONSTRAINT name FOREIGN KEY (columns) REFERENCES table (columns)
+	sb.WriteString(fmt.Sprintf("CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)",
+		fk.Name,
+		strings.Join(fk.Columns, ", "),
+		fk.ReferencedTable,
+		strings.Join(fk.ReferencedColumns, ", ")))
+
+	// Add ON DELETE and ON UPDATE actions if specified
+	if fk.OnDelete != nil {
+		sb.WriteString(fmt.Sprintf(" ON DELETE %s", *fk.OnDelete))
+	}
+	if fk.OnUpdate != nil {
+		sb.WriteString(fmt.Sprintf(" ON UPDATE %s", *fk.OnUpdate))
+	}
+
+	return sb.String()
+}
+
+// RecreateTableWithForeignKey generates steps to recreate a table with an added foreign key
+// This is the standard SQLite pattern for adding constraints to existing tables
+func (g *Generator) RecreateTableWithForeignKey(table database.Table, fk database.ForeignKey) []database.PlanStep {
+	steps := []database.PlanStep{}
+	tmpTableName := fmt.Sprintf("%s_new", table.Name)
+
+	// Create new table with the foreign key
+	newTable := table
+	newTable.Name = tmpTableName
+	newTable.ForeignKeys = append(newTable.ForeignKeys, fk)
+
+	createSQL, _ := g.CreateTable(newTable)
+	steps = append(steps, database.PlanStep{
+		Description: fmt.Sprintf("Create temporary table %s with foreign key %s", tmpTableName, fk.Name),
+		SQL:         createSQL,
+	})
+
+	// Copy data from old table to new table
+	columnNames := make([]string, len(table.Columns))
+	for i, col := range table.Columns {
+		columnNames[i] = col.Name
+	}
+	columnsStr := strings.Join(columnNames, ", ")
+
+	steps = append(steps, database.PlanStep{
+		Description: fmt.Sprintf("Copy data from %s to %s", table.Name, tmpTableName),
+		SQL:         fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", tmpTableName, columnsStr, columnsStr, table.Name),
+	})
+
+	// Drop old table
+	steps = append(steps, database.PlanStep{
+		Description: fmt.Sprintf("Drop old table %s", table.Name),
+		SQL:         fmt.Sprintf("DROP TABLE %s", table.Name),
+	})
+
+	// Rename new table to original name
+	steps = append(steps, database.PlanStep{
+		Description: fmt.Sprintf("Rename %s to %s", tmpTableName, table.Name),
+		SQL:         fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tmpTableName, table.Name),
+	})
+
+	return steps
+}
+
+// RecreateTableWithoutForeignKey generates steps to recreate a table without a specific foreign key
+func (g *Generator) RecreateTableWithoutForeignKey(table database.Table, fkName string) []database.PlanStep {
+	steps := []database.PlanStep{}
+	tmpTableName := fmt.Sprintf("%s_new", table.Name)
+
+	// Create new table without the foreign key
+	newTable := table
+	newTable.Name = tmpTableName
+	newForeignKeys := []database.ForeignKey{}
+	for _, existingFK := range table.ForeignKeys {
+		if existingFK.Name != fkName {
+			newForeignKeys = append(newForeignKeys, existingFK)
+		}
+	}
+	newTable.ForeignKeys = newForeignKeys
+
+	createSQL, _ := g.CreateTable(newTable)
+	steps = append(steps, database.PlanStep{
+		Description: fmt.Sprintf("Create temporary table %s without foreign key %s", tmpTableName, fkName),
+		SQL:         createSQL,
+	})
+
+	// Copy data from old table to new table
+	columnNames := make([]string, len(table.Columns))
+	for i, col := range table.Columns {
+		columnNames[i] = col.Name
+	}
+	columnsStr := strings.Join(columnNames, ", ")
+
+	steps = append(steps, database.PlanStep{
+		Description: fmt.Sprintf("Copy data from %s to %s", table.Name, tmpTableName),
+		SQL:         fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", tmpTableName, columnsStr, columnsStr, table.Name),
+	})
+
+	// Drop old table
+	steps = append(steps, database.PlanStep{
+		Description: fmt.Sprintf("Drop old table %s", table.Name),
+		SQL:         fmt.Sprintf("DROP TABLE %s", table.Name),
+	})
+
+	// Rename new table to original name
+	steps = append(steps, database.PlanStep{
+		Description: fmt.Sprintf("Rename %s to %s", tmpTableName, table.Name),
+		SQL:         fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tmpTableName, table.Name),
+	})
+
+	return steps
 }
 
 // ParameterPlaceholder returns the SQLite parameter placeholder (?)

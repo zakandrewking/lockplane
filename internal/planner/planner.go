@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lockplane/lockplane/database"
+	sqlitedb "github.com/lockplane/lockplane/database/sqlite"
 	"github.com/lockplane/lockplane/internal/schema"
 )
 
@@ -47,12 +48,15 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 		})
 
 		// Add foreign keys for new tables (after table is created)
-		for _, fk := range table.ForeignKeys {
-			sql, desc := driver.AddForeignKey(table.Name, fk)
-			plan.Steps = append(plan.Steps, PlanStep{
-				Description: desc,
-				SQL:         sql,
-			})
+		// For SQLite, foreign keys are included in CREATE TABLE, so skip this step
+		if driver.SupportsFeature("ALTER_ADD_FOREIGN_KEY") {
+			for _, fk := range table.ForeignKeys {
+				sql, desc := driver.AddForeignKey(table.Name, fk)
+				plan.Steps = append(plan.Steps, PlanStep{
+					Description: desc,
+					SQL:         sql,
+				})
+			}
 		}
 	}
 
@@ -88,11 +92,53 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 
 		// Add new foreign keys
 		for _, fk := range tableDiff.AddedForeignKeys {
-			sql, desc := driver.AddForeignKey(tableDiff.TableName, fk)
-			plan.Steps = append(plan.Steps, PlanStep{
-				Description: desc,
-				SQL:         sql,
-			})
+			// For SQLite, adding foreign keys requires table recreation
+			if driver.Name() == "sqlite" && !driver.SupportsFeature("ALTER_ADD_FOREIGN_KEY") {
+				if sqliteGen, ok := driver.(*sqlitedb.Driver); ok {
+					// Find the source table to get its current definition
+					var sourceTable *database.Table
+					if sourceSchema != nil {
+						for i := range sourceSchema.Tables {
+							if sourceSchema.Tables[i].Name == tableDiff.TableName {
+								sourceTable = &sourceSchema.Tables[i]
+								break
+							}
+						}
+					}
+
+					if sourceTable != nil {
+						// Use table recreation for SQLite
+						steps := sqliteGen.Generator.RecreateTableWithForeignKey(*sourceTable, fk)
+						for _, step := range steps {
+							plan.Steps = append(plan.Steps, PlanStep{
+								Description: step.Description,
+								SQL:         step.SQL,
+							})
+						}
+					} else {
+						// Fallback if we can't find the source table
+						sql, desc := driver.AddForeignKey(tableDiff.TableName, fk)
+						plan.Steps = append(plan.Steps, PlanStep{
+							Description: desc,
+							SQL:         sql,
+						})
+					}
+				} else {
+					// Should not happen, but fallback just in case
+					sql, desc := driver.AddForeignKey(tableDiff.TableName, fk)
+					plan.Steps = append(plan.Steps, PlanStep{
+						Description: desc,
+						SQL:         sql,
+					})
+				}
+			} else {
+				// PostgreSQL and other databases can add foreign keys directly
+				sql, desc := driver.AddForeignKey(tableDiff.TableName, fk)
+				plan.Steps = append(plan.Steps, PlanStep{
+					Description: desc,
+					SQL:         sql,
+				})
+			}
 		}
 
 		// Add new indexes
@@ -115,11 +161,53 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 
 		// Remove old foreign keys
 		for _, fk := range tableDiff.RemovedForeignKeys {
-			sql, desc := driver.DropForeignKey(tableDiff.TableName, fk)
-			plan.Steps = append(plan.Steps, PlanStep{
-				Description: desc,
-				SQL:         sql,
-			})
+			// For SQLite, dropping foreign keys requires table recreation
+			if driver.Name() == "sqlite" && !driver.SupportsFeature("ALTER_ADD_FOREIGN_KEY") {
+				if sqliteGen, ok := driver.(*sqlitedb.Driver); ok {
+					// Find the source table to get its current definition
+					var sourceTable *database.Table
+					if sourceSchema != nil {
+						for i := range sourceSchema.Tables {
+							if sourceSchema.Tables[i].Name == tableDiff.TableName {
+								sourceTable = &sourceSchema.Tables[i]
+								break
+							}
+						}
+					}
+
+					if sourceTable != nil {
+						// Use table recreation for SQLite
+						steps := sqliteGen.Generator.RecreateTableWithoutForeignKey(*sourceTable, fk.Name)
+						for _, step := range steps {
+							plan.Steps = append(plan.Steps, PlanStep{
+								Description: step.Description,
+								SQL:         step.SQL,
+							})
+						}
+					} else {
+						// Fallback if we can't find the source table
+						sql, desc := driver.DropForeignKey(tableDiff.TableName, fk)
+						plan.Steps = append(plan.Steps, PlanStep{
+							Description: desc,
+							SQL:         sql,
+						})
+					}
+				} else {
+					// Should not happen, but fallback just in case
+					sql, desc := driver.DropForeignKey(tableDiff.TableName, fk)
+					plan.Steps = append(plan.Steps, PlanStep{
+						Description: desc,
+						SQL:         sql,
+					})
+				}
+			} else {
+				// PostgreSQL and other databases can drop foreign keys directly
+				sql, desc := driver.DropForeignKey(tableDiff.TableName, fk)
+				plan.Steps = append(plan.Steps, PlanStep{
+					Description: desc,
+					SQL:         sql,
+				})
+			}
 		}
 
 		// Remove old columns

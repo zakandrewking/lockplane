@@ -191,41 +191,242 @@ func TestGenerator_DropIndex(t *testing.T) {
 	}
 }
 
-func TestGenerator_AddForeignKey(t *testing.T) {
+func TestGenerator_CreateTable_WithForeignKeys(t *testing.T) {
 	gen := NewGenerator()
 
-	fk := database.ForeignKey{
+	onDelete := "CASCADE"
+	table := database.Table{
+		Name: "posts",
+		Columns: []database.Column{
+			{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+			{Name: "user_id", Type: "integer", Nullable: false},
+			{Name: "title", Type: "text", Nullable: false},
+		},
+		ForeignKeys: []database.ForeignKey{
+			{
+				Name:              "fk_posts_user_id",
+				Columns:           []string{"user_id"},
+				ReferencedTable:   "users",
+				ReferencedColumns: []string{"id"},
+				OnDelete:          &onDelete,
+			},
+		},
+	}
+
+	sql, desc := gen.CreateTable(table)
+
+	// Verify description
+	if !strings.Contains(desc, "Create table posts") {
+		t.Errorf("Expected description to contain 'Create table posts', got: %s", desc)
+	}
+
+	// Verify SQL contains foreign key constraint
+	if !strings.Contains(sql, "CONSTRAINT fk_posts_user_id") {
+		t.Errorf("Expected SQL to contain foreign key constraint, got: %s", sql)
+	}
+
+	if !strings.Contains(sql, "FOREIGN KEY (user_id)") {
+		t.Errorf("Expected SQL to contain FOREIGN KEY definition, got: %s", sql)
+	}
+
+	if !strings.Contains(sql, "REFERENCES users (id)") {
+		t.Errorf("Expected SQL to contain REFERENCES clause, got: %s", sql)
+	}
+
+	if !strings.Contains(sql, "ON DELETE CASCADE") {
+		t.Errorf("Expected SQL to contain ON DELETE CASCADE, got: %s", sql)
+	}
+}
+
+func TestGenerator_FormatForeignKeyConstraint(t *testing.T) {
+	gen := NewGenerator()
+
+	onDelete := "CASCADE"
+	onUpdate := "RESTRICT"
+
+	tests := []struct {
+		name     string
+		fk       database.ForeignKey
+		expected []string
+	}{
+		{
+			name: "simple foreign key",
+			fk: database.ForeignKey{
+				Name:              "fk_posts_user",
+				Columns:           []string{"user_id"},
+				ReferencedTable:   "users",
+				ReferencedColumns: []string{"id"},
+			},
+			expected: []string{
+				"CONSTRAINT fk_posts_user",
+				"FOREIGN KEY (user_id)",
+				"REFERENCES users (id)",
+			},
+		},
+		{
+			name: "foreign key with ON DELETE",
+			fk: database.ForeignKey{
+				Name:              "fk_posts_user",
+				Columns:           []string{"user_id"},
+				ReferencedTable:   "users",
+				ReferencedColumns: []string{"id"},
+				OnDelete:          &onDelete,
+			},
+			expected: []string{
+				"CONSTRAINT fk_posts_user",
+				"FOREIGN KEY (user_id)",
+				"REFERENCES users (id)",
+				"ON DELETE CASCADE",
+			},
+		},
+		{
+			name: "foreign key with ON UPDATE",
+			fk: database.ForeignKey{
+				Name:              "fk_posts_user",
+				Columns:           []string{"user_id"},
+				ReferencedTable:   "users",
+				ReferencedColumns: []string{"id"},
+				OnUpdate:          &onUpdate,
+			},
+			expected: []string{
+				"CONSTRAINT fk_posts_user",
+				"FOREIGN KEY (user_id)",
+				"REFERENCES users (id)",
+				"ON UPDATE RESTRICT",
+			},
+		},
+		{
+			name: "composite foreign key",
+			fk: database.ForeignKey{
+				Name:              "fk_order_items",
+				Columns:           []string{"order_id", "product_id"},
+				ReferencedTable:   "orders",
+				ReferencedColumns: []string{"id", "product_id"},
+			},
+			expected: []string{
+				"CONSTRAINT fk_order_items",
+				"FOREIGN KEY (order_id, product_id)",
+				"REFERENCES orders (id, product_id)",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := gen.FormatForeignKeyConstraint(tt.fk)
+			for _, exp := range tt.expected {
+				if !strings.Contains(result, exp) {
+					t.Errorf("Expected result to contain '%s', got: %s", exp, result)
+				}
+			}
+		})
+	}
+}
+
+func TestGenerator_RecreateTableWithForeignKey(t *testing.T) {
+	gen := NewGenerator()
+
+	table := database.Table{
+		Name: "posts",
+		Columns: []database.Column{
+			{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+			{Name: "title", Type: "text", Nullable: false},
+			{Name: "user_id", Type: "integer", Nullable: false},
+		},
+		ForeignKeys: []database.ForeignKey{},
+	}
+
+	newFK := database.ForeignKey{
 		Name:              "fk_posts_user_id",
 		Columns:           []string{"user_id"},
 		ReferencedTable:   "users",
 		ReferencedColumns: []string{"id"},
 	}
 
-	sql, desc := gen.AddForeignKey("posts", fk)
+	steps := gen.RecreateTableWithForeignKey(table, newFK)
 
-	// SQLite doesn't support ALTER TABLE ADD FOREIGN KEY
-	if !strings.Contains(desc, "SQLite limitation") {
-		t.Errorf("Expected limitation warning in description, got: %s", desc)
+	// Should have 4 steps: create temp table, copy data, drop old table, rename
+	if len(steps) != 4 {
+		t.Fatalf("Expected 4 steps, got %d", len(steps))
 	}
 
-	if !strings.Contains(sql, "--") {
-		t.Errorf("Expected comment SQL, got: %s", sql)
+	// Step 1: Create new table with foreign key
+	if !strings.Contains(steps[0].SQL, "CREATE TABLE posts_new") {
+		t.Errorf("Expected step 1 to create posts_new, got: %s", steps[0].SQL)
+	}
+	if !strings.Contains(steps[0].SQL, "CONSTRAINT fk_posts_user_id") {
+		t.Errorf("Expected step 1 to include foreign key, got: %s", steps[0].SQL)
+	}
+
+	// Step 2: Copy data
+	if !strings.Contains(steps[1].SQL, "INSERT INTO posts_new") {
+		t.Errorf("Expected step 2 to insert data, got: %s", steps[1].SQL)
+	}
+	if !strings.Contains(steps[1].SQL, "SELECT id, title, user_id FROM posts") {
+		t.Errorf("Expected step 2 to select all columns, got: %s", steps[1].SQL)
+	}
+
+	// Step 3: Drop old table
+	if steps[2].SQL != "DROP TABLE posts" {
+		t.Errorf("Expected step 3 to drop posts, got: %s", steps[2].SQL)
+	}
+
+	// Step 4: Rename new table
+	if steps[3].SQL != "ALTER TABLE posts_new RENAME TO posts" {
+		t.Errorf("Expected step 4 to rename table, got: %s", steps[3].SQL)
 	}
 }
 
-func TestGenerator_DropForeignKey(t *testing.T) {
+func TestGenerator_RecreateTableWithoutForeignKey(t *testing.T) {
 	gen := NewGenerator()
 
-	fk := database.ForeignKey{Name: "fk_posts_user_id"}
-	sql, desc := gen.DropForeignKey("posts", fk)
-
-	// SQLite doesn't support ALTER TABLE DROP CONSTRAINT
-	if !strings.Contains(desc, "SQLite limitation") {
-		t.Errorf("Expected limitation warning in description, got: %s", desc)
+	onDelete := "CASCADE"
+	table := database.Table{
+		Name: "posts",
+		Columns: []database.Column{
+			{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+			{Name: "title", Type: "text", Nullable: false},
+			{Name: "user_id", Type: "integer", Nullable: false},
+		},
+		ForeignKeys: []database.ForeignKey{
+			{
+				Name:              "fk_posts_user_id",
+				Columns:           []string{"user_id"},
+				ReferencedTable:   "users",
+				ReferencedColumns: []string{"id"},
+				OnDelete:          &onDelete,
+			},
+		},
 	}
 
-	if !strings.Contains(sql, "--") {
-		t.Errorf("Expected comment SQL, got: %s", sql)
+	steps := gen.RecreateTableWithoutForeignKey(table, "fk_posts_user_id")
+
+	// Should have 4 steps: create temp table, copy data, drop old table, rename
+	if len(steps) != 4 {
+		t.Fatalf("Expected 4 steps, got %d", len(steps))
+	}
+
+	// Step 1: Create new table without the foreign key
+	if !strings.Contains(steps[0].SQL, "CREATE TABLE posts_new") {
+		t.Errorf("Expected step 1 to create posts_new, got: %s", steps[0].SQL)
+	}
+	if strings.Contains(steps[0].SQL, "fk_posts_user_id") {
+		t.Errorf("Expected step 1 to NOT include the foreign key, got: %s", steps[0].SQL)
+	}
+
+	// Step 2: Copy data
+	if !strings.Contains(steps[1].SQL, "INSERT INTO posts_new") {
+		t.Errorf("Expected step 2 to insert data, got: %s", steps[1].SQL)
+	}
+
+	// Step 3: Drop old table
+	if steps[2].SQL != "DROP TABLE posts" {
+		t.Errorf("Expected step 3 to drop posts, got: %s", steps[2].SQL)
+	}
+
+	// Step 4: Rename new table
+	if steps[3].SQL != "ALTER TABLE posts_new RENAME TO posts" {
+		t.Errorf("Expected step 4 to rename table, got: %s", steps[3].SQL)
 	}
 }
 
