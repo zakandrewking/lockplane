@@ -95,17 +95,6 @@ var (
 			Foreground(colorSubtle).
 			Italic(true).
 			MarginTop(1)
-
-	// Call to action style - prominent button-like appearance
-	callToActionStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")).
-				Background(colorPrimary).
-				Bold(true).
-				Padding(1, 4).
-				MarginTop(2).
-				Align(lipgloss.Center).
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorPrimary)
 )
 
 // Icons
@@ -165,5 +154,5 @@ func renderStatusBar(text string) string {
 }
 
 func renderCallToAction(text string) string {
-	return callToActionStyle.Render("⏎  " + text + "  ⏎")
+	return selectedStyle.Render(iconArrow + " " + text)
 }

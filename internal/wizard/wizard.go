@@ -607,7 +607,7 @@ func (m WizardModel) renderWelcome() string {
 		"  • Set up shadow databases for safe migrations\n" +
 		"  • Create environment-specific config files"))
 	b.WriteString("\n\n")
-	b.WriteString(renderCallToAction("Press ENTER to Continue"))
+	b.WriteString(renderCallToAction("Press Enter to continue"))
 	b.WriteString("\n\n")
 	b.WriteString(renderStatusBar("Ctrl-C to quit"))
 
@@ -636,7 +636,9 @@ func (m WizardModel) renderCheckExisting() string {
 		"If you add an environment with the same name as an\n" +
 		"existing one, it will be updated."))
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to add environment, Esc to go back, Ctrl-C to quit"))
+	b.WriteString(renderCallToAction("Press Enter to add environment"))
+	b.WriteString("\n\n")
+	b.WriteString(renderStatusBar("Esc: back  •  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
 }
