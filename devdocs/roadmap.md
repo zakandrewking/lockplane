@@ -507,6 +507,13 @@ Help teams safely upgrade database versions (e.g., Postgres 12 → 16):
 - [ ] **"Safe Migration Patterns"** - Expand/contract, multi-phase deploys, zero-downtime strategies
 - [ ] **"Migrating from Prisma/Alembic/Flyway"** - Import existing schemas, adopt Lockplane
 - [ ] **"Production Checklist"** - Everything to verify before applying migrations
+- [ ] **"Lockplane vs. Bytebase/Liquibase/Flyway"** - Feature comparison guide
+  - Compare approaches: Lockplane's declarative + shadow DB vs. traditional migration-based tools
+  - When to choose Lockplane: AI-friendly schema management, safety-first validation, explicit rollback plans
+  - When to choose other tools: Different organizational needs, existing tool investment
+  - Migration path: "Moving from X to Lockplane" workflows for each tool
+  - Feature matrix: Shadow DB testing, declarative schemas, multi-database support, backup recovery patterns
+  - Philosophy differences: Integration with best-in-class tools (pgroll, gh-ost) vs. all-in-one platforms
 
 ### Reference
 
