@@ -19,7 +19,9 @@ func NewIntrospector() *Introspector {
 
 // IntrospectSchema reads the entire SQLite database schema
 func (i *Introspector) IntrospectSchema(ctx context.Context, db *sql.DB) (*database.Schema, error) {
-	schema := &database.Schema{}
+	schema := &database.Schema{
+		Tables: make([]database.Table, 0),
+	}
 
 	tables, err := i.GetTables(ctx, db)
 	if err != nil {

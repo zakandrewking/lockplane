@@ -52,6 +52,55 @@ func TestSchemaJSONMarshaling(t *testing.T) {
 	}
 }
 
+func TestEmptySchemaJSONMarshaling(t *testing.T) {
+	// Test empty database schema
+	schema := &Schema{
+		Tables:  make([]Table, 0),
+		Dialect: DialectPostgres,
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("Failed to marshal empty schema to JSON: %v", err)
+	}
+
+	// Verify JSON contains empty array, not null
+	jsonStr := string(data)
+	if !contains(jsonStr, "\"tables\":[]") {
+		t.Errorf("Expected JSON to contain empty tables array, got: %s", jsonStr)
+	}
+
+	// Unmarshal back
+	var unmarshaled Schema
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("Failed to unmarshal empty schema from JSON: %v", err)
+	}
+
+	// Verify structure
+	if unmarshaled.Tables == nil {
+		t.Error("Expected Tables to be an empty slice, not nil")
+	}
+
+	if len(unmarshaled.Tables) != 0 {
+		t.Errorf("Expected 0 tables, got %d", len(unmarshaled.Tables))
+	}
+}
+
+// Helper function to check if a string contains a substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsInMiddle(s, substr)))
+}
+
+func containsInMiddle(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestTableWithForeignKeys(t *testing.T) {
 	onDelete := "CASCADE"
 	table := Table{
