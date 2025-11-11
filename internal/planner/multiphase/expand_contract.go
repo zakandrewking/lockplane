@@ -27,9 +27,6 @@ func GenerateExpandContractPlan(
 		return nil, fmt.Errorf("oldColumn and newColumn must be different")
 	}
 
-	// Generate unique migration ID
-	migrationID := fmt.Sprintf("rename_%s_%s_%d", table, oldColumn, time.Now().Unix())
-
 	// Phase 1: Expand - Add new column and backfill
 	phase1 := planner.Phase{
 		PhaseNumber:        1,
