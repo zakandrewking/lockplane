@@ -79,7 +79,8 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.result = msg.result
 		m.state = StateDone
-		return m, nil
+		// Quit immediately after showing the done screen
+		return m, tea.Quit
 
 	case existingConfigMsg:
 		if msg.path != "" {
