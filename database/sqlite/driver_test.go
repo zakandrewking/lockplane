@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"testing"
 
 	"github.com/lockplane/lockplane/database"
@@ -267,23 +268,27 @@ func TestDriver_SchemaOperations_NoOp(t *testing.T) {
 
 	// Test that schema operations are no-ops for SQLite
 	// (they shouldn't panic or return errors)
+	// Note: We don't need actual context or DB connection for no-op methods,
+	// but staticcheck requires we don't pass nil context
 
-	err := driver.CreateSchema(nil, nil, "test_schema")
+	ctx := context.Background()
+
+	err := driver.CreateSchema(ctx, nil, "test_schema")
 	if err != nil {
 		t.Errorf("CreateSchema should be no-op for SQLite, got error: %v", err)
 	}
 
-	err = driver.SetSchema(nil, nil, "test_schema")
+	err = driver.SetSchema(ctx, nil, "test_schema")
 	if err != nil {
 		t.Errorf("SetSchema should be no-op for SQLite, got error: %v", err)
 	}
 
-	err = driver.DropSchema(nil, nil, "test_schema", false)
+	err = driver.DropSchema(ctx, nil, "test_schema", false)
 	if err != nil {
 		t.Errorf("DropSchema should be no-op for SQLite, got error: %v", err)
 	}
 
-	schemas, err := driver.ListSchemas(nil, nil)
+	schemas, err := driver.ListSchemas(ctx, nil)
 	if err != nil {
 		t.Errorf("ListSchemas should be no-op for SQLite, got error: %v", err)
 	}
