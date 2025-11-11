@@ -1290,6 +1290,21 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *planner.Plan, shadowDB *sq
 		Errors:  []string{},
 	}
 
+	// Validate source hash if present in plan
+	if plan.SourceHash != "" {
+		currentHash, err := schema.ComputeSchemaHash((*Schema)(currentSchema))
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("failed to compute current schema hash: %v", err))
+			return result, fmt.Errorf("failed to compute current schema hash: %w", err)
+		}
+
+		if currentHash != plan.SourceHash {
+			errMsg := fmt.Sprintf("source schema hash mismatch: expected %s, got %s", plan.SourceHash, currentHash)
+			result.Errors = append(result.Errors, errMsg)
+			return result, fmt.Errorf("source schema hash mismatch: plan was generated for a different database state")
+		}
+	}
+
 	// If shadow DB provided, run dry-run first
 	if shadowDB != nil {
 		if err := dryRunPlan(ctx, shadowDB, plan, currentSchema, driver); err != nil {
