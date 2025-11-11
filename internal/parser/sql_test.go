@@ -204,3 +204,40 @@ ALTER TABLE users DROP CONSTRAINT users_pkey;
 		}
 	}
 }
+
+func TestParseSQLSchemaCreateIndexStatement(t *testing.T) {
+	sql := `
+CREATE TABLE login_tokens (
+    token TEXT PRIMARY KEY,
+    expires_at TEXT NOT NULL
+);
+CREATE INDEX idx_login_tokens_expires_at ON login_tokens (expires_at);
+`
+
+	schema, err := ParseSQLSchema(sql)
+	if err != nil {
+		t.Fatalf("ParseSQLSchema returned error: %v", err)
+	}
+
+	if len(schema.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(schema.Tables))
+	}
+
+	table := schema.Tables[0]
+	if len(table.Indexes) != 1 {
+		t.Fatalf("expected 1 index, got %d", len(table.Indexes))
+	}
+
+	idx := table.Indexes[0]
+	if idx.Name != "idx_login_tokens_expires_at" {
+		t.Fatalf("expected index name idx_login_tokens_expires_at, got %s", idx.Name)
+	}
+
+	if len(idx.Columns) != 1 {
+		t.Fatalf("expected index to have 1 column, got %d", len(idx.Columns))
+	}
+
+	if idx.Columns[0] != "expires_at" {
+		t.Fatalf("expected index column expires_at, got %s", idx.Columns[0])
+	}
+}
