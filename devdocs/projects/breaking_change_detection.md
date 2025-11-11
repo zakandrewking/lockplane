@@ -11,39 +11,39 @@
 ### Phase 1: Design and Analysis
 - [x] Create design document
 - [x] Review existing validation system
-- [ ] Design classification taxonomy (Safe/Lossy/Dangerous/Multi-Phase)
-- [ ] Define breaking change catalog
-- [ ] Plan safer alternative suggestions
+- [x] Design classification taxonomy (Safe/Review/Lossy/Dangerous/Multi-Phase)
+- [x] Define breaking change catalog
+- [x] Plan safer alternative suggestions
 
 ### Phase 2: Core Implementation
-- [ ] Implement SafetyClassification type and methods
-- [ ] Extend ValidationResult with safety classification
-- [ ] Implement breaking change detectors:
-  - [ ] DROP COLUMN detector
-  - [ ] DROP TABLE detector
-  - [ ] ALTER COLUMN TYPE detector
-  - [ ] ADD NOT NULL detector (without default)
-  - [ ] DROP CONSTRAINT detector
-  - [ ] MODIFY COLUMN (nullable → NOT NULL) detector
-- [ ] Add rollback safety analysis
+- [x] Implement SafetyClassification type and methods
+- [x] Extend ValidationResult with safety classification
+- [x] Implement breaking change detectors:
+  - [x] DROP COLUMN detector
+  - [x] DROP TABLE detector
+  - [x] ALTER COLUMN TYPE detector
+  - [x] ADD NOT NULL detector (enhanced AddColumnValidator)
+  - [ ] DROP CONSTRAINT detector (deferred)
+  - [ ] MODIFY COLUMN (nullable → NOT NULL) detector (deferred)
+- [x] Add rollback safety analysis
 
 ### Phase 3: Safer Alternatives
-- [ ] Implement alternative suggestion system
-- [ ] Add multi-phase migration guidance
-- [ ] Add expand/contract pattern suggestions
-- [ ] Document zero-downtime patterns
+- [x] Implement alternative suggestion system
+- [x] Add multi-phase migration guidance
+- [x] Add expand/contract pattern suggestions
+- [x] Document zero-downtime patterns (in design doc)
 
 ### Phase 4: Testing
-- [ ] Unit tests for each detector
-- [ ] Integration tests for classification
-- [ ] Test safer alternative suggestions
-- [ ] Test with real-world migration scenarios
+- [x] Unit tests for each detector (16 new tests)
+- [x] Integration tests for classification
+- [x] Test safer alternative suggestions
+- [x] Test with real-world migration scenarios
 
 ### Phase 5: Documentation & Polish
-- [ ] Update CLI output to show safety classification
-- [ ] Add documentation for safety levels
+- [x] Update CLI output to show safety classification
+- [ ] Add documentation for safety levels (README)
 - [ ] Update README with breaking change examples
-- [ ] Add migration safety guide
+- [ ] Add migration safety guide (docs/)
 - [ ] Commit and push
 
 ---
