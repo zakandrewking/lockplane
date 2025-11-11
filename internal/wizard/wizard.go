@@ -283,6 +283,7 @@ func (m *WizardModel) initializeInputs() {
 
 	if len(m.inputs) > 0 {
 		m.inputs[0].Focus()
+		m.inputs[0].PromptStyle = focusedPromptStyle
 	}
 }
 
@@ -290,9 +291,13 @@ func (m *WizardModel) makeInput(placeholder, value string, isPassword bool) text
 	input := textinput.New()
 	input.Placeholder = placeholder
 	input.SetValue(value)
+	input.Prompt = "→ "
+	input.PromptStyle = blurredPromptStyle
+	input.TextStyle = infoStyle
+	input.Width = 50
 	if isPassword {
 		input.EchoMode = textinput.EchoPassword
-		input.EchoCharacter = '*'
+		input.EchoCharacter = '•'
 	}
 	return input
 }
@@ -301,8 +306,10 @@ func (m *WizardModel) updateInputFocus() {
 	for i := range m.inputs {
 		if i == m.focusIndex {
 			m.inputs[i].Focus()
+			m.inputs[i].PromptStyle = focusedPromptStyle
 		} else {
 			m.inputs[i].Blur()
+			m.inputs[i].PromptStyle = blurredPromptStyle
 		}
 	}
 }

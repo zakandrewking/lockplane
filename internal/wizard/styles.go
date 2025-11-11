@@ -4,18 +4,34 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Color palette
+// ASCII art logo for the header
+const logoArt = `
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║                                                                  ║
+  ║   ┏┓ ┏━┓┏━╸╻┏ ┏━┓╻  ┏━┓┏┓╻┏━╸   ╻┏┓╻╻╺┳╸   ╻ ╻╻┏━┓┏━┓┏━┓╺┳┓    ║
+  ║   ┃┃ ┃ ┃┃  ┣┻┓┣━┛┃  ┣━┫┃┗┫┣╸    ┃┃┗┫┃ ┃    ┃╻┃┃┏━┛┣━┫┣┳┛ ┃┃    ║
+  ║   ┗┛ ┗━┛┗━╸╹ ╹╹  ┗━╸╹ ╹╹ ╹┗━╸   ╹╹ ╹╹ ╹    ┗┻┛╹┗━╸╹ ╹╹┗╸╺┻┛    ║
+  ║                                                                  ║
+  ╚══════════════════════════════════════════════════════════════════╝
+`
+
+// Color palette - using hex colors for richer, more modern look
 var (
 	// Primary colors
-	colorPrimary = lipgloss.Color("86")  // Cyan
-	colorSuccess = lipgloss.Color("42")  // Green
-	colorError   = lipgloss.Color("196") // Red
-	colorInfo    = lipgloss.Color("75")  // Blue
-	colorMuted   = lipgloss.Color("240") // Gray
+	colorPrimary = lipgloss.Color("#7D56F4") // Purple - main brand color
+	colorSuccess = lipgloss.Color("#04B575") // Green - success states
+	colorError   = lipgloss.Color("#FF4672") // Red - errors
+	colorInfo    = lipgloss.Color("#00D9FF") // Cyan - information
+	colorSubtle  = lipgloss.Color("#777777") // Gray - muted text
 )
 
 // Style definitions
 var (
+	// Logo style
+	logoStyle = lipgloss.NewStyle().
+			Foreground(colorPrimary).
+			Bold(true)
+
 	// Header styles
 	headerStyle = lipgloss.NewStyle().
 			Foreground(colorPrimary).
@@ -24,13 +40,13 @@ var (
 
 	// Section styles
 	sectionHeaderStyle = lipgloss.NewStyle().
-				Foreground(colorPrimary).
+				Foreground(colorInfo).
 				Bold(true).
 				MarginTop(1)
 
 	// Text styles
 	labelStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
+			Foreground(colorSubtle)
 
 	// Status styles
 	successStyle = lipgloss.NewStyle().
@@ -46,16 +62,24 @@ var (
 
 	// Selection styles
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(colorSuccess).
+			Foreground(lipgloss.Color("#FF6AD5")). // Pink - highlights
 			Bold(true)
 
 	unselectedStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
+			Foreground(colorSubtle)
+
+	// Input styles
+	focusedPromptStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FF6AD5")). // Pink - focus
+				Bold(true)
+
+	blurredPromptStyle = lipgloss.NewStyle().
+				Foreground(colorSubtle)
 
 	// Border styles
 	borderStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorMuted).
+			BorderForeground(colorPrimary).
 			Padding(1, 2)
 
 	// Tip box style
@@ -68,7 +92,7 @@ var (
 
 	// Status bar style
 	statusBarStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(colorSubtle).
 			Italic(true).
 			MarginTop(1)
 )
@@ -84,16 +108,26 @@ const (
 	iconSecurity = "🔒"
 	iconCheck    = "✓"
 	iconSpinner  = "⏳"
-	iconArrow    = "►"
+	iconArrow    = "▶"
+	iconPostgres = "🐘"
+	iconSQLite   = "📁"
+	iconLibSQL   = "🌐"
+	iconSparkles = "✨"
+	iconRocket   = "🚀"
+	iconFiles    = "📄"
 )
 
 // Helper functions for styled output
+func renderLogo() string {
+	return logoStyle.Render(logoArt)
+}
+
 func renderHeader(text string) string {
-	return headerStyle.Render(iconTool + " " + text)
+	return renderLogo() + "\n" + headerStyle.Render(text)
 }
 
 func renderSectionHeader(text string) string {
-	return sectionHeaderStyle.Render(iconDatabase + " " + text)
+	return sectionHeaderStyle.Render(text)
 }
 
 func renderSuccess(text string) string {
@@ -112,7 +146,7 @@ func renderOption(index int, selected bool, text string) string {
 	if selected {
 		return selectedStyle.Render(iconArrow + " " + text)
 	}
-	return unselectedStyle.Render("  " + text)
+	return unselectedStyle.Render("    " + text)
 }
 
 func renderStatusBar(text string) string {

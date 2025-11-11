@@ -114,7 +114,7 @@ var DatabaseTypes = []DatabaseType{
 		ID:          "sqlite",
 		DisplayName: "SQLite",
 		Description: "simple, file-based",
-		Icon:        "📄",
+		Icon:        "📁",
 	},
 	{
 		ID:          "libsql",
