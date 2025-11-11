@@ -453,14 +453,23 @@ func runPlan(args []string) {
 	}
 
 	if toInput == "" {
-		resolvedTo, err := config.ResolveEnvironment(cfg, *toEnvironment)
-		if err != nil {
-			log.Fatalf("Failed to resolve target environment: %v", err)
-		}
-		toInput = resolvedTo.DatabaseURL
-		if toInput == "" {
-			fmt.Fprintf(os.Stderr, "Error: environment %q does not define a target database. Provide --to or configure .env.%s.\n", resolvedTo.Name, resolvedTo.Name)
-			os.Exit(1)
+		// Try to auto-detect schema directory first (like apply command does)
+		if info, err := os.Stat("schema"); err == nil && info.IsDir() {
+			toInput = "schema"
+			if *verbose {
+				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
+			}
+		} else {
+			// Fall back to environment resolution
+			resolvedTo, err := config.ResolveEnvironment(cfg, *toEnvironment)
+			if err != nil {
+				log.Fatalf("Failed to resolve target environment: %v", err)
+			}
+			toInput = resolvedTo.DatabaseURL
+			if toInput == "" {
+				fmt.Fprintf(os.Stderr, "Error: environment %q does not define a target database. Provide --to or configure .env.%s.\n", resolvedTo.Name, resolvedTo.Name)
+				os.Exit(1)
+			}
 		}
 	}
 
