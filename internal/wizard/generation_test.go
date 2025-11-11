@@ -68,6 +68,10 @@ func TestGenerateFiles(t *testing.T) {
 		t.Error("expected gitignore to be updated")
 	}
 
+	if !result.EnvExampleCreated {
+		t.Error("expected .env.example to be created")
+	}
+
 	// Verify files exist
 	if _, err := os.Stat("schema"); os.IsNotExist(err) {
 		t.Error("schema directory was not created")
@@ -144,6 +148,26 @@ func TestGenerateFiles(t *testing.T) {
 	gitignoreStr := string(gitignoreContent)
 	if !strings.Contains(gitignoreStr, ".env.*") {
 		t.Error(".gitignore should contain .env.* pattern")
+	}
+
+	// Verify .env.example was created
+	if _, err := os.Stat(".env.example"); os.IsNotExist(err) {
+		t.Error(".env.example was not created")
+	}
+
+	// Verify .env.example content
+	exampleContent, err := os.ReadFile(".env.example")
+	if err != nil {
+		t.Fatalf("failed to read .env.example: %v", err)
+	}
+
+	exampleStr := string(exampleContent)
+	if !strings.Contains(exampleStr, "DATABASE_URL=") {
+		t.Error(".env.example should contain DATABASE_URL")
+	}
+
+	if !strings.Contains(exampleStr, "SHADOW_DATABASE_URL=") {
+		t.Error(".env.example should contain SHADOW_DATABASE_URL")
 	}
 }
 
@@ -397,6 +421,147 @@ func TestGenerateFilesPreservesExistingEnvironments(t *testing.T) {
 	// Verify original .env.local still exists
 	if _, err := os.Stat(".env.local"); os.IsNotExist(err) {
 		t.Error(".env.local should still exist")
+	}
+}
+
+func TestCreateOrUpdateEnvExampleNew(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("failed to change back to original directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+
+	// Create .env.example from scratch
+	if err := createOrUpdateEnvExample(); err != nil {
+		t.Fatalf("createOrUpdateEnvExample() error = %v", err)
+	}
+
+	// Verify file was created
+	content, err := os.ReadFile(".env.example")
+	if err != nil {
+		t.Fatalf("failed to read .env.example: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "DATABASE_URL=") {
+		t.Error(".env.example should contain DATABASE_URL")
+	}
+
+	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=") {
+		t.Error(".env.example should contain SHADOW_DATABASE_URL")
+	}
+
+	if !strings.Contains(contentStr, "Lockplane") {
+		t.Error(".env.example should contain Lockplane header")
+	}
+}
+
+func TestCreateOrUpdateEnvExampleUpdate(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("failed to change back to original directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+
+	// Create existing .env.example with only some content
+	existingContent := "# Existing config\nSOME_VAR=value\n"
+	if err := os.WriteFile(".env.example", []byte(existingContent), 0644); err != nil {
+		t.Fatalf("failed to create .env.example: %v", err)
+	}
+
+	// Update .env.example
+	if err := createOrUpdateEnvExample(); err != nil {
+		t.Fatalf("createOrUpdateEnvExample() error = %v", err)
+	}
+
+	// Verify file was updated
+	content, err := os.ReadFile(".env.example")
+	if err != nil {
+		t.Fatalf("failed to read .env.example: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Should preserve existing content
+	if !strings.Contains(contentStr, "SOME_VAR=value") {
+		t.Error(".env.example should preserve existing content")
+	}
+
+	// Should add new content
+	if !strings.Contains(contentStr, "DATABASE_URL=") {
+		t.Error(".env.example should contain DATABASE_URL")
+	}
+
+	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=") {
+		t.Error(".env.example should contain SHADOW_DATABASE_URL")
+	}
+}
+
+func TestCreateOrUpdateEnvExampleIdempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("failed to change back to original directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+
+	// Create .env.example that already has both fields
+	existingContent := "DATABASE_URL=postgres://localhost/db\nSHADOW_DATABASE_URL=postgres://localhost/shadow\n"
+	if err := os.WriteFile(".env.example", []byte(existingContent), 0644); err != nil {
+		t.Fatalf("failed to create .env.example: %v", err)
+	}
+
+	// Call update again
+	if err := createOrUpdateEnvExample(); err != nil {
+		t.Fatalf("createOrUpdateEnvExample() error = %v", err)
+	}
+
+	// Verify file was not modified
+	content, err := os.ReadFile(".env.example")
+	if err != nil {
+		t.Fatalf("failed to read .env.example: %v", err)
+	}
+
+	contentStr := string(content)
+	if contentStr != existingContent {
+		t.Error(".env.example should not be modified when it already has both fields")
+	}
+
+	// Should not duplicate fields
+	databaseURLCount := strings.Count(contentStr, "DATABASE_URL=")
+	if databaseURLCount != 1 {
+		t.Errorf("DATABASE_URL appears %d times, want 1", databaseURLCount)
+	}
+
+	shadowURLCount := strings.Count(contentStr, "SHADOW_DATABASE_URL=")
+	if shadowURLCount != 1 {
+		t.Errorf("SHADOW_DATABASE_URL appears %d times, want 1", shadowURLCount)
 	}
 }
 

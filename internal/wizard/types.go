@@ -89,13 +89,15 @@ type EnvironmentInput struct {
 
 // InitResult contains the outcome of running the wizard
 type InitResult struct {
-	ConfigPath       string
-	ConfigCreated    bool
-	ConfigUpdated    bool
-	EnvFiles         []string
-	SchemaDir        string
-	SchemaDirCreated bool
-	GitignoreUpdated bool
+	ConfigPath        string
+	ConfigCreated     bool
+	ConfigUpdated     bool
+	EnvFiles          []string
+	SchemaDir         string
+	SchemaDirCreated  bool
+	GitignoreUpdated  bool
+	EnvExampleCreated bool
+	EnvExampleUpdated bool
 }
 
 // DatabaseType represents a database option

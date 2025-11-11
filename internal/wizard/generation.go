@@ -49,6 +49,21 @@ func GenerateFiles(environments []EnvironmentInput) (*InitResult, error) {
 		result.EnvFiles = append(result.EnvFiles, envFilePath)
 	}
 
+	// Create or update .env.example
+	examplePath := ".env.example"
+	exampleExists := false
+	if _, err := os.Stat(examplePath); err == nil {
+		exampleExists = true
+	}
+	if err := createOrUpdateEnvExample(); err != nil {
+		return nil, fmt.Errorf("failed to create/update .env.example: %w", err)
+	}
+	if exampleExists {
+		result.EnvExampleUpdated = true
+	} else {
+		result.EnvExampleCreated = true
+	}
+
 	// Update .gitignore
 	if err := updateGitignore(); err != nil {
 		return nil, fmt.Errorf("failed to update .gitignore: %w", err)
@@ -171,6 +186,55 @@ func generateEnvFile(path string, env EnvironmentInput) error {
 
 	// Write with restrictive permissions (owner read/write only)
 	return os.WriteFile(path, []byte(b.String()), 0600)
+}
+
+func createOrUpdateEnvExample() error {
+	examplePath := ".env.example"
+
+	// Read existing .env.example if it exists
+	existingContent := ""
+	if data, err := os.ReadFile(examplePath); err == nil {
+		existingContent = string(data)
+	}
+
+	// Check if DATABASE_URL and SHADOW_DATABASE_URL already exist
+	hasDatabaseURL := strings.Contains(existingContent, "DATABASE_URL=")
+	hasShadowDatabaseURL := strings.Contains(existingContent, "SHADOW_DATABASE_URL=")
+
+	// If both already exist, nothing to do
+	if hasDatabaseURL && hasShadowDatabaseURL {
+		return nil
+	}
+
+	// Build the content to append
+	var b strings.Builder
+
+	// If file exists and has content, ensure there's a newline separator
+	if existingContent != "" && !strings.HasSuffix(existingContent, "\n") {
+		b.WriteString("\n")
+	}
+
+	// Add header comment if file is new or doesn't have lockplane section
+	if existingContent == "" || !strings.Contains(existingContent, "Lockplane") {
+		b.WriteString("\n# Lockplane Configuration\n")
+		b.WriteString("# Copy to .env.local and fill in your actual values\n")
+	}
+
+	// Add DATABASE_URL if missing
+	if !hasDatabaseURL {
+		b.WriteString("DATABASE_URL=postgresql://user:password@localhost:5432/database?sslmode=disable\n")
+	}
+
+	// Add SHADOW_DATABASE_URL if missing
+	if !hasShadowDatabaseURL {
+		b.WriteString("SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/database_shadow?sslmode=disable\n")
+	}
+
+	// Append to existing content
+	newContent := existingContent + b.String()
+
+	// Write with standard permissions (readable by all, writable by owner)
+	return os.WriteFile(examplePath, []byte(newContent), 0644)
 }
 
 func updateGitignore() error {

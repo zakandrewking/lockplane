@@ -25,13 +25,15 @@ shadow_database_url = "postgresql://lockplane:lockplane@localhost:5433/lockplane
 )
 
 type bootstrapResult struct {
-	SchemaDir        string
-	ConfigPath       string
-	EnvFiles         []string
-	SchemaDirCreated bool
-	ConfigCreated    bool
-	ConfigUpdated    bool
-	GitignoreUpdated bool
+	SchemaDir         string
+	ConfigPath        string
+	EnvFiles          []string
+	SchemaDirCreated  bool
+	ConfigCreated     bool
+	ConfigUpdated     bool
+	GitignoreUpdated  bool
+	EnvExampleCreated bool
+	EnvExampleUpdated bool
 }
 
 func runInit(args []string) {
@@ -185,13 +187,15 @@ func runInit(args []string) {
 
 		// Report success
 		reportBootstrapResult(os.Stdout, &bootstrapResult{
-			SchemaDir:        result.SchemaDir,
-			ConfigPath:       result.ConfigPath,
-			EnvFiles:         result.EnvFiles,
-			SchemaDirCreated: result.SchemaDirCreated,
-			ConfigCreated:    result.ConfigCreated,
-			ConfigUpdated:    result.ConfigUpdated,
-			GitignoreUpdated: result.GitignoreUpdated,
+			SchemaDir:         result.SchemaDir,
+			ConfigPath:        result.ConfigPath,
+			EnvFiles:          result.EnvFiles,
+			SchemaDirCreated:  result.SchemaDirCreated,
+			ConfigCreated:     result.ConfigCreated,
+			ConfigUpdated:     result.ConfigUpdated,
+			GitignoreUpdated:  result.GitignoreUpdated,
+			EnvExampleCreated: result.EnvExampleCreated,
+			EnvExampleUpdated: result.EnvExampleUpdated,
 		})
 		return
 	}
@@ -265,6 +269,12 @@ func reportBootstrapResult(out *os.File, result *bootstrapResult) {
 
 	for _, envFile := range result.EnvFiles {
 		_, _ = fmt.Fprintf(out, "✓ Wrote %s\n", envFile)
+	}
+
+	if result.EnvExampleCreated {
+		_, _ = fmt.Fprintf(out, "✓ Created .env.example\n")
+	} else if result.EnvExampleUpdated {
+		_, _ = fmt.Fprintf(out, "✓ Updated .env.example\n")
 	}
 
 	if result.GitignoreUpdated {
