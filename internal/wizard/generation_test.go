@@ -119,12 +119,12 @@ func TestGenerateFiles(t *testing.T) {
 	}
 
 	envStr := string(envContent)
-	if !strings.Contains(envStr, "DATABASE_URL=postgresql://testuser:testpass@localhost:5432/testdb") {
+	if !strings.Contains(envStr, "POSTGRES_URL=postgresql://testuser:testpass@localhost:5432/testdb") {
 		t.Error(".env.local should contain PostgreSQL connection string")
 	}
 
-	if !strings.Contains(envStr, "SHADOW_DATABASE_URL=") {
-		t.Error(".env.local should contain shadow database URL")
+	if !strings.Contains(envStr, "POSTGRES_SHADOW_URL=") {
+		t.Error(".env.local should contain PostgreSQL shadow database URL")
 	}
 
 	// Verify .env file permissions
@@ -162,22 +162,31 @@ func TestGenerateFiles(t *testing.T) {
 	}
 
 	exampleStr := string(exampleContent)
-	if !strings.Contains(exampleStr, "DATABASE_URL=") {
-		t.Error(".env.example should contain DATABASE_URL")
+	// Should contain PostgreSQL variables (first environment)
+	if !strings.Contains(exampleStr, "POSTGRES_URL=") {
+		t.Error(".env.example should contain POSTGRES_URL")
 	}
 
-	if !strings.Contains(exampleStr, "SHADOW_DATABASE_URL=") {
-		t.Error(".env.example should contain SHADOW_DATABASE_URL")
+	if !strings.Contains(exampleStr, "POSTGRES_SHADOW_URL=") {
+		t.Error(".env.example should contain POSTGRES_SHADOW_URL")
 	}
 
-	// Should use postgres examples since first environment is postgres
 	if !strings.Contains(exampleStr, "postgresql://") {
 		t.Error(".env.example should contain PostgreSQL examples")
 	}
 
-	// Should NOT contain LIBSQL_DB_TOKEN since no libsql environment was created
-	if strings.Contains(exampleStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should not contain LIBSQL_DB_TOKEN when no libsql environment is configured")
+	// Should contain SQLite variables (second environment)
+	if !strings.Contains(exampleStr, "SQLITE_DB_PATH=") {
+		t.Error(".env.example should contain SQLITE_DB_PATH")
+	}
+
+	if !strings.Contains(exampleStr, "SQLITE_SHADOW_DB_PATH=") {
+		t.Error(".env.example should contain SQLITE_SHADOW_DB_PATH")
+	}
+
+	// Should NOT contain libSQL variables since no libsql environment was created
+	if strings.Contains(exampleStr, "LIBSQL_") {
+		t.Error(".env.example should not contain LIBSQL variables when no libsql environment is configured")
 	}
 }
 
@@ -468,21 +477,24 @@ func TestCreateOrUpdateEnvExampleNew(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, "DATABASE_URL=postgresql://") {
-		t.Error(".env.example should contain PostgreSQL DATABASE_URL")
+	if !strings.Contains(contentStr, "POSTGRES_URL=postgresql://") {
+		t.Error(".env.example should contain POSTGRES_URL")
 	}
 
-	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=postgresql://") {
-		t.Error(".env.example should contain PostgreSQL SHADOW_DATABASE_URL")
+	if !strings.Contains(contentStr, "POSTGRES_SHADOW_URL=postgresql://") {
+		t.Error(".env.example should contain POSTGRES_SHADOW_URL")
 	}
 
 	if !strings.Contains(contentStr, "Lockplane") {
 		t.Error(".env.example should contain Lockplane header")
 	}
 
-	// Should NOT contain LIBSQL_DB_TOKEN for postgres environment
-	if strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should not contain LIBSQL_DB_TOKEN for postgres environment")
+	// Should NOT contain libSQL or SQLite variables for postgres environment
+	if strings.Contains(contentStr, "LIBSQL_") {
+		t.Error(".env.example should not contain LIBSQL variables for postgres environment")
+	}
+	if strings.Contains(contentStr, "SQLITE_") {
+		t.Error(".env.example should not contain SQLITE variables for postgres environment")
 	}
 }
 
@@ -502,13 +514,13 @@ func TestCreateOrUpdateEnvExampleUpdate(t *testing.T) {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
 
-	// Create existing .env.example with DATABASE_URL and SHADOW_DATABASE_URL already set
-	existingContent := "# Existing config\nDATABASE_URL=postgresql://existing\nSHADOW_DATABASE_URL=postgresql://existing_shadow\n"
+	// Create existing .env.example with PostgreSQL variables already set
+	existingContent := "# Existing config\nPOSTGRES_URL=postgresql://existing\nPOSTGRES_SHADOW_URL=postgresql://existing_shadow\n"
 	if err := os.WriteFile(".env.example", []byte(existingContent), 0644); err != nil {
 		t.Fatalf("failed to create .env.example: %v", err)
 	}
 
-	// Add a libsql environment - should append LIBSQL_DB_TOKEN
+	// Add a libsql environment - should append libSQL variables
 	envsWithLibSQL := []EnvironmentInput{
 		{
 			Name:         "turso",
@@ -528,17 +540,23 @@ func TestCreateOrUpdateEnvExampleUpdate(t *testing.T) {
 	contentStr := string(content)
 
 	// Should preserve existing content
-	if !strings.Contains(contentStr, "DATABASE_URL=postgresql://existing") {
-		t.Error(".env.example should preserve existing DATABASE_URL")
+	if !strings.Contains(contentStr, "POSTGRES_URL=postgresql://existing") {
+		t.Error(".env.example should preserve existing POSTGRES_URL")
 	}
 
-	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=postgresql://existing_shadow") {
-		t.Error(".env.example should preserve existing SHADOW_DATABASE_URL")
+	if !strings.Contains(contentStr, "POSTGRES_SHADOW_URL=postgresql://existing_shadow") {
+		t.Error(".env.example should preserve existing POSTGRES_SHADOW_URL")
 	}
 
-	// Should add LIBSQL_DB_TOKEN for libsql environment
-	if !strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should contain LIBSQL_DB_TOKEN when libsql environment is added")
+	// Should add libSQL variables for libsql environment
+	if !strings.Contains(contentStr, "LIBSQL_URL=") {
+		t.Error(".env.example should contain LIBSQL_URL when libsql environment is added")
+	}
+	if !strings.Contains(contentStr, "LIBSQL_AUTH_TOKEN=") {
+		t.Error(".env.example should contain LIBSQL_AUTH_TOKEN when libsql environment is added")
+	}
+	if !strings.Contains(contentStr, "LIBSQL_SHADOW_DB_PATH=") {
+		t.Error(".env.example should contain LIBSQL_SHADOW_DB_PATH when libsql environment is added")
 	}
 }
 
@@ -558,8 +576,8 @@ func TestCreateOrUpdateEnvExampleIdempotent(t *testing.T) {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
 
-	// Create .env.example that already has all fields
-	existingContent := "DATABASE_URL=postgres://localhost/db\nSHADOW_DATABASE_URL=postgres://localhost/shadow\nLIBSQL_DB_TOKEN=token123\n"
+	// Create .env.example that already has all fields for libSQL
+	existingContent := "LIBSQL_URL=libsql://localhost/db\nLIBSQL_AUTH_TOKEN=token123\nLIBSQL_SHADOW_DB_PATH=./shadow.db\n"
 	if err := os.WriteFile(".env.example", []byte(existingContent), 0644); err != nil {
 		t.Fatalf("failed to create .env.example: %v", err)
 	}
@@ -587,33 +605,32 @@ func TestCreateOrUpdateEnvExampleIdempotent(t *testing.T) {
 	}
 
 	// Should not duplicate fields
-	// Check for standalone DATABASE_URL (not part of SHADOW_DATABASE_URL)
 	lines := strings.Split(contentStr, "\n")
-	databaseURLCount := 0
-	shadowURLCount := 0
+	libsqlURLCount := 0
 	libsqlTokenCount := 0
+	libsqlShadowCount := 0
 	for _, line := range lines {
-		if strings.HasPrefix(line, "DATABASE_URL=") {
-			databaseURLCount++
+		if strings.HasPrefix(line, "LIBSQL_URL=") {
+			libsqlURLCount++
 		}
-		if strings.HasPrefix(line, "SHADOW_DATABASE_URL=") {
-			shadowURLCount++
-		}
-		if strings.HasPrefix(line, "LIBSQL_DB_TOKEN=") {
+		if strings.HasPrefix(line, "LIBSQL_AUTH_TOKEN=") {
 			libsqlTokenCount++
 		}
+		if strings.HasPrefix(line, "LIBSQL_SHADOW_DB_PATH=") {
+			libsqlShadowCount++
+		}
 	}
 
-	if databaseURLCount != 1 {
-		t.Errorf("DATABASE_URL appears %d times, want 1", databaseURLCount)
-	}
-
-	if shadowURLCount != 1 {
-		t.Errorf("SHADOW_DATABASE_URL appears %d times, want 1", shadowURLCount)
+	if libsqlURLCount != 1 {
+		t.Errorf("LIBSQL_URL appears %d times, want 1", libsqlURLCount)
 	}
 
 	if libsqlTokenCount != 1 {
-		t.Errorf("LIBSQL_DB_TOKEN appears %d times, want 1", libsqlTokenCount)
+		t.Errorf("LIBSQL_AUTH_TOKEN appears %d times, want 1", libsqlTokenCount)
+	}
+
+	if libsqlShadowCount != 1 {
+		t.Errorf("LIBSQL_SHADOW_DB_PATH appears %d times, want 1", libsqlShadowCount)
 	}
 }
 
@@ -651,17 +668,20 @@ func TestCreateOrUpdateEnvExampleSQLite(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, "DATABASE_URL=./") {
-		t.Error(".env.example should contain SQLite DATABASE_URL as a file path")
+	if !strings.Contains(contentStr, "SQLITE_DB_PATH=./") {
+		t.Error(".env.example should contain SQLITE_DB_PATH as a file path")
 	}
 
-	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=./") {
-		t.Error(".env.example should contain SQLite SHADOW_DATABASE_URL as a file path")
+	if !strings.Contains(contentStr, "SQLITE_SHADOW_DB_PATH=./") {
+		t.Error(".env.example should contain SQLITE_SHADOW_DB_PATH as a file path")
 	}
 
-	// Should NOT contain LIBSQL_DB_TOKEN for sqlite environment
-	if strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should not contain LIBSQL_DB_TOKEN for sqlite environment")
+	// Should NOT contain libSQL or PostgreSQL variables for sqlite environment
+	if strings.Contains(contentStr, "LIBSQL_") {
+		t.Error(".env.example should not contain LIBSQL variables for sqlite environment")
+	}
+	if strings.Contains(contentStr, "POSTGRES_") {
+		t.Error(".env.example should not contain POSTGRES variables for sqlite environment")
 	}
 }
 
@@ -699,17 +719,25 @@ func TestCreateOrUpdateEnvExampleLibSQL(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, "DATABASE_URL=libsql://") {
-		t.Error(".env.example should contain libSQL DATABASE_URL")
+	if !strings.Contains(contentStr, "LIBSQL_URL=libsql://") {
+		t.Error(".env.example should contain LIBSQL_URL")
 	}
 
-	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=./") {
-		t.Error(".env.example should contain SQLite SHADOW_DATABASE_URL as a file path for libSQL (uses local shadow)")
+	if !strings.Contains(contentStr, "LIBSQL_SHADOW_DB_PATH=./") {
+		t.Error(".env.example should contain LIBSQL_SHADOW_DB_PATH as a file path (uses local shadow)")
 	}
 
-	// Should contain LIBSQL_DB_TOKEN for libsql environment
-	if !strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should contain LIBSQL_DB_TOKEN for libsql environment")
+	// Should contain LIBSQL_AUTH_TOKEN for libsql environment
+	if !strings.Contains(contentStr, "LIBSQL_AUTH_TOKEN=") {
+		t.Error(".env.example should contain LIBSQL_AUTH_TOKEN for libsql environment")
+	}
+
+	// Should NOT contain PostgreSQL or SQLite variables for libsql environment
+	if strings.Contains(contentStr, "POSTGRES_") {
+		t.Error(".env.example should not contain POSTGRES variables for libsql environment")
+	}
+	if strings.Contains(contentStr, "SQLITE_") {
+		t.Error(".env.example should not contain SQLITE variables for libsql environment")
 	}
 }
 
@@ -756,19 +784,19 @@ func TestGenerateLibSQLEnvironment(t *testing.T) {
 	}
 
 	envStr := string(envContent)
-	if !strings.Contains(envStr, "DATABASE_URL=libsql://mydb-myorg.turso.io?authToken=") {
-		t.Error(".env.production should contain libSQL DATABASE_URL with authToken")
+	if !strings.Contains(envStr, "LIBSQL_URL=libsql://mydb-myorg.turso.io?authToken=") {
+		t.Error(".env.production should contain LIBSQL_URL with authToken")
 	}
 
-	if !strings.Contains(envStr, "LIBSQL_DB_TOKEN=eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.test.token") {
-		t.Error(".env.production should contain LIBSQL_DB_TOKEN")
+	if !strings.Contains(envStr, "LIBSQL_AUTH_TOKEN=eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.test.token") {
+		t.Error(".env.production should contain LIBSQL_AUTH_TOKEN")
 	}
 
-	if !strings.Contains(envStr, "SHADOW_DATABASE_URL=./schema/turso_shadow.db") {
-		t.Error(".env.production should contain shadow database URL as a file path")
+	if !strings.Contains(envStr, "LIBSQL_SHADOW_DB_PATH=./schema/turso_shadow.db") {
+		t.Error(".env.production should contain LIBSQL_SHADOW_DB_PATH as a file path")
 	}
 
-	// Verify .env.example was created and contains LIBSQL_DB_TOKEN
+	// Verify .env.example was created and contains libSQL variables
 	if !result.EnvExampleCreated {
 		t.Error("expected .env.example to be created")
 	}
@@ -779,8 +807,14 @@ func TestGenerateLibSQLEnvironment(t *testing.T) {
 	}
 
 	exampleStr := string(exampleContent)
-	if !strings.Contains(exampleStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should contain LIBSQL_DB_TOKEN")
+	if !strings.Contains(exampleStr, "LIBSQL_URL=") {
+		t.Error(".env.example should contain LIBSQL_URL")
+	}
+	if !strings.Contains(exampleStr, "LIBSQL_AUTH_TOKEN=") {
+		t.Error(".env.example should contain LIBSQL_AUTH_TOKEN")
+	}
+	if !strings.Contains(exampleStr, "LIBSQL_SHADOW_DB_PATH=") {
+		t.Error(".env.example should contain LIBSQL_SHADOW_DB_PATH")
 	}
 }
 
