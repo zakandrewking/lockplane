@@ -35,4 +35,8 @@ go.work
 .env
 .env.local
 
+# SQLite databases (including shadow databases)
+*.db
+*_shadow.db
+
 build/

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
 )
 
@@ -90,6 +91,9 @@ func TestConnection(connStr string, dbType string) error {
 		driverName = "sqlite"
 		// For SQLite, adjust the connection string format
 		connStr = strings.TrimPrefix(connStr, "sqlite://")
+	case "libsql":
+		driverName = "libsql"
+		// libSQL connection strings are used as-is (libsql://...)
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbType)
 	}
@@ -158,10 +162,37 @@ func BuildSQLiteConnectionString(env EnvironmentInput) string {
 	return fmt.Sprintf("sqlite://%s", filePath)
 }
 
+// BuildSQLiteShadowConnectionString constructs a shadow DB connection string for SQLite
+func BuildSQLiteShadowConnectionString(env EnvironmentInput) string {
+	filePath := env.FilePath
+	if filePath == "" {
+		filePath = "schema/lockplane.db"
+	}
+
+	// Add _shadow suffix before the file extension
+	// e.g., schema/lockplane.db -> schema/lockplane_shadow.db
+	if strings.HasSuffix(filePath, ".db") {
+		filePath = strings.TrimSuffix(filePath, ".db") + "_shadow.db"
+	} else {
+		filePath = filePath + "_shadow"
+	}
+
+	return fmt.Sprintf("sqlite://%s", filePath)
+}
+
 // BuildLibSQLConnectionString constructs a libSQL connection string
 func BuildLibSQLConnectionString(env EnvironmentInput) string {
 	if env.AuthToken != "" {
 		return fmt.Sprintf("%s?authToken=%s", env.URL, env.AuthToken)
 	}
 	return env.URL
+}
+
+// BuildLibSQLShadowConnectionString constructs a shadow DB connection string for libSQL/Turso
+// Since Turso is a remote service, we use a local SQLite database for shadow testing
+func BuildLibSQLShadowConnectionString(env EnvironmentInput) string {
+	// Use a local SQLite database for shadow testing
+	// This allows schema validation without needing a second Turso database
+	filePath := "schema/turso_shadow.db"
+	return fmt.Sprintf("sqlite://%s", filePath)
 }

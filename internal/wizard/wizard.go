@@ -583,9 +583,9 @@ func (m WizardModel) renderConnectionDetails() string {
 	case "postgres":
 		b.WriteString(renderInfo("Shadow DB will be auto-configured on port 5433\nfor safe migration testing."))
 	case "sqlite":
-		b.WriteString(renderInfo("SQLite uses file-based storage.\nShadow DB disabled to avoid file clutter."))
+		b.WriteString(renderInfo("SQLite uses file-based storage.\nShadow DB will be configured automatically."))
 	case "libsql":
-		b.WriteString(renderInfo("libSQL/Turso is an edge database.\nShadow DB not supported."))
+		b.WriteString(renderInfo("libSQL/Turso is an edge database.\nLocal SQLite shadow DB for validation."))
 	}
 
 	b.WriteString("\n\n")

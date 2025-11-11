@@ -201,6 +201,43 @@ func TestBuildSQLiteConnectionStringDefault(t *testing.T) {
 	}
 }
 
+func TestBuildSQLiteShadowConnectionString(t *testing.T) {
+	env := EnvironmentInput{
+		FilePath: "schema/test.db",
+	}
+
+	connStr := BuildSQLiteShadowConnectionString(env)
+
+	expected := "sqlite://schema/test_shadow.db"
+	if connStr != expected {
+		t.Errorf("BuildSQLiteShadowConnectionString() = %q, want %q", connStr, expected)
+	}
+}
+
+func TestBuildSQLiteShadowConnectionStringDefault(t *testing.T) {
+	env := EnvironmentInput{}
+
+	connStr := BuildSQLiteShadowConnectionString(env)
+
+	expected := "sqlite://schema/lockplane_shadow.db"
+	if connStr != expected {
+		t.Errorf("BuildSQLiteShadowConnectionString() with defaults = %q, want %q", connStr, expected)
+	}
+}
+
+func TestBuildSQLiteShadowConnectionStringNoExtension(t *testing.T) {
+	env := EnvironmentInput{
+		FilePath: "data/mydb",
+	}
+
+	connStr := BuildSQLiteShadowConnectionString(env)
+
+	expected := "sqlite://data/mydb_shadow"
+	if connStr != expected {
+		t.Errorf("BuildSQLiteShadowConnectionString() with no extension = %q, want %q", connStr, expected)
+	}
+}
+
 func TestBuildLibSQLConnectionString(t *testing.T) {
 	env := EnvironmentInput{
 		URL:       "libsql://db.turso.io",
@@ -225,5 +262,20 @@ func TestBuildLibSQLConnectionStringNoToken(t *testing.T) {
 	expected := "libsql://db.turso.io"
 	if connStr != expected {
 		t.Errorf("BuildLibSQLConnectionString() without token = %q, want %q", connStr, expected)
+	}
+}
+
+func TestBuildLibSQLShadowConnectionString(t *testing.T) {
+	env := EnvironmentInput{
+		URL:       "libsql://db.turso.io",
+		AuthToken: "token123",
+	}
+
+	connStr := BuildLibSQLShadowConnectionString(env)
+
+	// For libSQL/Turso, shadow DB uses local SQLite
+	expected := "sqlite://schema/turso_shadow.db"
+	if connStr != expected {
+		t.Errorf("BuildLibSQLShadowConnectionString() = %q, want %q", connStr, expected)
 	}
 }

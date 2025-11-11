@@ -251,8 +251,8 @@ SHADOW_DATABASE_URL=postgresql://lockplane:lockplane@localhost:5433/lockplane_sh
 # SQLite connection (file-based)
 DATABASE_URL=sqlite://schema/lockplane.db
 
-# Shadow database disabled for SQLite (avoids file clutter)
-# Migrations will run without shadow validation
+# Shadow database (configured for SQLite - safe migrations)
+SHADOW_DATABASE_URL=sqlite://schema/lockplane_shadow.db
 ```
 
 #### Auto-generated `.gitignore` additions

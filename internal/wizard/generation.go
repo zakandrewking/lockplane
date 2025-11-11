@@ -153,14 +153,20 @@ func generateEnvFile(path string, env EnvironmentInput) error {
 		connStr := BuildSQLiteConnectionString(env)
 		b.WriteString("# SQLite connection (file-based)\n")
 		b.WriteString(fmt.Sprintf("DATABASE_URL=%s\n\n", connStr))
-		b.WriteString("# Shadow database disabled for SQLite (avoids file clutter)\n")
-		b.WriteString("# Migrations will run without shadow validation\n")
+
+		shadowConnStr := BuildSQLiteShadowConnectionString(env)
+		b.WriteString("# Shadow database (configured for SQLite - safe migrations)\n")
+		b.WriteString(fmt.Sprintf("SHADOW_DATABASE_URL=%s\n", shadowConnStr))
 
 	case "libsql":
 		connStr := BuildLibSQLConnectionString(env)
-		b.WriteString("# libSQL/Turso connection\n")
+		b.WriteString("# libSQL/Turso connection (remote edge database)\n")
 		b.WriteString(fmt.Sprintf("DATABASE_URL=%s\n\n", connStr))
-		b.WriteString("# Shadow database not supported by Turso\n")
+
+		shadowConnStr := BuildLibSQLShadowConnectionString(env)
+		b.WriteString("# Shadow database (local SQLite for validation - safe migrations)\n")
+		b.WriteString("# Note: Uses local SQLite since Turso is a remote service\n")
+		b.WriteString(fmt.Sprintf("SHADOW_DATABASE_URL=%s\n", shadowConnStr))
 	}
 
 	// Write with restrictive permissions (owner read/write only)
