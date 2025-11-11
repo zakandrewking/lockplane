@@ -1,18 +1,18 @@
 # Rollback Command Redesign
 
 ## Progress Checklist
-- [ ] Phase 1: Planning and Design
+- [x] Phase 1: Planning and Design
   - [x] Create project plan document
-  - [ ] Review and validate approach
-- [ ] Phase 2: Rename `rollback` to `plan-rollback`
-  - [ ] Rename command handler function
-  - [ ] Update command routing in main()
-  - [ ] Update help strings and error messages
-  - [ ] Update printHelp() documentation
-  - [ ] Update README.md examples
-  - [ ] Update all documentation files
-  - [ ] Update test files
-  - [ ] Run tests to verify
+  - [x] Review and validate approach
+- [x] Phase 2: Rename `rollback` to `plan-rollback`
+  - [x] Rename command handler function (runRollback → runPlanRollback)
+  - [x] Update command routing in main()
+  - [x] Update help strings and error messages
+  - [x] Update printHelp() documentation
+  - [ ] Update README.md examples (deferred - will do with full impl)
+  - [ ] Update all documentation files (deferred - will do with full impl)
+  - [ ] Update test files (no test changes needed yet)
+  - [x] Run tests to verify
 - [ ] Phase 3: Implement new `rollback` command
   - [ ] Create runRollback() function (apply-like)
   - [ ] Implement plan generation internally
@@ -225,31 +225,31 @@ func runRollback(args []string) {
     //    --skip-shadow
     //    --shadow-db / --shadow-environment
     //    --verbose
-    
+
     // 2. Load forward plan
-    
+
     // 3. Resolve target database connection
-    
+
     // 4. Connect to target database
-    
+
     // 5. Introspect target database (current state)
-    
+
     // 6. Validate source hash (optional but recommended)
     //    - Check that target was modified by forward plan
     //    - Warn if can't verify
-    
+
     // 7. Generate rollback plan internally
     //    - Need "before" schema from forward plan OR introspect
     //    - Call planner.GenerateRollback()
-    
+
     // 8. Display rollback plan
-    
+
     // 9. Prompt for approval (unless --auto-approve)
-    
+
     // 10. Shadow DB validation (unless --skip-shadow)
-    
+
     // 11. Apply rollback plan
-    
+
     // 12. Report results
 }
 ```
@@ -257,26 +257,26 @@ func runRollback(args []string) {
 **Key decisions:**
 
 1. **How to get "before" schema for rollback generation?**
-   
+
    Option A: Store in forward plan (requires plan format change)
    - Pros: Guaranteed correct, no extra introspection
    - Cons: Breaking change, larger plan files
-   
+
    Option B: Use source_hash to find schema file
    - Pros: No format change
    - Cons: Requires keeping schema files around
-   
+
    Option C: Require --from flag
    - Pros: Explicit, no format change
    - Cons: More flags for user to provide
-   
+
    **Recommendation: Option C for now**
    - Add `--from <schema|db>` flag (same as plan-rollback)
    - This makes the command signature consistent
    - Later we can optimize by embedding schema in plan
 
 2. **Hash validation approach?**
-   
+
    For now:
    - Check that forward plan has source_hash
    - Optionally compute expected "after" hash
@@ -355,7 +355,7 @@ lockplane rollback --plan forward.json --from before.json --target-environment p
 
 Old plans generated before source hash feature.
 
-**Solution:** 
+**Solution:**
 - Warn user that hash validation is skipped
 - Proceed with rollback
 - Recommend regenerating plan with newer version
