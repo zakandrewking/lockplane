@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/fatih/color"
 	_ "github.com/lib/pq"
 	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/database/postgres"
@@ -848,7 +849,7 @@ func runApply(args []string) {
 		}
 		plan = loadedPlan
 
-		fmt.Fprintf(os.Stderr, "📋 Loaded migration plan with %d steps from %s\n", len(plan.Steps), planFile)
+		color.New(color.FgCyan).Fprintf(os.Stderr, "📋 Loaded migration plan with %d steps from %s\n", len(plan.Steps), planFile)
 	} else {
 		// Generate plan mode - require --schema
 		schemaPath := strings.TrimSpace(*schemaFlag)
@@ -870,7 +871,7 @@ func runApply(args []string) {
 		}
 
 		// Introspect target database (this is the "from" state)
-		fmt.Fprintf(os.Stderr, "🔍 Introspecting target database (%s)...\n", resolvedTarget.Name)
+		color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Introspecting target database (%s)...\n", resolvedTarget.Name)
 		before, err := LoadSchemaOrIntrospect(targetConnStr)
 		if err != nil {
 			log.Fatalf("Failed to introspect target database: %v", err)
@@ -880,7 +881,7 @@ func runApply(args []string) {
 		planDialect := schema.DriverNameToDialect(planDriverType)
 
 		// Load desired schema (this is the "to" state)
-		fmt.Fprintf(os.Stderr, "📖 Loading desired schema from %s...\n", schemaPath)
+		color.New(color.FgCyan).Fprintf(os.Stderr, "📖 Loading desired schema from %s...\n", schemaPath)
 		after, err := LoadSchemaOrIntrospectWithOptions(schemaPath, buildSchemaLoadOptions(schemaPath, planDialect))
 		if err != nil {
 			log.Fatalf("Failed to load schema: %v", err)
@@ -891,7 +892,7 @@ func runApply(args []string) {
 
 		// Check if there are any changes
 		if diff.IsEmpty() {
-			fmt.Fprintf(os.Stderr, "\n✓ No changes detected - database already matches desired schema\n")
+			color.New(color.FgGreen).Fprintf(os.Stderr, "\n✓ No changes detected - database already matches desired schema\n")
 			os.Exit(0)
 		}
 
@@ -908,37 +909,49 @@ func runApply(args []string) {
 		}
 		plan = generatedPlan
 
-		// Print plan details
-		fmt.Fprintf(os.Stderr, "\n📋 Migration plan (%d steps):\n\n", len(plan.Steps))
+		// Print plan details with colors
+		cyan := color.New(color.FgCyan, color.Bold)
+		green := color.New(color.FgGreen)
+		yellow := color.New(color.FgYellow)
+		gray := color.New(color.FgHiBlack)
+
+		cyan.Fprintf(os.Stderr, "\n📋 Migration plan (%d steps):\n\n", len(plan.Steps))
 		for i, step := range plan.Steps {
-			fmt.Fprintf(os.Stderr, "  %d. %s\n", i+1, step.Description)
+			// Color the step number and description
+			green.Fprintf(os.Stderr, "  %d. ", i+1)
+			fmt.Fprintf(os.Stderr, "%s\n", step.Description)
 			if step.SQL != "" {
 				// Truncate SQL for display
 				sql := step.SQL
 				if len(sql) > 100 {
 					sql = sql[:100] + "..."
 				}
-				fmt.Fprintf(os.Stderr, "     SQL: %s\n", sql)
+				// Show SQL in a dimmed color
+				gray.Fprintf(os.Stderr, "     SQL: ")
+				yellow.Fprintf(os.Stderr, "%s\n", sql)
 			}
 		}
 		fmt.Fprintf(os.Stderr, "\n")
 
 		// Ask for confirmation unless --auto-approve
 		if !*autoApprove {
-			fmt.Fprintf(os.Stderr, "Do you want to perform these actions?\n")
+			bold := color.New(color.Bold)
+			red := color.New(color.FgRed)
+
+			bold.Fprintf(os.Stderr, "Do you want to perform these actions?\n")
 			fmt.Fprintf(os.Stderr, "  Lockplane will perform the actions described above.\n")
-			fmt.Fprintf(os.Stderr, "  Only 'yes' will be accepted to approve.\n\n")
+			color.New(color.FgYellow).Fprintf(os.Stderr, "  Only 'yes' will be accepted to approve.\n\n")
 			fmt.Fprintf(os.Stderr, "  Enter a value: ")
 
 			var response string
 			_, err := fmt.Scanln(&response)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "\nApply cancelled.\n")
+				red.Fprintf(os.Stderr, "\nApply cancelled.\n")
 				os.Exit(0)
 			}
 
 			if response != "yes" {
-				fmt.Fprintf(os.Stderr, "\nApply cancelled.\n")
+				red.Fprintf(os.Stderr, "\nApply cancelled.\n")
 				os.Exit(0)
 			}
 			fmt.Fprintf(os.Stderr, "\n")
@@ -1007,9 +1020,9 @@ func runApply(args []string) {
 			log.Fatalf("Failed to ping shadow database: %v", err)
 		}
 
-		fmt.Fprintf(os.Stderr, "🔍 Testing migration on shadow database...\n")
+		color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow database...\n")
 	} else {
-		fmt.Fprintf(os.Stderr, "⚠️  Skipping shadow DB validation (--skip-shadow)\n")
+		color.New(color.FgYellow).Fprintf(os.Stderr, "⚠️  Skipping shadow DB validation (--skip-shadow)\n")
 	}
 
 	// Introspect current database state (needed for shadow DB validation and source hash check)
@@ -1020,7 +1033,7 @@ func runApply(args []string) {
 
 	// Validate source hash if present in plan
 	if plan.SourceHash != "" {
-		fmt.Fprintf(os.Stderr, "🔐 Validating source schema hash...\n")
+		color.New(color.FgCyan).Fprintf(os.Stderr, "🔐 Validating source schema hash...\n")
 
 		// Compute hash of current state
 		currentHash, err := schema.ComputeSchemaHash((*Schema)(currentSchema))
@@ -1030,30 +1043,34 @@ func runApply(args []string) {
 
 		// Compare hashes
 		if currentHash != plan.SourceHash {
-			fmt.Fprintf(os.Stderr, "\n❌ Source schema mismatch!\n\n")
+			red := color.New(color.FgRed, color.Bold)
+			yellow := color.New(color.FgYellow)
+
+			red.Fprintf(os.Stderr, "\n❌ Source schema mismatch!\n\n")
 			fmt.Fprintf(os.Stderr, "The migration plan was generated for a different database state.\n")
 			fmt.Fprintf(os.Stderr, "This usually happens when:\n")
 			fmt.Fprintf(os.Stderr, "  - The plan is being applied to the wrong database\n")
 			fmt.Fprintf(os.Stderr, "  - The database has been modified since the plan was generated\n")
 			fmt.Fprintf(os.Stderr, "  - The plan is being applied out of order\n\n")
-			fmt.Fprintf(os.Stderr, "Expected source hash: %s\n", plan.SourceHash)
-			fmt.Fprintf(os.Stderr, "Current database hash: %s\n\n", currentHash)
-			fmt.Fprintf(os.Stderr, "To fix this:\n")
+			yellow.Fprintf(os.Stderr, "Expected source hash: %s\n", plan.SourceHash)
+			yellow.Fprintf(os.Stderr, "Current database hash: %s\n\n", currentHash)
+			color.New(color.FgCyan, color.Bold).Fprintf(os.Stderr, "To fix this:\n")
 			fmt.Fprintf(os.Stderr, "  1. Introspect the current database: lockplane introspect > current.json\n")
 			fmt.Fprintf(os.Stderr, "  2. Generate a new plan: lockplane plan --from current.json --to desired.lp.sql\n")
 			fmt.Fprintf(os.Stderr, "  3. Apply the new plan: lockplane apply --plan migration.json\n\n")
 			os.Exit(1)
 		}
 
-		fmt.Fprintf(os.Stderr, "✓ Source schema hash matches (hash: %s...)\n", currentHash[:12])
+		color.New(color.FgGreen).Fprintf(os.Stderr, "✓ Source schema hash matches (hash: %s...)\n", currentHash[:12])
 	}
 
 	// Apply the plan
 	result, err := applyPlan(ctx, mainDB, plan, shadowDB, (*Schema)(currentSchema), mainDriver)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\n❌ Migration failed: %v\n\n", err)
+		red := color.New(color.FgRed, color.Bold)
+		red.Fprintf(os.Stderr, "\n❌ Migration failed: %v\n\n", err)
 		if len(result.Errors) > 0 {
-			fmt.Fprintf(os.Stderr, "Errors:\n")
+			red.Fprintf(os.Stderr, "Errors:\n")
 			for _, e := range result.Errors {
 				fmt.Fprintf(os.Stderr, "  - %s\n", e)
 			}
@@ -1062,8 +1079,9 @@ func runApply(args []string) {
 	}
 
 	// Success!
-	fmt.Fprintf(os.Stderr, "\n✅ Migration applied successfully!\n")
-	fmt.Fprintf(os.Stderr, "   Steps applied: %d\n", result.StepsApplied)
+	green := color.New(color.FgGreen, color.Bold)
+	green.Fprintf(os.Stderr, "\n✅ Migration applied successfully!\n")
+	color.New(color.FgGreen).Fprintf(os.Stderr, "   Steps applied: %d\n", result.StepsApplied)
 
 	// Output result as JSON
 	jsonBytes, err := json.MarshalIndent(result, "", "  ")
