@@ -30,13 +30,13 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "ctrl+d", "q", "esc":
-			// If we have environments configured, save them before quitting
-			if m.state == StateAddAnother && len(m.environments) > 0 {
-				m.state = StateCreating
-				return m, m.createFiles()
-			}
+		case "ctrl+c":
+			// Quit immediately on Ctrl-C
 			return m, tea.Quit
+
+		case "esc":
+			// Go back to previous state
+			return m.handleBack()
 
 		case "enter":
 			return m.handleEnter()
@@ -270,6 +270,57 @@ func (m *WizardModel) handleTab() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *WizardModel) handleBack() (tea.Model, tea.Cmd) {
+	switch m.state {
+	case StateDatabaseType:
+		// Go back to welcome or existing config check
+		if m.existingConfigPath != "" {
+			m.state = StateCheckExisting
+		} else {
+			m.state = StateWelcome
+		}
+		return m, nil
+
+	case StateConnectionDetails:
+		// Go back to database type selection
+		m.state = StateDatabaseType
+		// Clear current environment data
+		m.currentEnv = EnvironmentInput{}
+		m.inputs = []textinput.Model{}
+		m.focusIndex = 0
+		m.errors = make(map[string]string)
+		return m, nil
+
+	case StateTestConnection:
+		// If connection failed, go back to edit details
+		if m.connectionTestResult == "failed" {
+			m.state = StateConnectionDetails
+			m.connectionTestResult = ""
+			m.connectionError = nil
+			m.retryChoice = 0
+			return m, nil
+		}
+		// If testing or success, stay on this screen
+		return m, nil
+
+	case StateAddAnother:
+		// Save and finish when pressing escape here
+		if len(m.environments) > 0 {
+			m.state = StateCreating
+			return m, m.createFiles()
+		}
+		return m, nil
+
+	case StateDone, StateError:
+		// Exit on escape
+		return m, tea.Quit
+
+	default:
+		// For other states (Welcome, CheckExisting, Summary, Creating), do nothing
+		return m, nil
+	}
+}
+
 func (m *WizardModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.state == StateConnectionDetails && len(m.inputs) > 0 {
 		var cmd tea.Cmd
@@ -488,7 +539,7 @@ func (m WizardModel) renderWelcome() string {
 		"  • Set up shadow databases for safe migrations\n" +
 		"  • Create environment-specific config files"))
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to continue, q to quit"))
+	b.WriteString(renderStatusBar("Press Enter to continue, Ctrl-C to quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -515,7 +566,7 @@ func (m WizardModel) renderCheckExisting() string {
 		"If you add an environment with the same name as an\n" +
 		"existing one, it will be updated."))
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to add environment, q to quit"))
+	b.WriteString(renderStatusBar("Press Enter to add environment, Esc to go back, Ctrl-C to quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -540,7 +591,7 @@ func (m WizardModel) renderDatabaseType() string {
 	b.WriteString("\n")
 	b.WriteString(renderInfo("PostgreSQL provides the most features including\nshadow databases for safe migration testing."))
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  q: quit"))
+	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  Esc: back  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -589,7 +640,7 @@ func (m WizardModel) renderConnectionDetails() string {
 	}
 
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("↑/↓ or Tab: navigate  Enter: test connection  q: quit"))
+	b.WriteString(renderStatusBar("↑/↓ or Tab: navigate  Enter: test connection  Esc: back  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -632,7 +683,7 @@ func (m WizardModel) renderTestConnection() string {
 
 	b.WriteString("\n\n")
 	if m.connectionTestResult == "failed" {
-		b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  q: quit"))
+		b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  Esc: back  Ctrl-C: quit"))
 	} else {
 		b.WriteString(renderStatusBar("Press Enter to continue"))
 	}
@@ -665,7 +716,7 @@ func (m WizardModel) renderAddAnother() string {
 	b.WriteString(renderOption(1, m.addAnotherChoice == 1, "Save and finish"))
 	b.WriteString("\n\n")
 
-	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  q/Esc/Ctrl-C: finish and save"))
+	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  Esc: finish and save  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -751,7 +802,7 @@ func (m WizardModel) renderSummary() string {
 	b.WriteString("  • .gitignore (update if needed)\n")
 
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to save configuration, q to quit"))
+	b.WriteString(renderStatusBar("Press Enter to save configuration, Ctrl-C to quit"))
 
 	return borderStyle.Render(b.String())
 }
