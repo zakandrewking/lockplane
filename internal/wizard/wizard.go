@@ -30,7 +30,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c", "ctrl+d", "q", "esc":
 			// If we have environments configured, save them before quitting
 			if m.state == StateAddAnother && len(m.environments) > 0 {
 				m.state = StateCreating
@@ -163,6 +163,8 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.environments = append(m.environments, m.currentEnv)
 			// Reset current environment
 			m.currentEnv = EnvironmentInput{}
+			// Reset add another choice
+			m.addAnotherChoice = 0
 			return m, nil
 		case "failed":
 			// Handle retry choice
@@ -185,7 +187,15 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case StateAddAnother:
-		m.state = StateSummary
+		switch m.addAnotherChoice {
+		case 0: // Add another environment
+			m.state = StateDatabaseType
+			m.addAnotherChoice = 0 // Reset for next time
+			return m, nil
+		case 1: // Finish and save
+			m.state = StateCreating
+			return m, m.createFiles()
+		}
 		return m, nil
 
 	case StateSummary:
@@ -217,6 +227,10 @@ func (m *WizardModel) handleUp() (tea.Model, tea.Cmd) {
 		if m.connectionTestResult == "failed" && m.retryChoice > 0 {
 			m.retryChoice--
 		}
+	case StateAddAnother:
+		if m.addAnotherChoice > 0 {
+			m.addAnotherChoice--
+		}
 	}
 	return m, nil
 }
@@ -235,6 +249,10 @@ func (m *WizardModel) handleDown() (tea.Model, tea.Cmd) {
 	case StateTestConnection:
 		if m.connectionTestResult == "failed" && m.retryChoice < 2 {
 			m.retryChoice++
+		}
+	case StateAddAnother:
+		if m.addAnotherChoice < 1 {
+			m.addAnotherChoice++
 		}
 	}
 	return m, nil
@@ -615,12 +633,20 @@ func (m WizardModel) renderAddAnother() string {
 
 	b.WriteString(renderHeader("Lockplane Init Wizard"))
 	b.WriteString("\n\n")
-	b.WriteString(renderSectionHeader("Add Another Environment?"))
+	b.WriteString(renderSectionHeader("Environment Added"))
 	b.WriteString("\n\n")
 	b.WriteString(fmt.Sprintf("✓ Added environment: %s\n\n", m.environments[len(m.environments)-1].Name))
-	b.WriteString("Would you like to add another environment?\n")
-	b.WriteString("(e.g., staging, production)\n\n")
-	b.WriteString(renderStatusBar("Enter: add more  q: finish and save"))
+	b.WriteString("What would you like to do next?\n\n")
+
+	// Option 0: Add another environment
+	b.WriteString(renderOption(0, m.addAnotherChoice == 0, "Add another environment (e.g., staging, production)"))
+	b.WriteString("\n")
+
+	// Option 1: Finish and save
+	b.WriteString(renderOption(1, m.addAnotherChoice == 1, "Finish and save configuration"))
+	b.WriteString("\n\n")
+
+	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  q/Esc/Ctrl-C: finish and save"))
 
 	return borderStyle.Render(b.String())
 }

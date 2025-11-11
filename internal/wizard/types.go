@@ -38,6 +38,9 @@ type WizardModel struct {
 	connectionError      error
 	retryChoice          int // 0=retry, 1=edit, 2=quit
 
+	// Add another environment choice
+	addAnotherChoice int // 0=add another, 1=finish and save
+
 	// Input fields (using bubbletea textinput)
 	inputs     []textinput.Model
 	focusIndex int
