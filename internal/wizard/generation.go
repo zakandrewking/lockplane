@@ -1,11 +1,14 @@
 package wizard
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+	_ "modernc.org/sqlite"
 )
 
 // GenerateFiles creates the lockplane.toml and .env files
@@ -69,7 +72,68 @@ func GenerateFiles(environments []EnvironmentInput) (*InitResult, error) {
 	}
 	result.GitignoreUpdated = true
 
+	// Create SQLite database files if needed
+	for _, env := range environments {
+		if env.DatabaseType == "sqlite" {
+			dbPath := env.FilePath
+			shadowPath := ""
+
+			// Extract shadow DB path if it's configured
+			if strings.Contains(dbPath, ".db") {
+				// Generate shadow DB path (e.g., lockplane.db -> lockplane_shadow.db)
+				ext := filepath.Ext(dbPath)
+				base := strings.TrimSuffix(dbPath, ext)
+				shadowPath = base + "_shadow" + ext
+			}
+
+			// Create main database
+			if err := createSQLiteDatabaseFile(dbPath); err != nil {
+				return nil, fmt.Errorf("failed to create SQLite database %s: %w", dbPath, err)
+			}
+
+			// Create shadow database
+			if shadowPath != "" {
+				if err := createSQLiteDatabaseFile(shadowPath); err != nil {
+					return nil, fmt.Errorf("failed to create SQLite shadow database %s: %w", shadowPath, err)
+				}
+			}
+		}
+	}
+
 	return result, nil
+}
+
+// createSQLiteDatabaseFile creates an empty SQLite database file
+func createSQLiteDatabaseFile(filePath string) error {
+	// Skip if file already exists
+	if _, err := os.Stat(filePath); err == nil {
+		return nil
+	}
+	
+	// Create parent directory if it doesn't exist
+	dir := filepath.Dir(filePath)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+	
+	// Create the database
+	db, err := sql.Open("sqlite", filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	
+	// Initialize the database by creating a minimal table
+	// SQLite won't create the file until we actually write something
+	// We create and immediately drop a table to ensure the file is created
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS _lockplane_init (id INTEGER PRIMARY KEY); DROP TABLE IF EXISTS _lockplane_init;")
+	if err != nil {
+		return fmt.Errorf("failed to initialize database: %w", err)
+	}
+	
+	return nil
 }
 
 func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) error {

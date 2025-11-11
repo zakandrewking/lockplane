@@ -941,6 +941,14 @@ func runApply(args []string) {
 
 		// Detect shadow database driver type
 		shadowDriverType := detectDriver(shadowConnStr)
+
+		// For SQLite shadow DB, check if the database file exists and create it if needed
+		if shadowDriverType == "sqlite" || shadowDriverType == "sqlite3" {
+			if err := ensureSQLiteDatabase(shadowConnStr, "shadow", false); err != nil {
+				log.Fatalf("Failed to ensure shadow database: %v", err)
+			}
+		}
+
 		shadowDriverName := getSQLDriverName(shadowDriverType)
 		shadowDB, err = sql.Open(shadowDriverName, shadowConnStr)
 		if err != nil {

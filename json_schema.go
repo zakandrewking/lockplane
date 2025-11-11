@@ -46,6 +46,14 @@ func isConnectionString(s string) bool {
 func loadSchemaFromConnectionString(connStr string) (*Schema, error) {
 	// Detect database driver from connection string
 	driverType := detectDriver(connStr)
+
+	// For SQLite, check if the database file exists and create it if needed
+	if driverType == "sqlite" || driverType == "sqlite3" {
+		if err := ensureSQLiteDatabase(connStr, "target", false); err != nil {
+			return nil, err
+		}
+	}
+
 	driver, err := newDriver(driverType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database driver: %w", err)
