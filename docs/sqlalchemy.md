@@ -156,13 +156,7 @@ with open('desired.lp.sql', 'w') as f:
 print("Generated desired.lp.sql from SQLAlchemy models")
 ```
 
-Then use Lockplane to diff:
-
-```bash
-lockplane diff --before-environment local desired.lp.sql
-```
-
-## Step 2: Generate Migration Plan
+## Step 1: Generate Migration Plan
 
 Now you can generate a migration plan directly from your database:
 
@@ -343,8 +337,8 @@ In your local development workflow:
 python generate_schema.py
 lockplane introspect --source-environment local --shadow > desired.json
 
-# See what changed (directly from your database)
-lockplane diff --before-environment local desired.json
+# Generate and review migration plan (directly from your database)
+lockplane plan --from-environment local --to desired.json --validate > migration.json
 
 # Apply changes locally
 lockplane apply --auto-approve --target-environment local --schema desired.json

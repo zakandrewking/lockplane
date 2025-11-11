@@ -918,7 +918,7 @@ Lockplane automatically detects dangerous migrations and suggests safer alternat
 ### Example
 
 ```bash
-$ lockplane diff --from-db --to schema/desired.json
+$ lockplane plan --from-db --to schema/desired.json --validate
 
 ⚠️ Migration Safety Report:
 
@@ -932,15 +932,12 @@ Safer Alternative:
     2. Stop reads (code deploy)
     3. Drop column (safe)
 ```
-```
 
 ### 3. CLI Help Text
 
-Update `lockplane diff --help`:
+The `lockplane plan --validate` command provides safety analysis:
 ```
---safety-check          Enable breaking change detection (default: true)
---allow-dangerous       Allow dangerous operations without confirmation
---suggest-alternatives  Show safer alternatives for risky operations (default: true)
+--validate              Validate migration safety and reversibility
 ```
 
 ---

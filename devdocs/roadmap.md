@@ -215,7 +215,7 @@ Hotfixes in prod, manual SQL in psql, inconsistent migration runs. Dev, staging,
   - Introspection + diff detects drift: compare desired schema to any environment
   - Declarative source of truth (`desired.json`) eliminates "which migration ran where?" confusion
   - Environment-specific configs in `lockplane.toml`
-  - One command to check any environment: `lockplane diff --from-environment prod --to schema/`
+  - One command to check any environment: `lockplane plan --from-environment prod --to schema/`
 
 **Roadmap:**
 - [ ] **Drift detection and reporting**

@@ -168,8 +168,6 @@ func main() {
 		return
 	case "introspect":
 		runIntrospect(os.Args[2:])
-	case "diff":
-		runDiff(os.Args[2:])
 	case "plan":
 		runPlan(os.Args[2:])
 	case "rollback":
@@ -187,7 +185,7 @@ func main() {
 
 		// Suggest similar commands using Levenshtein distance
 		validCommands := []string{
-			"init", "introspect", "diff", "plan", "rollback",
+			"init", "introspect", "plan", "rollback",
 			"apply", "validate", "convert", "version", "help",
 		}
 
@@ -359,138 +357,6 @@ func runIntrospect(args []string) {
 	default:
 		log.Fatalf("Unsupported format: %s (use 'json' or 'sql')", *format)
 	}
-}
-
-func runDiff(args []string) {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatalf("Failed to load config file: %v", err)
-	}
-
-	fs := flag.NewFlagSet("diff", flag.ExitOnError)
-	beforeEnv := fs.String("before-environment", "", "Environment providing the before-state database connection")
-	afterEnv := fs.String("after-environment", "", "Environment providing the after-state database connection")
-	verbose := fs.Bool("verbose", false, "Enable verbose logging")
-	fs.BoolVar(verbose, "v", false, "Enable verbose logging (shorthand)")
-	if err := fs.Parse(args); err != nil {
-		log.Fatalf("Failed to parse flags: %v", err)
-	}
-
-	var beforeArg, afterArg string
-	if fs.NArg() > 0 {
-		beforeArg = fs.Arg(0)
-	}
-	if fs.NArg() > 1 {
-		afterArg = fs.Arg(1)
-	}
-
-	if beforeArg == "" {
-		// If no before-environment provided, try to use default environment
-		envName := strings.TrimSpace(*beforeEnv)
-		if envName == "" {
-			envName = cfg.DefaultEnvironment
-			if envName == "" {
-				envName = "local"
-			}
-			if *verbose {
-				fmt.Fprintf(os.Stderr, "ℹ️  Using default environment for 'before': %s\n", envName)
-			}
-		}
-
-		env, err := config.ResolveEnvironment(cfg, envName)
-		if err != nil {
-			log.Fatalf("Failed to resolve before environment: %v", err)
-		}
-		beforeArg = env.DatabaseURL
-	}
-
-	if afterArg == "" {
-		// Try to auto-detect schema directory first
-		if info, err := os.Stat("schema"); err == nil && info.IsDir() {
-			afterArg = "schema"
-			if *verbose {
-				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory for 'after': schema/\n")
-			}
-		} else {
-			// Fall back to environment resolution
-			envName := strings.TrimSpace(*afterEnv)
-			if envName == "" {
-				envName = cfg.DefaultEnvironment
-				if envName == "" {
-					envName = "local"
-				}
-				if *verbose {
-					fmt.Fprintf(os.Stderr, "ℹ️  Using default environment for 'after': %s\n", envName)
-				}
-			}
-
-			env, err := config.ResolveEnvironment(cfg, envName)
-			if err != nil {
-				log.Fatalf("Failed to resolve after environment: %v", err)
-			}
-			afterArg = env.DatabaseURL
-		}
-	}
-
-	if beforeArg == "" || afterArg == "" {
-		log.Fatalf("Usage: lockplane diff <before> <after>\n       lockplane diff --before-environment <name> --after-environment <name>")
-	}
-
-	var beforeFallback, afterFallback database.Dialect
-	if isConnectionString(beforeArg) {
-		beforeFallback = schema.DriverNameToDialect(detectDriver(beforeArg))
-		afterFallback = beforeFallback
-	}
-	if isConnectionString(afterArg) {
-		afterFallback = schema.DriverNameToDialect(detectDriver(afterArg))
-		if beforeFallback == database.DialectUnknown {
-			beforeFallback = afterFallback
-		}
-	}
-
-	// Load schemas
-	if *verbose {
-		fmt.Fprintf(os.Stderr, "🔍 Loading 'before' schema: %s\n", beforeArg)
-	}
-	before, err := LoadSchemaOrIntrospectWithOptions(beforeArg, buildSchemaLoadOptions(beforeArg, beforeFallback))
-	if err != nil {
-		if *verbose {
-			fmt.Fprintf(os.Stderr, "❌ Failed to load before schema\n")
-			fmt.Fprintf(os.Stderr, "   Input: %s\n", beforeArg)
-			fmt.Fprintf(os.Stderr, "   Error: %v\n", err)
-		}
-		log.Fatalf("Failed to load before schema: %v", err)
-	}
-	if *verbose {
-		fmt.Fprintf(os.Stderr, "✓ Loaded 'before' schema (%d tables)\n", len(before.Tables))
-	}
-
-	if *verbose {
-		fmt.Fprintf(os.Stderr, "🔍 Loading 'after' schema: %s\n", afterArg)
-	}
-	after, err := LoadSchemaOrIntrospectWithOptions(afterArg, buildSchemaLoadOptions(afterArg, afterFallback))
-	if err != nil {
-		if *verbose {
-			fmt.Fprintf(os.Stderr, "❌ Failed to load after schema\n")
-			fmt.Fprintf(os.Stderr, "   Input: %s\n", afterArg)
-			fmt.Fprintf(os.Stderr, "   Error: %v\n", err)
-		}
-		log.Fatalf("Failed to load after schema: %v", err)
-	}
-	if *verbose {
-		fmt.Fprintf(os.Stderr, "✓ Loaded 'after' schema (%d tables)\n", len(after.Tables))
-	}
-
-	// Generate diff
-	diff := schema.DiffSchemas(before, after)
-
-	// Output diff as JSON
-	jsonBytes, err := json.MarshalIndent(diff, "", "  ")
-	if err != nil {
-		log.Fatalf("Failed to marshal diff to JSON: %v", err)
-	}
-
-	fmt.Println(string(jsonBytes))
 }
 
 func runPlan(args []string) {
@@ -1332,7 +1198,6 @@ USAGE:
 COMMANDS:
   init            Interactive project setup wizard
   introspect       Introspect database and output current schema as JSON
-  diff             Compare two schemas and show differences
   plan             Generate migration plan from schema diff (with --validate flag)
   apply            Apply migration plan to database (validates on shadow DB first)
   rollback         Generate rollback plan from forward migration
@@ -1362,9 +1227,6 @@ EXAMPLES:
 
   # Introspect current database
   lockplane introspect > current.json
-
-  # Compare schemas
-  lockplane diff current.json schema/
 
   # Generate and validate migration plan from files (save to file with >)
   lockplane plan --from current.json --to schema/ --validate > migration.json
