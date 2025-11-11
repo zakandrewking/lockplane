@@ -18,7 +18,7 @@ const (
 
 [environments.local]
 description = "Local development database"
-schema_path = "."
+schema_path = "schema"
 database_url = "postgresql://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
 shadow_database_url = "postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable"
 `
