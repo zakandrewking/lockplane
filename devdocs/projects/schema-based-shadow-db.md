@@ -71,9 +71,10 @@
    - More credentials to manage
    - Network complexity
 
-3. **SQLite**: Currently requires two file paths
+3. **SQLite/libSQL**: Currently requires two database instances/files
+   - SQLite: Two file paths with cleanup responsibilities
+   - libSQL/Turso: Need a second remote database (extra cost)
    - File management overhead
-   - Cleanup responsibilities
 
 **User pain points**:
 ```bash
@@ -153,26 +154,34 @@ CREATE TABLE lockplane_shadow.users (id SERIAL PRIMARY KEY, name TEXT);
 
 #### Configuration Options
 
-**Option 1: Environment variable (recommended for most users)**
+**Option 1: Same database, different schema (simple)**
 ```bash
 # .env.local
 DATABASE_URL=postgres://user:pass@localhost:5432/mydb
 SHADOW_SCHEMA=lockplane_shadow
 ```
 
-**Option 2: Separate shadow URL with schema**
+**Option 2: Different database, different schema (production workflow)**
+```bash
+# .env.production
+DATABASE_URL=postgres://user:pass@prod-db.supabase.co:5432/postgres  # Production
+SHADOW_DATABASE_URL=postgres://postgres:postgres@localhost:54322/postgres  # Local Supabase
+SHADOW_SCHEMA=lockplane_shadow  # Use schema in local Supabase
+```
+
+**Option 3: Different database with schema in connection string**
 ```bash
 # .env.local
 DATABASE_URL=postgres://user:pass@localhost:5432/mydb
 SHADOW_DATABASE_URL=postgres://user:pass@localhost:5432/mydb?search_path=lockplane_shadow
 ```
 
-**Option 3: CLI flag**
+**Option 4: CLI flag**
 ```bash
 lockplane apply migration.json --shadow-schema lockplane_shadow
 ```
 
-**Option 4: Config file**
+**Option 5: Config file**
 ```toml
 # lockplane.toml
 [environments.local]
@@ -182,10 +191,40 @@ shadow_schema = "lockplane_shadow"
 
 #### Precedence Order
 1. CLI flag `--shadow-schema`
-2. Separate `SHADOW_DATABASE_URL` (backward compatibility)
-3. `SHADOW_SCHEMA` environment variable
-4. Config file `shadow_schema`
-5. Default: create separate schema `lockplane_shadow`
+2. `SHADOW_SCHEMA` environment variable
+3. Config file `shadow_schema`
+4. Schema in `SHADOW_DATABASE_URL` connection string (e.g., `?search_path=...`)
+5. Default: no schema (use separate database as-is)
+
+#### Configuration Combinations
+
+**Case 1: Same database, use schema**
+```bash
+DATABASE_URL=postgres://localhost:5432/mydb
+SHADOW_SCHEMA=lockplane_shadow
+# Result: Uses same database, schema lockplane_shadow
+```
+
+**Case 2: Different database, use schema**
+```bash
+DATABASE_URL=postgres://prod:5432/mydb      # Production
+SHADOW_DATABASE_URL=postgres://localhost:5432/test  # Local test DB
+SHADOW_SCHEMA=lockplane_shadow              # Schema in local test DB
+# Result: Uses different database (local test), schema lockplane_shadow
+```
+
+**Case 3: Different database, no schema**
+```bash
+DATABASE_URL=postgres://prod:5432/mydb
+SHADOW_DATABASE_URL=postgres://localhost:5433/shadow
+# Result: Uses different database entirely (traditional approach)
+```
+
+**Case 4: No configuration (fallback)**
+```bash
+DATABASE_URL=postgres://localhost:5432/mydb
+# Result: Error - must provide shadow configuration
+```
 
 ### SQLite/libSQL: In-Memory Shadow DB
 
@@ -369,10 +408,16 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
         resolved.ShadowSchema = shadowSchema
     }
 
-    // If shadow schema is set but no separate shadow URL, use main DB
+    // Configuration logic supports multiple scenarios:
+    // 1. SHADOW_SCHEMA only: Use same database with different schema
+    // 2. SHADOW_DATABASE_URL + SHADOW_SCHEMA: Use different database with schema
+    // 3. SHADOW_DATABASE_URL only: Use different database without schema (traditional)
+
+    // If shadow schema is set but no separate shadow URL, use main DB with schema
     if resolved.ShadowSchema != "" && resolved.ShadowDatabaseURL == "" {
         resolved.ShadowDatabaseURL = resolved.DatabaseURL
     }
+    // If both are set, that's valid too - use different DB with schema in that DB
 
     return resolved, nil
 }
@@ -392,9 +437,17 @@ func runApply(args []string) {
     if !*skipShadow {
         if resolvedTarget.ShadowSchema != "" && mainDriverType == "postgres" {
             // Use schema-based shadow DB
-            shadowDB = mainDB  // Same connection!
+            // This supports both:
+            // 1. Same database (shadowDB URL == mainDB URL)
+            // 2. Different database (shadowDB URL != mainDB URL)
 
-            // Create shadow schema
+            // Connect to shadow database (might be same as main DB)
+            shadowDB, err = sql.Open(shadowDriverName, resolvedShadow.ShadowDatabaseURL)
+            if err != nil {
+                log.Fatalf("Failed to connect to shadow database: %v", err)
+            }
+
+            // Create shadow schema in the shadow database
             if err := mainDriver.CreateSchema(ctx, shadowDB, resolvedTarget.ShadowSchema); err != nil {
                 log.Fatalf("Failed to create shadow schema: %v", err)
             }
@@ -404,8 +457,14 @@ func runApply(args []string) {
                 log.Fatalf("Failed to set shadow schema: %v", err)
             }
 
-            fmt.Fprintf(os.Stderr, "🔍 Testing migration on shadow schema %q...\n",
-                resolvedTarget.ShadowSchema)
+            // Show clear message about what we're doing
+            if resolvedShadow.ShadowDatabaseURL == resolvedTarget.DatabaseURL {
+                fmt.Fprintf(os.Stderr, "🔍 Testing migration on shadow schema %q (same database)...\n",
+                    resolvedTarget.ShadowSchema)
+            } else {
+                fmt.Fprintf(os.Stderr, "🔍 Testing migration on shadow schema %q in separate database...\n",
+                    resolvedTarget.ShadowSchema)
+            }
         } else if mainDriverType == "sqlite" || mainDriverType == "libsql" {
             // Use in-memory database for SQLite (fastest, auto-cleanup)
             shadowConnStr := resolvedShadow.ShadowDatabaseURL
@@ -460,6 +519,31 @@ func (i *Introspector) GetTables(ctx context.Context, db *sql.DB, schema string)
 
 ### User Experience
 
+#### Powerful Combination: Different Database + Schema
+
+The most flexible approach combines both features:
+
+```bash
+# .env.production
+DATABASE_URL=postgres://prod-db.supabase.co:5432/postgres          # Production
+SHADOW_DATABASE_URL=postgres://postgres:postgres@localhost:54322/postgres  # Local Supabase
+SHADOW_SCHEMA=lockplane_shadow                                     # Schema in local
+```
+
+**Benefits of this approach**:
+- ✅ **Safe**: Shadow testing happens on completely different database
+- ✅ **Clean**: Schema isolation within shadow database
+- ✅ **Fast**: Local testing (no production network latency)
+- ✅ **Cost-effective**: Reuses local Supabase instance
+- ✅ **Easy cleanup**: Just drop the schema, not entire database
+- ✅ **Multiple projects**: Each project can have its own schema in shared local DB
+
+**Real-world use cases**:
+1. **Production migrations**: Test against production structure locally before deploying
+2. **Multiple environments**: Different production DBs, same local shadow with different schemas
+3. **CI/CD**: Each pipeline run gets its own schema in shared test database
+4. **Team development**: Shared local DB, per-developer schemas
+
 #### Supabase Local Development (Common Case)
 
 **Before (complex)**:
@@ -489,24 +573,72 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres
 SHADOW_SCHEMA=lockplane_shadow  # Same DB, different schema!
 ```
 
+#### libSQL/Turso Projects
+
+**Before (complex + costly)**:
+```bash
+# Need TWO Turso databases
+turso db create myapp        # Production ($$$)
+turso db create myapp-shadow # Shadow ($$$)
+```
+
+```bash
+# .env.local
+DATABASE_URL=libsql://myapp-user.turso.io?authToken=token1
+SHADOW_DATABASE_URL=libsql://myapp-shadow-user.turso.io?authToken=token2
+```
+
+**After (simple + free)**:
+```bash
+# Only ONE Turso database needed
+turso db create myapp  # Production only
+```
+
+```bash
+# .env.local
+DATABASE_URL=libsql://myapp-user.turso.io?authToken=token1
+# No shadow config needed - uses local :memory: automatically!
+```
+
+**Why this is better**:
+- ✅ 50% cost reduction (no shadow database needed)
+- ✅ Zero configuration (automatic)
+- ✅ Faster shadow testing (local, no network latency)
+- ✅ Same validation guarantees
+
 #### Supabase Production
 
-**Recommended approach**: Use local DB as shadow for production migrations
+**Recommended approach**: Use local Supabase with schema for production testing
 
 ```bash
 # .env.production
-DATABASE_URL=postgres://user:pass@db.supabase.co:5432/postgres  # Production
-SHADOW_DATABASE_URL=postgres://localhost:5432/postgres           # Local test DB
+DATABASE_URL=postgres://user:pass@db.supabase.co:5432/postgres     # Production (remote)
+SHADOW_DATABASE_URL=postgres://postgres:postgres@localhost:54322/postgres  # Local Supabase
+SHADOW_SCHEMA=lockplane_shadow                                     # Schema in local DB
 ```
 
-**Alternative (if local test DB not available)**: Use schema in production DB
+**Why this is best**:
+- ✅ Tests on separate database (safe)
+- ✅ Uses schema for easy cleanup
+- ✅ Local testing (fast)
+- ✅ No risk to production
+
+**Alternative 1**: Use local DB without schema
 ```bash
 # .env.production
 DATABASE_URL=postgres://user:pass@db.supabase.co:5432/postgres
-SHADOW_SCHEMA=lockplane_shadow_prod
+SHADOW_DATABASE_URL=postgres://localhost:54322/postgres  # Local test DB
+# No schema - uses whole database
 ```
 
-⚠️ **Security note**: Using a schema in production DB requires careful permission management. Recommend separate test instance for production shadow testing.
+**Alternative 2**: Use schema in production DB (not recommended)
+```bash
+# .env.production
+DATABASE_URL=postgres://user:pass@db.supabase.co:5432/postgres
+SHADOW_SCHEMA=lockplane_shadow_prod  # Schema in production database
+```
+
+⚠️ **Security note**: Using a schema in production DB requires careful permission management. The recommended approach (separate database + schema) is safer.
 
 #### SQLite Projects
 
@@ -546,20 +678,26 @@ LIBSQL_URL=libsql://mydb.turso.io?authToken=...
 
 #### Backward Compatibility
 
-All existing configurations continue to work:
+All existing configurations continue to work, and new combinations are supported:
 
 ```bash
 # OLD: Separate shadow database (still works!)
 SHADOW_DATABASE_URL=postgres://...@localhost:5433/...
 
-# NEW: Schema-based shadow (recommended)
+# NEW: Schema in same database (simple local dev)
+SHADOW_SCHEMA=lockplane_shadow
+
+# NEW: Both together (powerful production workflow)
+DATABASE_URL=postgres://prod-db:5432/mydb
+SHADOW_DATABASE_URL=postgres://localhost:5432/test
 SHADOW_SCHEMA=lockplane_shadow
 ```
 
-**Resolution order ensures compatibility**:
-1. If `SHADOW_DATABASE_URL` is set → use it (existing behavior)
-2. If `SHADOW_SCHEMA` is set → use schema-based approach (new)
-3. If neither → error (current behavior)
+**Configuration combinations**:
+1. **`SHADOW_DATABASE_URL` only** → Use separate database (traditional)
+2. **`SHADOW_SCHEMA` only** → Use schema in same database (new, simple)
+3. **Both `SHADOW_DATABASE_URL` + `SHADOW_SCHEMA`** → Use schema in different database (new, powerful)
+4. **Neither** → Error (must provide shadow configuration)
 
 #### Migration Guide for Existing Users
 
@@ -871,6 +1009,27 @@ Create comprehensive guide covering:
 - ✅ Can override with file path if you need to debug
 - ✅ Especially good for CI/CD pipelines
 
+### libSQL/Turso In-Memory Approach
+
+**Pros**:
+- ✅ Zero configuration
+- ✅ 50% cost savings (no shadow database instance needed)
+- ✅ Fastest possible (local testing, no network latency)
+- ✅ Automatic cleanup (no file management)
+- ✅ Complete isolation
+- ✅ Works because libSQL is SQLite-compatible
+- ✅ Tests SQL locally before applying to remote DB
+
+**Cons**:
+- ⚠️ Can't inspect shadow DB after run
+- ⚠️ Shadow tests SQLite compatibility, not Turso-specific features (usually fine)
+
+**When to use**:
+- ✅ Always (default for libSQL/Turso)
+- ✅ Saves money on Turso usage
+- ✅ Perfect for CI/CD pipelines
+- ✅ Override with file path only if debugging
+
 ### Separate Database (Existing Approach)
 
 **Pros**:
@@ -1029,10 +1188,12 @@ Create comprehensive guide covering:
 
 ### User Experience
 
-- [ ] Supabase users can use single database
+- [ ] Supabase users can use single database for local dev
+- [ ] Supabase users can combine different database + schema for production testing
 - [ ] SQLite users need zero shadow configuration
+- [ ] libSQL/Turso users need zero shadow configuration (saves 50% cost)
 - [ ] `lockplane init` suggests appropriate shadow strategy
-- [ ] Documentation clearly explains trade-offs
+- [ ] Documentation clearly explains trade-offs and configuration combinations
 
 ### Quality
 
@@ -1140,16 +1301,28 @@ SHADOW_DATABASE_URL=postgres://test-db:5432/myapp_test  # Separate instance
 This feature makes Lockplane significantly more accessible while maintaining safety:
 
 1. **Removes friction**: No more managing multiple database instances for local development
-2. **Lowers costs**: Single database instance is enough
+2. **Lowers costs**: Single database instance is enough (or reuse local DB for remote testing)
 3. **Maintains safety**: PostgreSQL schemas provide strong isolation
 4. **Great UX**: SQLite automatic shadow requires zero configuration
 5. **Flexible**: Users can choose their isolation level based on needs
+6. **Powerful combinations**: Can mix different databases with schema isolation
 
-**Recommended defaults**:
-- **PostgreSQL local dev**: Schema-based shadow (`SHADOW_SCHEMA=lockplane_shadow`)
-- **SQLite/libSQL**: In-memory shadow (`:memory:` - automatic, fastest)
-- **CI/CD**: Schema-based (PostgreSQL) or in-memory (SQLite)
-- **Production**: Separate database (maximum safety) or local DB as shadow
+**Recommended configurations**:
+
+| Use Case | Configuration | Benefits |
+|----------|--------------|----------|
+| **PostgreSQL local dev** | `SHADOW_SCHEMA=lockplane_shadow` | Simple, same DB |
+| **PostgreSQL production** | `SHADOW_DATABASE_URL` (local) + `SHADOW_SCHEMA` | Safe, fast, clean |
+| **SQLite local** | (automatic `:memory:`) | Zero config, fastest |
+| **libSQL/Turso remote** | (automatic `:memory:`) | Zero config, cost savings |
+| **CI/CD PostgreSQL** | `SHADOW_SCHEMA` per pipeline run | Isolated, parallel-safe |
+| **Team development** | Same local DB, different `SHADOW_SCHEMA` per dev | Shared resources |
+
+**Key innovation**: The combination of `SHADOW_DATABASE_URL` + `SHADOW_SCHEMA` provides the best of both worlds:
+- Test production migrations locally (safe)
+- Use schemas for easy cleanup (simple)
+- Reuse local database infrastructure (cost-effective)
+- Multiple projects/pipelines can share one local DB (efficient)
 
 The implementation is straightforward, leveraging native PostgreSQL features and Go's standard library for SQLite. The main complexity is in the configuration resolution logic, which already exists and just needs extension.
 

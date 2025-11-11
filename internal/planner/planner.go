@@ -108,7 +108,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 
 					if sourceTable != nil {
 						// Use table recreation for SQLite
-						steps := sqliteGen.Generator.RecreateTableWithForeignKey(*sourceTable, fk)
+						steps := sqliteGen.RecreateTableWithForeignKey(*sourceTable, fk)
 						for _, step := range steps {
 							plan.Steps = append(plan.Steps, PlanStep{
 								Description: step.Description,
@@ -177,7 +177,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 
 					if sourceTable != nil {
 						// Use table recreation for SQLite
-						steps := sqliteGen.Generator.RecreateTableWithoutForeignKey(*sourceTable, fk.Name)
+						steps := sqliteGen.RecreateTableWithoutForeignKey(*sourceTable, fk.Name)
 						for _, step := range steps {
 							plan.Steps = append(plan.Steps, PlanStep{
 								Description: step.Description,
