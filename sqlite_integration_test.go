@@ -396,7 +396,7 @@ func TestApplyPlan_ShadowDB_CatchesUniqueConstraintViolation(t *testing.T) {
 	}
 
 	// Execute plan with shadow DB validation - should FAIL on shadow DB
-	result, err := applyPlan(ctx, mainDB, &dangerousPlan, shadowDB, currentSchema, driver)
+	result, err := applyPlan(ctx, mainDB, &dangerousPlan, shadowDB, currentSchema, driver, false)
 
 	// We expect the apply to fail because shadow DB should catch the duplicate error
 	if err == nil {

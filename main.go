@@ -1083,7 +1083,10 @@ func runRollback(args []string) {
 	}
 
 	// Apply the rollback plan
-	result, err := applyPlan(ctx, mainDB, rollbackPlan, shadowDB, (*Schema)(currentSchema), mainDriver)
+	if *verbose {
+		_, _ = color.New(color.FgCyan, color.Bold).Fprintf(os.Stderr, "\n🚀 Executing rollback...\n\n")
+	}
+	result, err := applyPlan(ctx, mainDB, rollbackPlan, shadowDB, (*Schema)(currentSchema), mainDriver, *verbose)
 	if err != nil {
 		_, _ = red.Fprintf(os.Stderr, "\n❌ Rollback failed: %v\n\n", err)
 		if len(result.Errors) > 0 {
@@ -1440,7 +1443,10 @@ func runApply(args []string) {
 	}
 
 	// Apply the plan
-	result, err := applyPlan(ctx, mainDB, plan, shadowDB, (*Schema)(currentSchema), mainDriver)
+	if *verbose {
+		_, _ = color.New(color.FgCyan, color.Bold).Fprintf(os.Stderr, "\n🚀 Applying migration...\n\n")
+	}
+	result, err := applyPlan(ctx, mainDB, plan, shadowDB, (*Schema)(currentSchema), mainDriver, *verbose)
 	if err != nil {
 		red := color.New(color.FgRed, color.Bold)
 		_, _ = red.Fprintf(os.Stderr, "\n❌ Migration failed: %v\n\n", err)
@@ -1714,7 +1720,7 @@ For more information: https://github.com/lockplane/lockplane
 }
 
 // applyPlan executes a migration plan with optional shadow DB validation
-func applyPlan(ctx context.Context, db *sql.DB, plan *planner.Plan, shadowDB *sql.DB, currentSchema *Schema, driver database.Driver) (*planner.ExecutionResult, error) {
+func applyPlan(ctx context.Context, db *sql.DB, plan *planner.Plan, shadowDB *sql.DB, currentSchema *Schema, driver database.Driver, verbose bool) (*planner.ExecutionResult, error) {
 	result := &planner.ExecutionResult{
 		Success: false,
 		Errors:  []string{},
@@ -1758,11 +1764,23 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *planner.Plan, shadowDB *sq
 
 	// Execute each step
 	for i, step := range plan.Steps {
+		if verbose {
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "  [Step %d/%d] %s\n", i+1, len(plan.Steps), step.Description)
+		}
 		// Execute all SQL statements in this step
 		for j, sqlStmt := range step.SQL {
 			trimmedSQL := strings.TrimSpace(sqlStmt)
 			if trimmedSQL == "" || strings.HasPrefix(trimmedSQL, "--") {
 				continue // Skip empty or comment-only statements
+			}
+
+			if verbose {
+				// Show SQL being executed
+				sqlPreview := sqlStmt
+				if len(sqlPreview) > 200 {
+					sqlPreview = sqlPreview[:200] + "..."
+				}
+				_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "    SQL: %s\n", sqlPreview)
 			}
 
 			_, err := tx.ExecContext(ctx, sqlStmt)
@@ -1771,6 +1789,10 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *planner.Plan, shadowDB *sq
 					i+1, j+1, len(step.SQL), step.Description, err)
 				result.Errors = append(result.Errors, errMsg)
 				return result, fmt.Errorf("step %d failed: %w", i+1, err)
+			}
+
+			if verbose {
+				_, _ = color.New(color.FgGreen).Fprintf(os.Stderr, "    ✓ Executed successfully\n")
 			}
 		}
 		result.StepsApplied++
