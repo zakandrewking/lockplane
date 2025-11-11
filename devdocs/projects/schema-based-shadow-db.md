@@ -12,13 +12,14 @@
 - [x] Design configuration UX
 - [x] Document trade-offs
 
-### Phase 2: Core Implementation
-- [ ] Add schema support to PostgreSQL driver
-- [ ] Implement schema introspection for PostgreSQL
-- [ ] Implement schema-aware SQL generation
-- [ ] Add schema configuration to environment config
-- [ ] Update connection string parsing for schemas
-- [ ] Add schema isolation for shadow operations
+### Phase 2: Core Implementation ✅
+- [x] Add schema support to PostgreSQL driver
+- [x] Implement schema methods (CreateSchema, SetSchema, DropSchema, ListSchemas)
+- [x] Add SQLite no-op implementations
+- [x] Add schema configuration to environment config
+- [x] Update environment resolution for SHADOW_SCHEMA
+- [x] Add schema isolation for shadow operations in runApply()
+- [x] Unit tests for schema operations
 
 ### Phase 3: SQLite/libSQL Implementation
 - [ ] Design file-based shadow DB for SQLite

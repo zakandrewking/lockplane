@@ -130,3 +130,28 @@ func (d *Driver) RecreateTableWithForeignKey(table database.Table, fk database.F
 func (d *Driver) RecreateTableWithoutForeignKey(table database.Table, fkName string) []database.PlanStep {
 	return d.Generator.RecreateTableWithoutForeignKey(table, fkName)
 }
+
+// SupportsSchemas returns false for SQLite (does not support schema namespaces)
+func (d *Driver) SupportsSchemas() bool {
+	return false
+}
+
+// CreateSchema is a no-op for SQLite (does not support schemas)
+func (d *Driver) CreateSchema(ctx context.Context, db *sql.DB, schemaName string) error {
+	return nil // No-op
+}
+
+// SetSchema is a no-op for SQLite (does not support schemas)
+func (d *Driver) SetSchema(ctx context.Context, db *sql.DB, schemaName string) error {
+	return nil // No-op
+}
+
+// DropSchema is a no-op for SQLite (does not support schemas)
+func (d *Driver) DropSchema(ctx context.Context, db *sql.DB, schemaName string, cascade bool) error {
+	return nil // No-op
+}
+
+// ListSchemas returns empty for SQLite (does not support schemas)
+func (d *Driver) ListSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
+	return []string{}, nil
+}

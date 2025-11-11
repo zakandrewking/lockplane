@@ -14,6 +14,7 @@ type ResolvedEnvironment struct {
 	Name              string
 	DatabaseURL       string
 	ShadowDatabaseURL string
+	ShadowSchema      string // PostgreSQL schema name for shadow database
 	SchemaPath        string
 	DotenvPath        string
 	FromConfig        bool
@@ -170,6 +171,11 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 				resolved.SchemaPath = value
 			}
 		}
+
+		// Check for shadow schema configuration (PostgreSQL only)
+		if value := values["SHADOW_SCHEMA"]; value != "" {
+			resolved.ShadowSchema = value
+		}
 	}
 
 	if resolved.DatabaseURL == "" {
@@ -178,6 +184,13 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 	if resolved.ShadowDatabaseURL == "" {
 		resolved.ShadowDatabaseURL = defaultShadowDatabaseURL
 	}
+
+	// If shadow schema is set but no separate shadow URL, use main DB with schema
+	if resolved.ShadowSchema != "" && resolved.ShadowDatabaseURL == "" {
+		resolved.ShadowDatabaseURL = resolved.DatabaseURL
+	}
+	// Note: If both ShadowSchema and ShadowDatabaseURL are set, that's valid too
+	// - it means use the schema in the shadow database (different database + schema)
 
 	if resolved.SchemaPath != "" {
 		base := resolved.ResolvedConfigDir

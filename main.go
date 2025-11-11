@@ -982,6 +982,8 @@ func runApply(args []string) {
 	var shadowDB *sql.DB
 	if !*skipShadow {
 		shadowConnStr := strings.TrimSpace(*shadowDBURL)
+		var shadowSchema string
+
 		if shadowConnStr == "" {
 			shadowEnvName := strings.TrimSpace(*shadowEnvironment)
 			if shadowEnvName == "" {
@@ -992,9 +994,18 @@ func runApply(args []string) {
 				log.Fatalf("Failed to resolve shadow environment: %v", err)
 			}
 			shadowConnStr = resolvedShadow.ShadowDatabaseURL
-			if shadowConnStr == "" {
+			shadowSchema = resolvedShadow.ShadowSchema
+
+			// For SQLite/libSQL, default to :memory: if no shadow DB configured
+			if shadowConnStr == "" && (mainDriverType == "sqlite" || mainDriverType == "sqlite3" || mainDriverType == "libsql") {
+				shadowConnStr = ":memory:"
+				color.New(color.FgCyan).Fprintf(os.Stderr, "ℹ️  Using in-memory shadow database (fast, zero config)\n")
+			} else if shadowConnStr == "" {
 				fmt.Fprintf(os.Stderr, "Error: no shadow database configured for environment %q.\n", resolvedShadow.Name)
-				fmt.Fprintf(os.Stderr, "Add SHADOW_DATABASE_URL to .env.%s or provide --shadow-db.\n", resolvedShadow.Name)
+				fmt.Fprintf(os.Stderr, "Options:\n")
+				fmt.Fprintf(os.Stderr, "  - Add SHADOW_DATABASE_URL to .env.%s\n", resolvedShadow.Name)
+				fmt.Fprintf(os.Stderr, "  - Add SHADOW_SCHEMA=lockplane_shadow (PostgreSQL only)\n")
+				fmt.Fprintf(os.Stderr, "  - Provide --shadow-db flag\n")
 				os.Exit(1)
 			}
 		}
@@ -1002,8 +1013,8 @@ func runApply(args []string) {
 		// Detect shadow database driver type
 		shadowDriverType := detectDriver(shadowConnStr)
 
-		// For SQLite shadow DB, check if the database file exists and create it if needed
-		if shadowDriverType == "sqlite" || shadowDriverType == "sqlite3" {
+		// For SQLite shadow DB (not :memory:), check if the database file exists and create it if needed
+		if (shadowDriverType == "sqlite" || shadowDriverType == "sqlite3") && shadowConnStr != ":memory:" {
 			if err := ensureSQLiteDatabase(shadowConnStr, "shadow", false); err != nil {
 				log.Fatalf("Failed to ensure shadow database: %v", err)
 			}
@@ -1020,7 +1031,29 @@ func runApply(args []string) {
 			log.Fatalf("Failed to ping shadow database: %v", err)
 		}
 
-		color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow database...\n")
+		// If shadow schema is configured and driver supports it, set up the schema
+		if shadowSchema != "" && mainDriver.SupportsSchemas() {
+			// Create shadow schema if it doesn't exist
+			if err := mainDriver.CreateSchema(ctx, shadowDB, shadowSchema); err != nil {
+				log.Fatalf("Failed to create shadow schema: %v", err)
+			}
+
+			// Set search path to shadow schema
+			if err := mainDriver.SetSchema(ctx, shadowDB, shadowSchema); err != nil {
+				log.Fatalf("Failed to set shadow schema: %v", err)
+			}
+
+			// Show clear message about what we're doing
+			if shadowConnStr == targetConnStr {
+				color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow schema %q (same database)...\n", shadowSchema)
+			} else {
+				color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow schema %q in separate database...\n", shadowSchema)
+			}
+		} else if shadowConnStr == ":memory:" {
+			color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on in-memory shadow database...\n")
+		} else {
+			color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing migration on shadow database...\n")
+		}
 	} else {
 		color.New(color.FgYellow).Fprintf(os.Stderr, "⚠️  Skipping shadow DB validation (--skip-shadow)\n")
 	}
