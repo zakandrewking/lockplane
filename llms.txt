@@ -49,8 +49,21 @@ CREATE UNIQUE INDEX users_email_idx ON users(email);
 
 **Shadow DB Testing**: All migrations are tested on a shadow database first, so bad changes never touch production.
 
+**Breaking Change Detection**: Lockplane automatically classifies every migration operation by safety level:
+- ✅ **Safe** - Fully reversible, no data loss (e.g., adding nullable column)
+- ⚠️ **Review** - May need review for performance (e.g., adding index on large table)
+- 🔶 **Lossy** - Safe forward, but rollback may lose data (e.g., INTEGER → BIGINT)
+- ❌ **Dangerous** - Permanent data loss or breaking change (e.g., dropping column, BIGINT → INTEGER)
+- 🔄 **Multi-Phase** - Requires coordinated application changes
+
+**Migration Safety Analysis**:
+- Detects permanent data loss (dropping columns/tables)
+- Analyzes type conversion safety (widening vs narrowing)
+- Identifies rollback risks and warns about irreversible operations
+- Suggests safer alternatives for dangerous operations (e.g., expand/contract pattern)
+
 **Dangerous Pattern Detection**: Lockplane validates SQL and rejects:
-- Data loss operations (DROP TABLE, DROP COLUMN, TRUNCATE)
+- Data loss operations in schema files (DROP TABLE, DROP COLUMN, TRUNCATE)
 - Non-declarative patterns (IF NOT EXISTS, transaction control)
 - Warns about blocking operations (CREATE INDEX without CONCURRENTLY)
 

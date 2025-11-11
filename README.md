@@ -13,12 +13,16 @@ A control plane for safe, AI-friendly schema management. Works with PostgreSQL, 
 **Shadow DB validation catches problems before production.** Lockplane tests
 migrations on a shadow database first, so bad plans never touch your real data.
 
+**Breaking change detection prevents data loss.** Lockplane automatically
+identifies dangerous operations (dropping columns, type narrowing, etc.) and
+suggests safer alternatives before you deploy.
+
 **Every change is explainable.** See exactly what SQL runs, in what order, with
-clear descriptions.
+clear descriptions and safety classifications (Safe, Review, Lossy, Dangerous).
 
 **Rollbacks are generated and validated, not manually written.** For every
-forward migration, Lockplane computes the reverse operation and validates it
-works.
+forward migration, Lockplane computes the reverse operation, validates it
+works, and warns if rollback will lose data.
 
 **Guarantees safety.** Lockplane validates migrations, only runs migrations
 against expected database state, safely rolls back every time.
@@ -695,7 +699,99 @@ lockplane plan --from current.json --to schema.lp.sql
 - ✅ **Safety**: Can this operation be executed without breaking existing data?
 - ✅ **Reversibility**: Can we generate a safe rollback?
 - ✅ **NOT NULL constraints**: Requires DEFAULT values for existing rows
-- 🔄 **More checks coming**: Type compatibility, data preservation, etc.
+- ✅ **Breaking changes**: Identifies operations that will affect running applications
+- ✅ **Data loss detection**: Warns about permanent data loss from dropping columns/tables
+- ✅ **Type conversion safety**: Analyzes whether type changes preserve data
+
+### Migration Safety Levels
+
+Lockplane automatically classifies every migration operation by its safety level and provides detailed analysis of potential risks:
+
+**Safety Levels:**
+- **✅ Safe** - Fully reversible with no risk of data loss (e.g., adding a nullable column)
+- **⚠️ Review** - May need review for performance or application compatibility (e.g., adding an index on large table)
+- **🔶 Lossy** - Forward migration is safe, but rollback may lose data (e.g., widening type from INTEGER to BIGINT)
+- **❌ Dangerous** - Permanent data loss or breaking change (e.g., dropping a column, narrowing type from BIGINT to INTEGER)
+- **🔄 Multi-Phase** - Requires coordinated application changes (e.g., renaming a column requires expand/contract pattern)
+
+**Example: Dangerous operation detected**
+```bash
+lockplane plan --from current.json --to schema.lp.sql --validate
+```
+
+```
+=== Migration Safety Report ===
+
+❌ Dangerous - Operation 1
+  💥 Permanent data loss
+  ⚠️  Breaking change - will affect running applications
+  ↩️  Rollback: Cannot rollback - column data is permanently lost
+
+  💡 Safer alternatives:
+     • Use deprecation period: stop writes → archive data → stop reads → drop column
+     • Use expand/contract if renaming: add new column → dual-write → migrate reads → drop old
+
+=== Summary ===
+
+  ❌ 1 dangerous operation(s)
+
+⚠️  WARNING: This migration contains dangerous operations.
+   Review safer alternatives above before proceeding.
+```
+
+**What's detected:**
+
+1. **Data Loss Operations**
+   - **Dropping columns** - Permanently loses all data in that column
+   - **Dropping tables** - Permanently loses all rows and structure
+   - **Type narrowing** - Converting BIGINT → INTEGER may truncate values
+   - **Making columns NOT NULL** - May fail if existing rows have NULL values
+
+2. **Rollback Risks**
+   - **Type widening** (INTEGER → BIGINT) - Forward migration is safe, but rollback may lose precision
+   - **Dropped objects** - Rollback can recreate structure but not restore data
+   - **Irreversible operations** - Some operations cannot be safely reversed
+
+3. **Breaking Changes**
+   - Operations that require application code changes to deploy safely
+   - Suggests multi-phase deployment patterns (expand/contract)
+   - Identifies operations that will cause downtime if not coordinated
+
+**Example: Type conversion analysis**
+
+Safe widening (data preserved):
+```
+✅ Safe - Operation 1: Alter column users.account_balance type
+  • Type change: INTEGER → BIGINT (safe widening)
+  • Forward migration: safe (all values fit in larger type)
+  ⚠️  Rollback: May lose precision when converting back to INTEGER
+```
+
+Dangerous narrowing (potential data loss):
+```
+❌ Dangerous - Operation 1: Alter column users.account_balance type
+  💥 Potential data loss
+  • Type change: BIGINT → INTEGER (dangerous narrowing)
+  • Risk: Values outside INTEGER range will cause migration to fail
+
+  💡 Safer alternatives:
+     • Use multi-phase: add new column → backfill → dual-write → migrate reads → drop old
+     • Test conversion on shadow DB first to verify data compatibility
+```
+
+**Testing dangerous operations safely:**
+
+Always use shadow DB validation to test dangerous migrations before production:
+
+```bash
+# Test on shadow DB first (automatic with apply command)
+lockplane apply migration.json --target $DATABASE_URL --shadow-db $SHADOW_DB_URL
+
+# Shadow DB validation will:
+# 1. Apply migration to shadow DB
+# 2. Run validation checks
+# 3. Only proceed to production if shadow DB succeeds
+```
 
 ### Supported Operations
 
