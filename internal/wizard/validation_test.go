@@ -184,7 +184,7 @@ func TestBuildSQLiteConnectionString(t *testing.T) {
 
 	connStr := BuildSQLiteConnectionString(env)
 
-	expected := "sqlite://schema/test.db"
+	expected := "./schema/test.db"
 	if connStr != expected {
 		t.Errorf("BuildSQLiteConnectionString() = %q, want %q", connStr, expected)
 	}
@@ -195,7 +195,7 @@ func TestBuildSQLiteConnectionStringDefault(t *testing.T) {
 
 	connStr := BuildSQLiteConnectionString(env)
 
-	expected := "sqlite://schema/lockplane.db"
+	expected := "./schema/lockplane.db"
 	if connStr != expected {
 		t.Errorf("BuildSQLiteConnectionString() with defaults = %q, want %q", connStr, expected)
 	}
@@ -208,7 +208,7 @@ func TestBuildSQLiteShadowConnectionString(t *testing.T) {
 
 	connStr := BuildSQLiteShadowConnectionString(env)
 
-	expected := "sqlite://schema/test_shadow.db"
+	expected := "./schema/test_shadow.db"
 	if connStr != expected {
 		t.Errorf("BuildSQLiteShadowConnectionString() = %q, want %q", connStr, expected)
 	}
@@ -219,7 +219,7 @@ func TestBuildSQLiteShadowConnectionStringDefault(t *testing.T) {
 
 	connStr := BuildSQLiteShadowConnectionString(env)
 
-	expected := "sqlite://schema/lockplane_shadow.db"
+	expected := "./schema/lockplane_shadow.db"
 	if connStr != expected {
 		t.Errorf("BuildSQLiteShadowConnectionString() with defaults = %q, want %q", connStr, expected)
 	}
@@ -232,7 +232,7 @@ func TestBuildSQLiteShadowConnectionStringNoExtension(t *testing.T) {
 
 	connStr := BuildSQLiteShadowConnectionString(env)
 
-	expected := "sqlite://data/mydb_shadow"
+	expected := "./data/mydb_shadow"
 	if connStr != expected {
 		t.Errorf("BuildSQLiteShadowConnectionString() with no extension = %q, want %q", connStr, expected)
 	}
@@ -273,8 +273,8 @@ func TestBuildLibSQLShadowConnectionString(t *testing.T) {
 
 	connStr := BuildLibSQLShadowConnectionString(env)
 
-	// For libSQL/Turso, shadow DB uses local SQLite
-	expected := "sqlite://schema/turso_shadow.db"
+	// For libSQL/Turso, shadow DB uses local SQLite file path
+	expected := "./schema/turso_shadow.db"
 	if connStr != expected {
 		t.Errorf("BuildLibSQLShadowConnectionString() = %q, want %q", connStr, expected)
 	}

@@ -252,7 +252,7 @@ func createOrUpdateEnvExample(environments []EnvironmentInput) error {
 	if !hasDatabaseURL {
 		switch dbType {
 		case "sqlite":
-			b.WriteString("DATABASE_URL=sqlite://schema/lockplane.db\n")
+			b.WriteString("DATABASE_URL=./schema/lockplane.db\n")
 		case "libsql":
 			b.WriteString("DATABASE_URL=libsql://your-database.turso.io\n")
 		default: // postgres
@@ -264,9 +264,9 @@ func createOrUpdateEnvExample(environments []EnvironmentInput) error {
 	if !hasShadowDatabaseURL {
 		switch dbType {
 		case "sqlite":
-			b.WriteString("SHADOW_DATABASE_URL=sqlite://schema/lockplane_shadow.db\n")
+			b.WriteString("SHADOW_DATABASE_URL=./schema/lockplane_shadow.db\n")
 		case "libsql":
-			b.WriteString("SHADOW_DATABASE_URL=sqlite://schema/turso_shadow.db\n")
+			b.WriteString("SHADOW_DATABASE_URL=./schema/turso_shadow.db\n")
 		default: // postgres
 			b.WriteString("SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/database_shadow?sslmode=disable\n")
 		}

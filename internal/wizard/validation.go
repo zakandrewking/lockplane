@@ -156,28 +156,32 @@ func BuildPostgresShadowConnectionString(env EnvironmentInput) string {
 func BuildSQLiteConnectionString(env EnvironmentInput) string {
 	filePath := env.FilePath
 	if filePath == "" {
-		filePath = "schema/lockplane.db"
+		filePath = "./schema/lockplane.db"
+	} else if !strings.HasPrefix(filePath, "./") && !strings.HasPrefix(filePath, "/") {
+		filePath = "./" + filePath
 	}
 
-	return fmt.Sprintf("sqlite://%s", filePath)
+	return filePath
 }
 
 // BuildSQLiteShadowConnectionString constructs a shadow DB connection string for SQLite
 func BuildSQLiteShadowConnectionString(env EnvironmentInput) string {
 	filePath := env.FilePath
 	if filePath == "" {
-		filePath = "schema/lockplane.db"
+		filePath = "./schema/lockplane.db"
+	} else if !strings.HasPrefix(filePath, "./") && !strings.HasPrefix(filePath, "/") {
+		filePath = "./" + filePath
 	}
 
 	// Add _shadow suffix before the file extension
-	// e.g., schema/lockplane.db -> schema/lockplane_shadow.db
+	// e.g., ./schema/lockplane.db -> ./schema/lockplane_shadow.db
 	if strings.HasSuffix(filePath, ".db") {
 		filePath = strings.TrimSuffix(filePath, ".db") + "_shadow.db"
 	} else {
 		filePath = filePath + "_shadow"
 	}
 
-	return fmt.Sprintf("sqlite://%s", filePath)
+	return filePath
 }
 
 // BuildLibSQLConnectionString constructs a libSQL connection string
@@ -193,6 +197,5 @@ func BuildLibSQLConnectionString(env EnvironmentInput) string {
 func BuildLibSQLShadowConnectionString(env EnvironmentInput) string {
 	// Use a local SQLite database for shadow testing
 	// This allows schema validation without needing a second Turso database
-	filePath := "schema/turso_shadow.db"
-	return fmt.Sprintf("sqlite://%s", filePath)
+	return "./schema/turso_shadow.db"
 }

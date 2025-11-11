@@ -651,12 +651,12 @@ func TestCreateOrUpdateEnvExampleSQLite(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, "DATABASE_URL=sqlite://") {
-		t.Error(".env.example should contain SQLite DATABASE_URL")
+	if !strings.Contains(contentStr, "DATABASE_URL=./") {
+		t.Error(".env.example should contain SQLite DATABASE_URL as a file path")
 	}
 
-	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=sqlite://") {
-		t.Error(".env.example should contain SQLite SHADOW_DATABASE_URL")
+	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=./") {
+		t.Error(".env.example should contain SQLite SHADOW_DATABASE_URL as a file path")
 	}
 
 	// Should NOT contain LIBSQL_DB_TOKEN for sqlite environment
@@ -703,8 +703,8 @@ func TestCreateOrUpdateEnvExampleLibSQL(t *testing.T) {
 		t.Error(".env.example should contain libSQL DATABASE_URL")
 	}
 
-	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=sqlite://") {
-		t.Error(".env.example should contain SQLite SHADOW_DATABASE_URL for libSQL (uses local shadow)")
+	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=./") {
+		t.Error(".env.example should contain SQLite SHADOW_DATABASE_URL as a file path for libSQL (uses local shadow)")
 	}
 
 	// Should contain LIBSQL_DB_TOKEN for libsql environment
@@ -764,8 +764,8 @@ func TestGenerateLibSQLEnvironment(t *testing.T) {
 		t.Error(".env.production should contain LIBSQL_DB_TOKEN")
 	}
 
-	if !strings.Contains(envStr, "SHADOW_DATABASE_URL=sqlite://schema/turso_shadow.db") {
-		t.Error(".env.production should contain shadow database URL")
+	if !strings.Contains(envStr, "SHADOW_DATABASE_URL=./schema/turso_shadow.db") {
+		t.Error(".env.production should contain shadow database URL as a file path")
 	}
 
 	// Verify .env.example was created and contains LIBSQL_DB_TOKEN
