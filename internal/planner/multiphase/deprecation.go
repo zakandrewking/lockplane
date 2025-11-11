@@ -25,6 +25,7 @@ func GenerateDeprecationPlan(
 	}
 
 	migrationID := fmt.Sprintf("drop_%s_%s_%d", table, column, time.Now().Unix())
+	_ = migrationID
 
 	phases := []planner.Phase{}
 
@@ -168,7 +169,7 @@ func GenerateDeprecationPlan(
 			"Confirm column is removed from schema",
 		},
 		Rollback: &planner.PhaseRollback{
-			Description: fmt.Sprintf("Cannot fully rollback - data is permanently lost"),
+			Description: "Cannot fully rollback - data is permanently lost",
 			SQL:         []string{},
 			Warning: fmt.Sprintf("Column %s data is permanently lost. If archived, can restore from %s_%s_archive table, but requires manual intervention.",
 				column, table, column),

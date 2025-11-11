@@ -18,7 +18,7 @@ func GenerateValidationPhasePlan(
 	column string,
 	columnType string,
 	constraintType string, // "not_null", "check", "unique"
-	backfillValue string,  // Value to use for backfill, or SQL expression
+	backfillValue string, // Value to use for backfill, or SQL expression
 	checkExpression string, // For CHECK constraints
 	sourceHash string,
 ) (*planner.MultiPhasePlan, error) {
@@ -39,6 +39,7 @@ func GenerateValidationPhasePlan(
 	}
 
 	migrationID := fmt.Sprintf("add_%s_%s_%s_%d", constraintType, table, column, time.Now().Unix())
+	_ = migrationID
 
 	phases := []planner.Phase{}
 

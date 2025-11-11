@@ -29,6 +29,7 @@ func GenerateExpandContractPlan(
 
 	// Generate unique migration ID
 	migrationID := fmt.Sprintf("rename_%s_%s_%d", table, oldColumn, time.Now().Unix())
+	_ = migrationID
 
 	// Phase 1: Expand - Add new column and backfill
 	phase1 := planner.Phase{

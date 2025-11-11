@@ -2,6 +2,8 @@ package parser
 
 import (
 	"testing"
+
+	"github.com/lockplane/lockplane/database"
 )
 
 func TestParseSQLSchemaCreateTable(t *testing.T) {
@@ -239,5 +241,37 @@ CREATE INDEX idx_login_tokens_expires_at ON login_tokens (expires_at);
 
 	if idx.Columns[0] != "expires_at" {
 		t.Fatalf("expected index column expires_at, got %s", idx.Columns[0])
+	}
+}
+
+func TestParseSQLiteSchemaIndexColumns(t *testing.T) {
+	sql := `
+CREATE TABLE projects (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL
+);
+CREATE INDEX idx_projects_user_id ON projects(user_id);
+`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectSQLite)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect returned error: %v", err)
+	}
+
+	if len(schema.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(schema.Tables))
+	}
+
+	table := schema.Tables[0]
+	if len(table.Indexes) != 1 {
+		t.Fatalf("expected 1 index, got %d", len(table.Indexes))
+	}
+
+	idx := table.Indexes[0]
+	if idx.Name != "idx_projects_user_id" {
+		t.Fatalf("expected index name idx_projects_user_id, got %s", idx.Name)
+	}
+	if len(idx.Columns) != 1 || idx.Columns[0] != "user_id" {
+		t.Fatalf("expected index columns [user_id], got %v", idx.Columns)
 	}
 }

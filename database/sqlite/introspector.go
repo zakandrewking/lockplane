@@ -59,12 +59,12 @@ func (i *Introspector) IntrospectSchema(ctx context.Context, db *sql.DB) (*datab
 // GetTables returns all table names in the SQLite database
 func (i *Introspector) GetTables(ctx context.Context, db *sql.DB) ([]string, error) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT name
-		FROM sqlite_master
-		WHERE type = 'table'
-		AND name NOT LIKE 'sqlite_%'
-		ORDER BY name
-	`)
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+            AND name NOT LIKE 'sqlite_%'
+            ORDER BY name
+    `)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %w", err)
 	}
@@ -143,26 +143,47 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 	}
 	defer func() { _ = rows.Close() }()
 
-	var indexes []database.Index
+	type rawIndex struct {
+		index  database.Index
+		origin string
+	}
+
+	var rawIndexes []rawIndex
 	for rows.Next() {
 		var seq int
-		var idx database.Index
 		var origin string
 		var partial int
 		var unique int
+		var name string
 
 		// PRAGMA index_list returns: seq, name, unique, origin, partial
-		if err := rows.Scan(&seq, &idx.Name, &unique, &origin, &partial); err != nil {
+		if err := rows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
 			return nil, err
 		}
 
-		idx.Unique = unique == 1
+		_ = seq
+		_ = partial
 
-		// Get columns for this index
-		indexInfoQuery := fmt.Sprintf("PRAGMA index_info(%s)", idx.Name)
+		rawIndexes = append(rawIndexes, rawIndex{
+			index: database.Index{
+				Name:   name,
+				Unique: unique == 1,
+			},
+			origin: origin,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	_ = rows.Close()
+
+	var indexes []database.Index
+	for _, raw := range rawIndexes {
+		indexInfoQuery := fmt.Sprintf("PRAGMA index_info(%s)", quoteSQLiteString(raw.index.Name))
 		indexRows, indexErr := db.QueryContext(ctx, indexInfoQuery)
 		if indexErr != nil {
-			return nil, fmt.Errorf("failed to query index_info for %s: %w", idx.Name, indexErr)
+			return nil, fmt.Errorf("failed to query index_info for %s: %w", raw.index.Name, indexErr)
 		}
 
 		for indexRows.Next() {
@@ -172,27 +193,30 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 			// PRAGMA index_info returns: seqno, cid, name
 			if err := indexRows.Scan(&seqno, &cid, &name); err != nil {
 				_ = indexRows.Close()
-				return nil, fmt.Errorf("failed to scan index_info for %s: %w", idx.Name, err)
+				return nil, fmt.Errorf("failed to scan index_info for %s: %w", raw.index.Name, err)
 			}
 
 			if name.Valid {
-				idx.Columns = append(idx.Columns, name.String)
+				raw.index.Columns = append(raw.index.Columns, name.String)
 			}
 		}
 		if err := indexRows.Err(); err != nil {
 			_ = indexRows.Close()
-			return nil, fmt.Errorf("error iterating index_info for %s: %w", idx.Name, err)
+			return nil, fmt.Errorf("error iterating index_info for %s: %w", raw.index.Name, err)
 		}
 		_ = indexRows.Close()
 
-		// Only include user-created indexes (origin == "c" means created by CREATE INDEX)
-		// Skip auto-created indexes (like for primary keys and unique constraints)
-		if origin == "c" {
-			indexes = append(indexes, idx)
+		if raw.origin == "c" {
+			indexes = append(indexes, raw.index)
 		}
 	}
 
 	return indexes, nil
+}
+
+func quoteSQLiteString(value string) string {
+	escaped := strings.ReplaceAll(value, "'", "''")
+	return fmt.Sprintf("'%s'", escaped)
 }
 
 // GetForeignKeys returns all foreign keys for a given SQLite table
