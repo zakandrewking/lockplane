@@ -59,12 +59,14 @@ CREATE TABLE tasks (
 	// Verify we have a CREATE TABLE step
 	var foundCreateTable bool
 	for _, step := range plan.Steps {
-		if strings.Contains(strings.ToUpper(step.SQL), "CREATE TABLE") &&
-			strings.Contains(step.SQL, "tasks") {
-			foundCreateTable = true
-			// Verify SQLite-specific syntax is preserved
-			if !strings.Contains(step.SQL, "INTEGER") {
-				t.Error("expected INTEGER type in CREATE TABLE")
+		for _, sqlStmt := range step.SQL {
+			if strings.Contains(strings.ToUpper(sqlStmt), "CREATE TABLE") &&
+				strings.Contains(sqlStmt, "tasks") {
+				foundCreateTable = true
+				// Verify SQLite-specific syntax is preserved
+				if !strings.Contains(sqlStmt, "INTEGER") {
+					t.Error("expected INTEGER type in CREATE TABLE")
+				}
 			}
 		}
 	}
@@ -124,10 +126,12 @@ CREATE TABLE users (
 
 	foundColumnChange := false
 	for _, step := range plan.Steps {
-		sql := strings.ToUpper(step.SQL)
-		if strings.Contains(sql, "NAME") &&
-			(strings.Contains(sql, "ADD COLUMN") || strings.Contains(sql, "CREATE TABLE")) {
-			foundColumnChange = true
+		for _, sqlStmt := range step.SQL {
+			sql := strings.ToUpper(sqlStmt)
+			if strings.Contains(sql, "NAME") &&
+				(strings.Contains(sql, "ADD COLUMN") || strings.Contains(sql, "CREATE TABLE")) {
+				foundColumnChange = true
+			}
 		}
 	}
 
@@ -191,9 +195,11 @@ CREATE INDEX idx_products_name ON products(name);
 	// Execute plan steps
 	for i, step := range plan.Steps {
 		t.Logf("Executing step %d: %s", i+1, step.Description)
-		if _, err := db.ExecContext(ctx, step.SQL); err != nil {
-			t.Fatalf("failed to execute step %d (%s): %v\nSQL: %s",
-				i+1, step.Description, err, step.SQL)
+		for j, sqlStmt := range step.SQL {
+			if _, err := db.ExecContext(ctx, sqlStmt); err != nil {
+				t.Fatalf("failed to execute step %d, statement %d/%d (%s): %v\nSQL: %s",
+					i+1, j+1, len(step.SQL), step.Description, err, sqlStmt)
+			}
 		}
 	}
 
@@ -272,8 +278,10 @@ CREATE TABLE notes (
 	// Should have DROP TABLE
 	foundDrop := false
 	for _, step := range forwardPlan.Steps {
-		if strings.Contains(strings.ToUpper(step.SQL), "DROP TABLE") {
-			foundDrop = true
+		for _, sqlStmt := range step.SQL {
+			if strings.Contains(strings.ToUpper(sqlStmt), "DROP TABLE") {
+				foundDrop = true
+			}
 		}
 	}
 	if !foundDrop {
@@ -290,9 +298,11 @@ CREATE TABLE notes (
 	// Rollback should recreate the table
 	foundCreate := false
 	for _, step := range rollbackPlan.Steps {
-		if strings.Contains(strings.ToUpper(step.SQL), "CREATE TABLE") &&
-			strings.Contains(step.SQL, "notes") {
-			foundCreate = true
+		for _, sqlStmt := range step.SQL {
+			if strings.Contains(strings.ToUpper(sqlStmt), "CREATE TABLE") &&
+				strings.Contains(sqlStmt, "notes") {
+				foundCreate = true
+			}
 		}
 	}
 	if !foundCreate {
@@ -359,7 +369,7 @@ func TestApplyPlan_ShadowDB_CatchesUniqueConstraintViolation(t *testing.T) {
 		Steps: []planner.PlanStep{
 			{
 				Description: "Add unique index on user_emails.email",
-				SQL:         "CREATE UNIQUE INDEX idx_user_emails_email ON user_emails(email)",
+				SQL:         []string{"CREATE UNIQUE INDEX idx_user_emails_email ON user_emails(email)"},
 			},
 		},
 		SourceHash: "", // Not validating hash for this test
@@ -511,7 +521,7 @@ CREATE INDEX idx_books_author ON books(author_id);
 	if len(plan.Steps) > 0 {
 		t.Logf("WARNING: Expected no plan steps for equivalent schemas, got %d:", len(plan.Steps))
 		for i, step := range plan.Steps {
-			t.Logf("  Step %d: %s\n    SQL: %s", i+1, step.Description, step.SQL)
+			t.Logf("  Step %d: %s\n    SQL: %v", i+1, step.Description, step.SQL)
 		}
 		// Note: This might not be zero due to index column ordering or other
 		// minor differences between parsed and introspected schemas.

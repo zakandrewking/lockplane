@@ -139,8 +139,8 @@ func TestGenerator_ModifyColumn_Type(t *testing.T) {
 		t.Fatalf("Expected 1 step, got %d", len(steps))
 	}
 
-	if steps[0].SQL != "ALTER TABLE users ALTER COLUMN age TYPE bigint" {
-		t.Errorf("Expected type change SQL, got: %s", steps[0].SQL)
+	if len(steps[0].SQL) == 0 || steps[0].SQL[0] != "ALTER TABLE users ALTER COLUMN age TYPE bigint" {
+		t.Errorf("Expected type change SQL, got: %v", steps[0].SQL)
 	}
 }
 
@@ -160,8 +160,8 @@ func TestGenerator_ModifyColumn_Nullable(t *testing.T) {
 		t.Fatalf("Expected 1 step, got %d", len(steps))
 	}
 
-	if steps[0].SQL != "ALTER TABLE users ALTER COLUMN email SET NOT NULL" {
-		t.Errorf("Expected SET NOT NULL, got: %s", steps[0].SQL)
+	if len(steps[0].SQL) == 0 || steps[0].SQL[0] != "ALTER TABLE users ALTER COLUMN email SET NOT NULL" {
+		t.Errorf("Expected SET NOT NULL, got: %v", steps[0].SQL)
 	}
 
 	// Test removing NOT NULL
@@ -169,8 +169,8 @@ func TestGenerator_ModifyColumn_Nullable(t *testing.T) {
 	diff.New.Nullable = true
 
 	steps = gen.ModifyColumn("users", diff)
-	if steps[0].SQL != "ALTER TABLE users ALTER COLUMN email DROP NOT NULL" {
-		t.Errorf("Expected DROP NOT NULL, got: %s", steps[0].SQL)
+	if len(steps[0].SQL) == 0 || steps[0].SQL[0] != "ALTER TABLE users ALTER COLUMN email DROP NOT NULL" {
+		t.Errorf("Expected DROP NOT NULL, got: %v", steps[0].SQL)
 	}
 }
 
@@ -190,8 +190,8 @@ func TestGenerator_ModifyColumn_Default(t *testing.T) {
 		t.Fatalf("Expected 1 step, got %d", len(steps))
 	}
 
-	if steps[0].SQL != "ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now()" {
-		t.Errorf("Expected SET DEFAULT, got: %s", steps[0].SQL)
+	if len(steps[0].SQL) == 0 || steps[0].SQL[0] != "ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now()" {
+		t.Errorf("Expected SET DEFAULT, got: %v", steps[0].SQL)
 	}
 
 	// Test removing default
@@ -199,8 +199,8 @@ func TestGenerator_ModifyColumn_Default(t *testing.T) {
 	diff.New.Default = nil
 
 	steps = gen.ModifyColumn("users", diff)
-	if steps[0].SQL != "ALTER TABLE users ALTER COLUMN created_at DROP DEFAULT" {
-		t.Errorf("Expected DROP DEFAULT, got: %s", steps[0].SQL)
+	if len(steps[0].SQL) == 0 || steps[0].SQL[0] != "ALTER TABLE users ALTER COLUMN created_at DROP DEFAULT" {
+		t.Errorf("Expected DROP DEFAULT, got: %v", steps[0].SQL)
 	}
 }
 

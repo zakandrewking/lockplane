@@ -34,16 +34,16 @@ func TestGeneratePlan_AddTable(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if !strings.Contains(step.SQL, "CREATE TABLE users") {
-		t.Errorf("Expected CREATE TABLE in SQL, got: %s", step.SQL)
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "CREATE TABLE users") {
+		t.Errorf("Expected CREATE TABLE in SQL, got: %v", step.SQL)
 	}
 
-	if !strings.Contains(step.SQL, "id integer NOT NULL PRIMARY KEY") {
-		t.Errorf("Expected id column definition in SQL, got: %s", step.SQL)
+	if !strings.Contains(step.SQL[0], "id integer NOT NULL PRIMARY KEY") {
+		t.Errorf("Expected id column definition in SQL, got: %s", step.SQL[0])
 	}
 
-	if !strings.Contains(step.SQL, "email text NOT NULL") {
-		t.Errorf("Expected email column definition in SQL, got: %s", step.SQL)
+	if !strings.Contains(step.SQL[0], "email text NOT NULL") {
+		t.Errorf("Expected email column definition in SQL, got: %s", step.SQL[0])
 	}
 }
 
@@ -65,8 +65,8 @@ func TestGeneratePlan_DropTable(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if step.SQL != "DROP TABLE old_table CASCADE" {
-		t.Errorf("Expected 'DROP TABLE old_table CASCADE', got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "DROP TABLE old_table CASCADE" {
+		t.Errorf("Expected 'DROP TABLE old_table CASCADE', got: %v", step.SQL)
 	}
 }
 
@@ -93,12 +93,12 @@ func TestGeneratePlan_AddColumn(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if !strings.Contains(step.SQL, "ALTER TABLE users ADD COLUMN age integer") {
-		t.Errorf("Expected ALTER TABLE ADD COLUMN, got: %s", step.SQL)
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "ALTER TABLE users ADD COLUMN age integer") {
+		t.Errorf("Expected ALTER TABLE ADD COLUMN, got: %v", step.SQL)
 	}
 
-	if strings.Contains(step.SQL, "NOT NULL") {
-		t.Errorf("Expected nullable column (no NOT NULL), got: %s", step.SQL)
+	if strings.Contains(step.SQL[0], "NOT NULL") {
+		t.Errorf("Expected nullable column (no NOT NULL), got: %s", step.SQL[0])
 	}
 }
 
@@ -125,8 +125,8 @@ func TestGeneratePlan_DropColumn(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if step.SQL != "ALTER TABLE users DROP COLUMN deprecated_field" {
-		t.Errorf("Expected 'ALTER TABLE users DROP COLUMN deprecated_field', got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "ALTER TABLE users DROP COLUMN deprecated_field" {
+		t.Errorf("Expected 'ALTER TABLE users DROP COLUMN deprecated_field', got: %v", step.SQL)
 	}
 }
 
@@ -158,8 +158,8 @@ func TestGeneratePlan_ModifyColumn_Type(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if step.SQL != "ALTER TABLE users ALTER COLUMN age TYPE bigint" {
-		t.Errorf("Expected type change SQL, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "ALTER TABLE users ALTER COLUMN age TYPE bigint" {
+		t.Errorf("Expected type change SQL, got: %v", step.SQL)
 	}
 }
 
@@ -192,8 +192,8 @@ func TestGeneratePlan_ModifyColumn_Nullable(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if step.SQL != "ALTER TABLE users ALTER COLUMN email SET NOT NULL" {
-		t.Errorf("Expected SET NOT NULL, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "ALTER TABLE users ALTER COLUMN email SET NOT NULL" {
+		t.Errorf("Expected SET NOT NULL, got: %v", step.SQL)
 	}
 
 	// Test removing NOT NULL
@@ -206,8 +206,8 @@ func TestGeneratePlan_ModifyColumn_Nullable(t *testing.T) {
 	}
 
 	step = plan.Steps[0]
-	if step.SQL != "ALTER TABLE users ALTER COLUMN email DROP NOT NULL" {
-		t.Errorf("Expected DROP NOT NULL, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "ALTER TABLE users ALTER COLUMN email DROP NOT NULL" {
+		t.Errorf("Expected DROP NOT NULL, got: %v", step.SQL)
 	}
 }
 
@@ -241,8 +241,8 @@ func TestGeneratePlan_ModifyColumn_Default(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if step.SQL != "ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now()" {
-		t.Errorf("Expected SET DEFAULT, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now()" {
+		t.Errorf("Expected SET DEFAULT, got: %v", step.SQL)
 	}
 }
 
@@ -269,8 +269,8 @@ func TestGeneratePlan_AddIndex(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if step.SQL != "CREATE UNIQUE INDEX idx_users_email ON users (email)" {
-		t.Errorf("Expected CREATE UNIQUE INDEX, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "CREATE UNIQUE INDEX idx_users_email ON users (email)" {
+		t.Errorf("Expected CREATE UNIQUE INDEX, got: %v", step.SQL)
 	}
 }
 
@@ -297,8 +297,8 @@ func TestGeneratePlan_DropIndex(t *testing.T) {
 	}
 
 	step := plan.Steps[0]
-	if step.SQL != "DROP INDEX idx_old" {
-		t.Errorf("Expected DROP INDEX, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "DROP INDEX idx_old" {
+		t.Errorf("Expected DROP INDEX, got: %v", step.SQL)
 	}
 }
 
@@ -350,24 +350,24 @@ func TestGeneratePlan_ComplexMigration(t *testing.T) {
 	}
 
 	// Verify order: adds before drops
-	if !strings.Contains(plan.Steps[0].SQL, "CREATE TABLE posts") {
-		t.Errorf("Step 0 should create table, got: %s", plan.Steps[0].SQL)
+	if len(plan.Steps[0].SQL) == 0 || !strings.Contains(plan.Steps[0].SQL[0], "CREATE TABLE posts") {
+		t.Errorf("Step 0 should create table, got: %v", plan.Steps[0].SQL)
 	}
 
-	if !strings.Contains(plan.Steps[1].SQL, "ADD COLUMN age") {
-		t.Errorf("Step 1 should add column, got: %s", plan.Steps[1].SQL)
+	if len(plan.Steps[1].SQL) == 0 || !strings.Contains(plan.Steps[1].SQL[0], "ADD COLUMN age") {
+		t.Errorf("Step 1 should add column, got: %v", plan.Steps[1].SQL)
 	}
 
-	if !strings.Contains(plan.Steps[2].SQL, "CREATE INDEX") {
-		t.Errorf("Step 2 should create index, got: %s", plan.Steps[2].SQL)
+	if len(plan.Steps[2].SQL) == 0 || !strings.Contains(plan.Steps[2].SQL[0], "CREATE INDEX") {
+		t.Errorf("Step 2 should create index, got: %v", plan.Steps[2].SQL)
 	}
 
-	if !strings.Contains(plan.Steps[3].SQL, "DROP COLUMN") {
-		t.Errorf("Step 3 should drop column, got: %s", plan.Steps[3].SQL)
+	if len(plan.Steps[3].SQL) == 0 || !strings.Contains(plan.Steps[3].SQL[0], "DROP COLUMN") {
+		t.Errorf("Step 3 should drop column, got: %v", plan.Steps[3].SQL)
 	}
 
-	if !strings.Contains(plan.Steps[4].SQL, "DROP TABLE") {
-		t.Errorf("Step 4 should drop table, got: %s", plan.Steps[4].SQL)
+	if len(plan.Steps[4].SQL) == 0 || !strings.Contains(plan.Steps[4].SQL[0], "DROP TABLE") {
+		t.Errorf("Step 4 should drop table, got: %v", plan.Steps[4].SQL)
 	}
 }
 
@@ -417,7 +417,7 @@ func TestGeneratePlan_PostgreSQLvsSQLite(t *testing.T) {
 		// PostgreSQL should use ALTER COLUMN TYPE
 		foundAlterColumn := false
 		for _, step := range plan.Steps {
-			if strings.Contains(step.SQL, "ALTER COLUMN") && strings.Contains(step.SQL, "TYPE") {
+			if len(step.SQL) > 0 && strings.Contains(step.SQL[0], "ALTER COLUMN") && strings.Contains(step.SQL[0], "TYPE") {
 				foundAlterColumn = true
 				break
 			}
@@ -443,14 +443,16 @@ func TestGeneratePlan_PostgreSQLvsSQLite(t *testing.T) {
 		t.Logf("SQLite generated %d steps:", len(plan.Steps))
 		for i, step := range plan.Steps {
 			t.Logf("  Step %d: %s", i+1, step.Description)
-			t.Logf("  SQL: %s", step.SQL)
+			t.Logf("  SQL: %v", step.SQL)
 		}
 
 		// SQLite should NOT use ALTER COLUMN (it's not supported)
 		// Instead it should use table recreation strategy or comment
 		for _, step := range plan.Steps {
-			if strings.Contains(step.SQL, "ALTER COLUMN") {
-				t.Errorf("SQLite should not use ALTER COLUMN (not supported), got: %s", step.SQL)
+			for _, sqlStmt := range step.SQL {
+				if strings.Contains(sqlStmt, "ALTER COLUMN") {
+					t.Errorf("SQLite should not use ALTER COLUMN (not supported), got: %s", sqlStmt)
+				}
 			}
 		}
 
@@ -458,10 +460,15 @@ func TestGeneratePlan_PostgreSQLvsSQLite(t *testing.T) {
 		foundRecreation := false
 		for _, step := range plan.Steps {
 			desc := strings.ToLower(step.Description)
-			sql := strings.ToLower(step.SQL)
-			if strings.Contains(desc, "recreat") || strings.Contains(desc, "rebuild") ||
-				strings.Contains(sql, "_new") || strings.Contains(sql, "temp") {
-				foundRecreation = true
+			for _, sqlStmt := range step.SQL {
+				sql := strings.ToLower(sqlStmt)
+				if strings.Contains(desc, "recreat") || strings.Contains(desc, "rebuild") ||
+					strings.Contains(sql, "_new") || strings.Contains(sql, "temp") {
+					foundRecreation = true
+					break
+				}
+			}
+			if foundRecreation {
 				break
 			}
 		}

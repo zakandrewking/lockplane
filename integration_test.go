@@ -312,7 +312,7 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 			// Create an invalid plan inline (no JSON fixture for this)
 			plan := planner.Plan{
 				Steps: []planner.PlanStep{
-					{Description: "Invalid SQL", SQL: "INVALID SQL STATEMENT"},
+					{Description: "Invalid SQL", SQL: []string{"INVALID SQL STATEMENT"}},
 				},
 			}
 
@@ -412,7 +412,7 @@ func TestApplyPlan_ShadowDB_CatchesTypeConversionFailure(t *testing.T) {
 		Steps: []planner.PlanStep{
 			{
 				Description: "Alter column analytics.user_id type from BIGINT to INTEGER",
-				SQL:         "ALTER TABLE analytics ALTER COLUMN user_id TYPE INTEGER",
+				SQL:         []string{"ALTER TABLE analytics ALTER COLUMN user_id TYPE INTEGER"},
 			},
 		},
 		SourceHash: "", // Not validating hash for this test
@@ -745,7 +745,7 @@ func TestApplyPlan_ValidHashAcceptance(t *testing.T) {
 				Steps: []planner.PlanStep{
 					{
 						Description: "Add price column",
-						SQL:         "ALTER TABLE products ADD COLUMN price INTEGER",
+						SQL:         []string{"ALTER TABLE products ADD COLUMN price INTEGER"},
 					},
 				},
 				SourceHash: hash, // Valid hash matching current state
@@ -821,7 +821,7 @@ func TestApplyPlan_InvalidHashRejection(t *testing.T) {
 				Steps: []planner.PlanStep{
 					{
 						Description: "Add total column",
-						SQL:         "ALTER TABLE orders ADD COLUMN total INTEGER",
+						SQL:         []string{"ALTER TABLE orders ADD COLUMN total INTEGER"},
 					},
 				},
 				SourceHash: wrongHash, // Invalid hash - doesn't match current state
@@ -914,7 +914,7 @@ func TestApplyPlan_EmptyHashSkipsValidation(t *testing.T) {
 				Steps: []planner.PlanStep{
 					{
 						Description: "Add quantity column",
-						SQL:         "ALTER TABLE items ADD COLUMN quantity INTEGER",
+						SQL:         []string{"ALTER TABLE items ADD COLUMN quantity INTEGER"},
 					},
 				},
 				SourceHash: "", // Empty hash - should skip validation
@@ -994,7 +994,7 @@ func TestApplyPlan_HashMismatchAfterDatabaseChange(t *testing.T) {
 				Steps: []planner.PlanStep{
 					{
 						Description: "Add email column",
-						SQL:         "ALTER TABLE customers ADD COLUMN email TEXT",
+						SQL:         []string{"ALTER TABLE customers ADD COLUMN email TEXT"},
 					},
 				},
 				SourceHash: hashBeforeChange, // Hash computed before database change

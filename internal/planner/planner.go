@@ -44,7 +44,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 		sql, desc := driver.CreateTable(table)
 		plan.Steps = append(plan.Steps, PlanStep{
 			Description: desc,
-			SQL:         sql,
+			SQL:         []string{sql},
 		})
 
 		// Add foreign keys for new tables (after table is created)
@@ -54,7 +54,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 				sql, desc := driver.AddForeignKey(table.Name, fk)
 				plan.Steps = append(plan.Steps, PlanStep{
 					Description: desc,
-					SQL:         sql,
+					SQL:         []string{sql},
 				})
 			}
 		}
@@ -67,7 +67,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 			sql, desc := driver.AddColumn(tableDiff.TableName, col)
 			plan.Steps = append(plan.Steps, PlanStep{
 				Description: desc,
-				SQL:         sql,
+				SQL:         []string{sql},
 			})
 		}
 
@@ -107,20 +107,18 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 					}
 
 					if sourceTable != nil {
-						// Use table recreation for SQLite
-						steps := sqliteGen.RecreateTableWithForeignKey(*sourceTable, fk)
-						for _, step := range steps {
-							plan.Steps = append(plan.Steps, PlanStep{
-								Description: step.Description,
-								SQL:         step.SQL,
-							})
-						}
+						// Use table recreation for SQLite (returns single atomic step)
+						step := sqliteGen.RecreateTableWithForeignKey(*sourceTable, fk)
+						plan.Steps = append(plan.Steps, PlanStep{
+							Description: step.Description,
+							SQL:         step.SQL,
+						})
 					} else {
 						// Fallback if we can't find the source table
 						sql, desc := driver.AddForeignKey(tableDiff.TableName, fk)
 						plan.Steps = append(plan.Steps, PlanStep{
 							Description: desc,
-							SQL:         sql,
+							SQL:         []string{sql},
 						})
 					}
 				} else {
@@ -128,7 +126,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 					sql, desc := driver.AddForeignKey(tableDiff.TableName, fk)
 					plan.Steps = append(plan.Steps, PlanStep{
 						Description: desc,
-						SQL:         sql,
+						SQL:         []string{sql},
 					})
 				}
 			} else {
@@ -136,7 +134,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 				sql, desc := driver.AddForeignKey(tableDiff.TableName, fk)
 				plan.Steps = append(plan.Steps, PlanStep{
 					Description: desc,
-					SQL:         sql,
+					SQL:         []string{sql},
 				})
 			}
 		}
@@ -146,7 +144,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 			sql, desc := driver.AddIndex(tableDiff.TableName, idx)
 			plan.Steps = append(plan.Steps, PlanStep{
 				Description: desc,
-				SQL:         sql,
+				SQL:         []string{sql},
 			})
 		}
 
@@ -155,7 +153,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 			sql, desc := driver.DropIndex(tableDiff.TableName, idx)
 			plan.Steps = append(plan.Steps, PlanStep{
 				Description: desc,
-				SQL:         sql,
+				SQL:         []string{sql},
 			})
 		}
 
@@ -176,20 +174,18 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 					}
 
 					if sourceTable != nil {
-						// Use table recreation for SQLite
-						steps := sqliteGen.RecreateTableWithoutForeignKey(*sourceTable, fk.Name)
-						for _, step := range steps {
-							plan.Steps = append(plan.Steps, PlanStep{
-								Description: step.Description,
-								SQL:         step.SQL,
-							})
-						}
+						// Use table recreation for SQLite (returns single atomic step)
+						step := sqliteGen.RecreateTableWithoutForeignKey(*sourceTable, fk.Name)
+						plan.Steps = append(plan.Steps, PlanStep{
+							Description: step.Description,
+							SQL:         step.SQL,
+						})
 					} else {
 						// Fallback if we can't find the source table
 						sql, desc := driver.DropForeignKey(tableDiff.TableName, fk)
 						plan.Steps = append(plan.Steps, PlanStep{
 							Description: desc,
-							SQL:         sql,
+							SQL:         []string{sql},
 						})
 					}
 				} else {
@@ -197,7 +193,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 					sql, desc := driver.DropForeignKey(tableDiff.TableName, fk)
 					plan.Steps = append(plan.Steps, PlanStep{
 						Description: desc,
-						SQL:         sql,
+						SQL:         []string{sql},
 					})
 				}
 			} else {
@@ -205,7 +201,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 				sql, desc := driver.DropForeignKey(tableDiff.TableName, fk)
 				plan.Steps = append(plan.Steps, PlanStep{
 					Description: desc,
-					SQL:         sql,
+					SQL:         []string{sql},
 				})
 			}
 		}
@@ -215,7 +211,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 			sql, desc := driver.DropColumn(tableDiff.TableName, col)
 			plan.Steps = append(plan.Steps, PlanStep{
 				Description: desc,
-				SQL:         sql,
+				SQL:         []string{sql},
 			})
 		}
 	}
@@ -225,7 +221,7 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 		sql, desc := driver.DropTable(table)
 		plan.Steps = append(plan.Steps, PlanStep{
 			Description: desc,
-			SQL:         sql,
+			SQL:         []string{sql},
 		})
 	}
 

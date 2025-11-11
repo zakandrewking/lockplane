@@ -15,7 +15,7 @@ func TestGenerateRollback_CreateTable(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Create table users",
-				SQL:         "CREATE TABLE users (\n  id integer NOT NULL PRIMARY KEY,\n  email text NOT NULL\n)",
+				SQL:         []string{"CREATE TABLE users (\n  id integer NOT NULL PRIMARY KEY,\n  email text NOT NULL\n)"},
 			},
 		},
 	}
@@ -31,8 +31,8 @@ func TestGenerateRollback_CreateTable(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if !strings.Contains(step.SQL, "DROP TABLE users") {
-		t.Errorf("Expected DROP TABLE users, got: %s", step.SQL)
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "DROP TABLE users") {
+		t.Errorf("Expected DROP TABLE users, got: %v", step.SQL)
 	}
 }
 
@@ -53,7 +53,7 @@ func TestGenerateRollback_DropTable(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Drop table old_table",
-				SQL:         "DROP TABLE old_table CASCADE",
+				SQL:         []string{"DROP TABLE old_table CASCADE"},
 			},
 		},
 	}
@@ -69,8 +69,8 @@ func TestGenerateRollback_DropTable(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if !strings.Contains(step.SQL, "CREATE TABLE old_table") {
-		t.Errorf("Expected CREATE TABLE old_table, got: %s", step.SQL)
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "CREATE TABLE old_table") {
+		t.Errorf("Expected CREATE TABLE old_table, got: %v", step.SQL)
 	}
 }
 
@@ -90,7 +90,7 @@ func TestGenerateRollback_AddColumn(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Add column email to table users",
-				SQL:         "ALTER TABLE users ADD COLUMN email text NOT NULL",
+				SQL:         []string{"ALTER TABLE users ADD COLUMN email text NOT NULL"},
 			},
 		},
 	}
@@ -106,8 +106,8 @@ func TestGenerateRollback_AddColumn(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if step.SQL != "ALTER TABLE users DROP COLUMN email" {
-		t.Errorf("Expected 'ALTER TABLE users DROP COLUMN email', got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "ALTER TABLE users DROP COLUMN email" {
+		t.Errorf("Expected 'ALTER TABLE users DROP COLUMN email', got: %v", step.SQL)
 	}
 }
 
@@ -128,7 +128,7 @@ func TestGenerateRollback_DropColumn(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Drop column deprecated_field from table users",
-				SQL:         "ALTER TABLE users DROP COLUMN deprecated_field",
+				SQL:         []string{"ALTER TABLE users DROP COLUMN deprecated_field"},
 			},
 		},
 	}
@@ -144,8 +144,8 @@ func TestGenerateRollback_DropColumn(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if !strings.Contains(step.SQL, "ALTER TABLE users ADD COLUMN deprecated_field") {
-		t.Errorf("Expected ADD COLUMN deprecated_field, got: %s", step.SQL)
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "ALTER TABLE users ADD COLUMN deprecated_field") {
+		t.Errorf("Expected ADD COLUMN deprecated_field, got: %v", step.SQL)
 	}
 }
 
@@ -166,7 +166,7 @@ func TestGenerateRollback_AlterColumnType(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Change type of users.age from integer to bigint",
-				SQL:         "ALTER TABLE users ALTER COLUMN age TYPE bigint",
+				SQL:         []string{"ALTER TABLE users ALTER COLUMN age TYPE bigint"},
 			},
 		},
 	}
@@ -182,8 +182,8 @@ func TestGenerateRollback_AlterColumnType(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if step.SQL != "ALTER TABLE users ALTER COLUMN age TYPE integer" {
-		t.Errorf("Expected TYPE integer, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "ALTER TABLE users ALTER COLUMN age TYPE integer" {
+		t.Errorf("Expected TYPE integer, got: %v", step.SQL)
 	}
 }
 
@@ -203,7 +203,7 @@ func TestGenerateRollback_SetNotNull(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Change nullability of users.email to false",
-				SQL:         "ALTER TABLE users ALTER COLUMN email SET NOT NULL",
+				SQL:         []string{"ALTER TABLE users ALTER COLUMN email SET NOT NULL"},
 			},
 		},
 	}
@@ -219,8 +219,8 @@ func TestGenerateRollback_SetNotNull(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if step.SQL != "ALTER TABLE users ALTER COLUMN email DROP NOT NULL" {
-		t.Errorf("Expected DROP NOT NULL, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "ALTER TABLE users ALTER COLUMN email DROP NOT NULL" {
+		t.Errorf("Expected DROP NOT NULL, got: %v", step.SQL)
 	}
 }
 
@@ -240,7 +240,7 @@ func TestGenerateRollback_CreateIndex(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Create index idx_users_email on table users",
-				SQL:         "CREATE UNIQUE INDEX idx_users_email ON users (email)",
+				SQL:         []string{"CREATE UNIQUE INDEX idx_users_email ON users (email)"},
 			},
 		},
 	}
@@ -256,8 +256,8 @@ func TestGenerateRollback_CreateIndex(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if step.SQL != "DROP INDEX idx_users_email" {
-		t.Errorf("Expected DROP INDEX idx_users_email, got: %s", step.SQL)
+	if len(step.SQL) == 0 || step.SQL[0] != "DROP INDEX idx_users_email" {
+		t.Errorf("Expected DROP INDEX idx_users_email, got: %v", step.SQL)
 	}
 }
 
@@ -280,7 +280,7 @@ func TestGenerateRollback_DropIndex(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Drop index idx_old from table users",
-				SQL:         "DROP INDEX idx_old",
+				SQL:         []string{"DROP INDEX idx_old"},
 			},
 		},
 	}
@@ -296,8 +296,8 @@ func TestGenerateRollback_DropIndex(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if !strings.Contains(step.SQL, "CREATE INDEX idx_old") {
-		t.Errorf("Expected CREATE INDEX idx_old, got: %s", step.SQL)
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "CREATE INDEX idx_old") {
+		t.Errorf("Expected CREATE INDEX idx_old, got: %v", step.SQL)
 	}
 }
 
@@ -319,11 +319,11 @@ func TestGenerateRollback_ComplexMigration(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Create table posts",
-				SQL:         "CREATE TABLE posts (\n  id integer NOT NULL PRIMARY KEY,\n  title text NOT NULL\n)",
+				SQL:         []string{"CREATE TABLE posts (\n  id integer NOT NULL PRIMARY KEY,\n  title text NOT NULL\n)"},
 			},
 			{
 				Description: "Add column age to table users",
-				SQL:         "ALTER TABLE users ADD COLUMN age integer",
+				SQL:         []string{"ALTER TABLE users ADD COLUMN age integer"},
 			},
 		},
 	}
@@ -340,13 +340,13 @@ func TestGenerateRollback_ComplexMigration(t *testing.T) {
 	}
 
 	// First rollback step should remove the age column (reverse of last forward step)
-	if !strings.Contains(rollbackPlan.Steps[0].SQL, "DROP COLUMN age") {
-		t.Errorf("First rollback step should drop age column, got: %s", rollbackPlan.Steps[0].SQL)
+	if len(rollbackPlan.Steps[0].SQL) == 0 || !strings.Contains(rollbackPlan.Steps[0].SQL[0], "DROP COLUMN age") {
+		t.Errorf("First rollback step should drop age column, got: %v", rollbackPlan.Steps[0].SQL)
 	}
 
 	// Second rollback step should drop the posts table (reverse of first forward step)
-	if !strings.Contains(rollbackPlan.Steps[1].SQL, "DROP TABLE posts") {
-		t.Errorf("Second rollback step should drop posts table, got: %s", rollbackPlan.Steps[1].SQL)
+	if len(rollbackPlan.Steps[1].SQL) == 0 || !strings.Contains(rollbackPlan.Steps[1].SQL[0], "DROP TABLE posts") {
+		t.Errorf("Second rollback step should drop posts table, got: %v", rollbackPlan.Steps[1].SQL)
 	}
 }
 
@@ -367,7 +367,7 @@ func TestGenerateRollback_SetDefault(t *testing.T) {
 		Steps: []PlanStep{
 			{
 				Description: "Change default of users.score",
-				SQL:         "ALTER TABLE users ALTER COLUMN score SET DEFAULT 100",
+				SQL:         []string{"ALTER TABLE users ALTER COLUMN score SET DEFAULT 100"},
 			},
 		},
 	}
@@ -383,7 +383,7 @@ func TestGenerateRollback_SetDefault(t *testing.T) {
 	}
 
 	step := rollbackPlan.Steps[0]
-	if !strings.Contains(step.SQL, "SET DEFAULT 0") {
-		t.Errorf("Expected SET DEFAULT 0, got: %s", step.SQL)
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "SET DEFAULT 0") {
+		t.Errorf("Expected SET DEFAULT 0, got: %v", step.SQL)
 	}
 }

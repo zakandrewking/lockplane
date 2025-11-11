@@ -123,10 +123,10 @@ func (d *Driver) ParameterPlaceholder(position int) string {
 	return d.Generator.ParameterPlaceholder(position)
 }
 
-func (d *Driver) RecreateTableWithForeignKey(table database.Table, fk database.ForeignKey) []database.PlanStep {
+func (d *Driver) RecreateTableWithForeignKey(table database.Table, fk database.ForeignKey) database.PlanStep {
 	return d.Generator.RecreateTableWithForeignKey(table, fk)
 }
 
-func (d *Driver) RecreateTableWithoutForeignKey(table database.Table, fkName string) []database.PlanStep {
+func (d *Driver) RecreateTableWithoutForeignKey(table database.Table, fkName string) database.PlanStep {
 	return d.Generator.RecreateTableWithoutForeignKey(table, fkName)
 }

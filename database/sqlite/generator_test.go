@@ -117,8 +117,8 @@ func TestGenerator_ModifyColumn(t *testing.T) {
 		t.Errorf("Expected limitation warning in description, got: %s", steps[0].Description)
 	}
 
-	if !strings.Contains(steps[0].SQL, "--") {
-		t.Errorf("Expected comment SQL, got: %s", steps[0].SQL)
+	if len(steps[0].SQL) == 0 || !strings.Contains(steps[0].SQL[0], "--") {
+		t.Errorf("Expected comment SQL, got: %v", steps[0].SQL)
 	}
 }
 
@@ -343,37 +343,37 @@ func TestGenerator_RecreateTableWithForeignKey(t *testing.T) {
 		ReferencedColumns: []string{"id"},
 	}
 
-	steps := gen.RecreateTableWithForeignKey(table, newFK)
+	step := gen.RecreateTableWithForeignKey(table, newFK)
 
-	// Should have 4 steps: create temp table, copy data, drop old table, rename
-	if len(steps) != 4 {
-		t.Fatalf("Expected 4 steps, got %d", len(steps))
-	}
-
-	// Step 1: Create new table with foreign key
-	if !strings.Contains(steps[0].SQL, "CREATE TABLE posts_new") {
-		t.Errorf("Expected step 1 to create posts_new, got: %s", steps[0].SQL)
-	}
-	if !strings.Contains(steps[0].SQL, "CONSTRAINT fk_posts_user_id") {
-		t.Errorf("Expected step 1 to include foreign key, got: %s", steps[0].SQL)
+	// Should return single step with 4 SQL statements
+	if len(step.SQL) != 4 {
+		t.Fatalf("Expected 4 SQL statements, got %d", len(step.SQL))
 	}
 
-	// Step 2: Copy data
-	if !strings.Contains(steps[1].SQL, "INSERT INTO posts_new") {
-		t.Errorf("Expected step 2 to insert data, got: %s", steps[1].SQL)
+	// Statement 1: Create new table with foreign key
+	if !strings.Contains(step.SQL[0], "CREATE TABLE posts_new") {
+		t.Errorf("Expected statement 1 to create posts_new, got: %s", step.SQL[0])
 	}
-	if !strings.Contains(steps[1].SQL, "SELECT id, title, user_id FROM posts") {
-		t.Errorf("Expected step 2 to select all columns, got: %s", steps[1].SQL)
-	}
-
-	// Step 3: Drop old table
-	if steps[2].SQL != "DROP TABLE posts" {
-		t.Errorf("Expected step 3 to drop posts, got: %s", steps[2].SQL)
+	if !strings.Contains(step.SQL[0], "CONSTRAINT fk_posts_user_id") {
+		t.Errorf("Expected statement 1 to include foreign key, got: %s", step.SQL[0])
 	}
 
-	// Step 4: Rename new table
-	if steps[3].SQL != "ALTER TABLE posts_new RENAME TO posts" {
-		t.Errorf("Expected step 4 to rename table, got: %s", steps[3].SQL)
+	// Statement 2: Copy data
+	if !strings.Contains(step.SQL[1], "INSERT INTO posts_new") {
+		t.Errorf("Expected statement 2 to insert data, got: %s", step.SQL[1])
+	}
+	if !strings.Contains(step.SQL[1], "SELECT id, title, user_id FROM posts") {
+		t.Errorf("Expected statement 2 to select all columns, got: %s", step.SQL[1])
+	}
+
+	// Statement 3: Drop old table
+	if step.SQL[2] != "DROP TABLE posts" {
+		t.Errorf("Expected statement 3 to drop posts, got: %s", step.SQL[2])
+	}
+
+	// Statement 4: Rename new table
+	if step.SQL[3] != "ALTER TABLE posts_new RENAME TO posts" {
+		t.Errorf("Expected statement 4 to rename table, got: %s", step.SQL[3])
 	}
 }
 
@@ -399,34 +399,34 @@ func TestGenerator_RecreateTableWithoutForeignKey(t *testing.T) {
 		},
 	}
 
-	steps := gen.RecreateTableWithoutForeignKey(table, "fk_posts_user_id")
+	step := gen.RecreateTableWithoutForeignKey(table, "fk_posts_user_id")
 
-	// Should have 4 steps: create temp table, copy data, drop old table, rename
-	if len(steps) != 4 {
-		t.Fatalf("Expected 4 steps, got %d", len(steps))
+	// Should return single step with 4 SQL statements
+	if len(step.SQL) != 4 {
+		t.Fatalf("Expected 4 SQL statements, got %d", len(step.SQL))
 	}
 
-	// Step 1: Create new table without the foreign key
-	if !strings.Contains(steps[0].SQL, "CREATE TABLE posts_new") {
-		t.Errorf("Expected step 1 to create posts_new, got: %s", steps[0].SQL)
+	// Statement 1: Create new table without the foreign key
+	if !strings.Contains(step.SQL[0], "CREATE TABLE posts_new") {
+		t.Errorf("Expected statement 1 to create posts_new, got: %s", step.SQL[0])
 	}
-	if strings.Contains(steps[0].SQL, "fk_posts_user_id") {
-		t.Errorf("Expected step 1 to NOT include the foreign key, got: %s", steps[0].SQL)
-	}
-
-	// Step 2: Copy data
-	if !strings.Contains(steps[1].SQL, "INSERT INTO posts_new") {
-		t.Errorf("Expected step 2 to insert data, got: %s", steps[1].SQL)
+	if strings.Contains(step.SQL[0], "fk_posts_user_id") {
+		t.Errorf("Expected statement 1 to NOT include the foreign key, got: %s", step.SQL[0])
 	}
 
-	// Step 3: Drop old table
-	if steps[2].SQL != "DROP TABLE posts" {
-		t.Errorf("Expected step 3 to drop posts, got: %s", steps[2].SQL)
+	// Statement 2: Copy data
+	if !strings.Contains(step.SQL[1], "INSERT INTO posts_new") {
+		t.Errorf("Expected statement 2 to insert data, got: %s", step.SQL[1])
 	}
 
-	// Step 4: Rename new table
-	if steps[3].SQL != "ALTER TABLE posts_new RENAME TO posts" {
-		t.Errorf("Expected step 4 to rename table, got: %s", steps[3].SQL)
+	// Statement 3: Drop old table
+	if step.SQL[2] != "DROP TABLE posts" {
+		t.Errorf("Expected statement 3 to drop posts, got: %s", step.SQL[2])
+	}
+
+	// Statement 4: Rename new table
+	if step.SQL[3] != "ALTER TABLE posts_new RENAME TO posts" {
+		t.Errorf("Expected statement 4 to rename table, got: %s", step.SQL[3])
 	}
 }
 

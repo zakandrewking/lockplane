@@ -108,10 +108,11 @@ type ColumnDiff struct {
 	Changes    []string // e.g., ["type", "nullable", "default"]
 }
 
-// PlanStep represents a single SQL operation in a migration plan
+// PlanStep represents a single logical migration operation in a migration plan
+// that may consist of multiple SQL statements executed atomically
 type PlanStep struct {
-	Description string `json:"description"`
-	SQL         string `json:"sql"`
+	Description string   `json:"description"`
+	SQL         []string `json:"sql"` // Array of SQL statements to execute in order
 }
 
 // SQLGenerator defines the interface for generating database-specific SQL

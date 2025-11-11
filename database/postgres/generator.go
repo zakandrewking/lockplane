@@ -71,7 +71,7 @@ func (g *Generator) ModifyColumn(tableName string, diff database.ColumnDiff) []d
 		steps = append(steps, database.PlanStep{
 			Description: fmt.Sprintf("Change type of %s.%s from %s to %s",
 				tableName, diff.ColumnName, diff.Old.Type, diff.New.Type),
-			SQL: sql,
+			SQL: []string{sql},
 		})
 	}
 
@@ -88,7 +88,7 @@ func (g *Generator) ModifyColumn(tableName string, diff database.ColumnDiff) []d
 		steps = append(steps, database.PlanStep{
 			Description: fmt.Sprintf("Change nullability of %s.%s to %t",
 				tableName, diff.ColumnName, diff.New.Nullable),
-			SQL: sql,
+			SQL: []string{sql},
 		})
 	}
 
@@ -105,7 +105,7 @@ func (g *Generator) ModifyColumn(tableName string, diff database.ColumnDiff) []d
 		steps = append(steps, database.PlanStep{
 			Description: fmt.Sprintf("Change default of %s.%s",
 				tableName, diff.ColumnName),
-			SQL: sql,
+			SQL: []string{sql},
 		})
 	}
 

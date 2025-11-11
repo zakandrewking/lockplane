@@ -203,7 +203,7 @@ func TestColumnWithoutDefault(t *testing.T) {
 func TestPlanStepMarshaling(t *testing.T) {
 	step := PlanStep{
 		Description: "Create table users",
-		SQL:         "CREATE TABLE users (id integer PRIMARY KEY)",
+		SQL:         []string{"CREATE TABLE users (id integer PRIMARY KEY)"},
 	}
 
 	data, err := json.Marshal(step)
@@ -220,8 +220,8 @@ func TestPlanStepMarshaling(t *testing.T) {
 		t.Errorf("Expected description '%s', got '%s'", step.Description, unmarshaled.Description)
 	}
 
-	if unmarshaled.SQL != step.SQL {
-		t.Errorf("Expected SQL '%s', got '%s'", step.SQL, unmarshaled.SQL)
+	if len(unmarshaled.SQL) != len(step.SQL) || unmarshaled.SQL[0] != step.SQL[0] {
+		t.Errorf("Expected SQL '%v', got '%v'", step.SQL, unmarshaled.SQL)
 	}
 }
 
