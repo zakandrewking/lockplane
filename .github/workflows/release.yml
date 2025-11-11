@@ -36,13 +36,8 @@ jobs:
             goos: linux
             goarch: amd64
             artifact: lockplane-linux-amd64
-          # macOS amd64 (native on macos-13)
-          - os: macos-13
-            goos: darwin
-            goarch: amd64
-            artifact: lockplane-darwin-amd64
-          # macOS arm64 (native on macos-14 / Apple Silicon)
-          - os: macos-14
+          # macOS arm64 (native on macos-latest / Apple Silicon)
+          - os: macos-latest
             goos: darwin
             goarch: arm64
             artifact: lockplane-darwin-arm64
@@ -82,13 +77,13 @@ jobs:
       - name: Create tarball (Unix)
         if: runner.os != 'Windows'
         run: |
-          tar -czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }} README.md LICENSE docs/getting_started.md
+          tar -czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }} README.md LICENSE
 
       - name: Create zip (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path ${{ matrix.artifact }},README.md,LICENSE,docs/getting_started.md -DestinationPath ${{ matrix.artifact }}.zip
+          Compress-Archive -Path ${{ matrix.artifact }},README.md,LICENSE -DestinationPath ${{ matrix.artifact }}.zip
 
       - name: Upload artifact (Unix)
         if: runner.os != 'Windows'
