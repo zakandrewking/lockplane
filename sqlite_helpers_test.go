@@ -166,3 +166,27 @@ func TestCreateSQLiteDatabase(t *testing.T) {
 		}
 	})
 }
+
+func TestGenerateShadowDBPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"with .db extension", "lockplane.db", "lockplane_shadow.db"},
+		{"with .sqlite extension", "data.sqlite", "data_shadow.sqlite"},
+		{"with .sqlite3 extension", "test.sqlite3", "test_shadow.sqlite3"},
+		{"with path", "./schema/lockplane.db", "./schema/lockplane_shadow.db"},
+		{"with nested path", "/var/data/app.db", "/var/data/app_shadow.db"},
+		{"no extension", "database", "database_shadow"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := generateShadowDBPath(tt.input)
+			if result != tt.expected {
+				t.Errorf("generateShadowDBPath(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

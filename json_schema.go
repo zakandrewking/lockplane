@@ -48,8 +48,9 @@ func loadSchemaFromConnectionString(connStr string) (*Schema, error) {
 	driverType := detectDriver(connStr)
 
 	// For SQLite, check if the database file exists and create it if needed
+	// Also offer to create shadow database
 	if driverType == "sqlite" || driverType == "sqlite3" {
-		if err := ensureSQLiteDatabase(connStr, "target", false); err != nil {
+		if err := ensureSQLiteDatabaseWithShadow(connStr, "target", false, true); err != nil {
 			return nil, err
 		}
 	}

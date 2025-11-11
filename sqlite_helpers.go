@@ -136,7 +136,14 @@ func createSQLiteDatabase(connStr string) error {
 }
 
 // ensureSQLiteDatabase checks if a SQLite database exists and offers to create it
+// If createShadow is true and a main database is created, also creates the shadow database
 func ensureSQLiteDatabase(connStr string, dbName string, autoCreate bool) error {
+	return ensureSQLiteDatabaseWithShadow(connStr, dbName, autoCreate, false)
+}
+
+// ensureSQLiteDatabaseWithShadow checks if a SQLite database exists and offers to create it
+// If createShadow is true and a main database is created, also creates the shadow database
+func ensureSQLiteDatabaseWithShadow(connStr string, dbName string, autoCreate bool, createShadow bool) error {
 	if !isSQLiteFilePath(connStr) {
 		return nil // Not a SQLite file path, skip
 	}
@@ -155,6 +162,20 @@ func ensureSQLiteDatabase(connStr string, dbName string, autoCreate bool) error 
 				return fmt.Errorf("failed to create %s database: %w", dbName, err)
 			}
 			fmt.Fprintf(os.Stderr, "✓ Created %s database\n", dbName)
+
+			// Also create shadow database if requested
+			if createShadow && dbName == "target" {
+				shadowPath := generateShadowDBPath(filePath)
+				shadowExists, _, _ := checkSQLiteDatabase(shadowPath)
+				if !shadowExists {
+					fmt.Fprintf(os.Stderr, "📁 Creating shadow database: %s\n", shadowPath)
+					if err := createSQLiteDatabase(shadowPath); err != nil {
+						fmt.Fprintf(os.Stderr, "⚠️  Warning: failed to create shadow database: %v\n", err)
+					} else {
+						fmt.Fprintf(os.Stderr, "✓ Created shadow database\n")
+					}
+				}
+			}
 			return nil
 		}
 
@@ -170,6 +191,29 @@ func ensureSQLiteDatabase(connStr string, dbName string, autoCreate bool) error 
 				return fmt.Errorf("failed to create %s database: %w", dbName, err)
 			}
 			fmt.Fprintf(os.Stderr, "✓ Created %s database: %s\n", dbName, filePath)
+
+			// Also create shadow database if requested
+			if createShadow && dbName == "target" {
+				shadowPath := generateShadowDBPath(filePath)
+				shadowExists, _, _ := checkSQLiteDatabase(shadowPath)
+				if !shadowExists {
+					fmt.Fprintf(os.Stderr, "\n⚠️  Shadow database file does not exist: %s\n", shadowPath)
+					fmt.Fprintf(os.Stderr, "Would you like to create it? [Y/n]: ")
+
+					var shadowResponse string
+					_, _ = fmt.Scanln(&shadowResponse)
+					shadowResponse = strings.ToLower(strings.TrimSpace(shadowResponse))
+
+					if shadowResponse == "" || shadowResponse == "y" || shadowResponse == "yes" {
+						if err := createSQLiteDatabase(shadowPath); err != nil {
+							fmt.Fprintf(os.Stderr, "⚠️  Warning: failed to create shadow database: %v\n", err)
+						} else {
+							fmt.Fprintf(os.Stderr, "✓ Created shadow database: %s\n", shadowPath)
+						}
+					}
+				}
+			}
+
 			return nil
 		}
 
@@ -186,4 +230,15 @@ func ensureSQLiteDatabase(connStr string, dbName string, autoCreate bool) error 
 	}
 
 	return nil
+}
+
+// generateShadowDBPath generates a shadow database path from a main database path
+// e.g., "lockplane.db" -> "lockplane_shadow.db"
+func generateShadowDBPath(mainPath string) string {
+	ext := filepath.Ext(mainPath)
+	if ext == "" {
+		return mainPath + "_shadow"
+	}
+	base := strings.TrimSuffix(mainPath, ext)
+	return base + "_shadow" + ext
 }
