@@ -161,9 +161,55 @@ The wizard will guide you through:
 - Provides clear next steps after setup
 
 **Non-interactive mode** (for CI/scripts):
+
 ```bash
-lockplane init --yes  # Use all defaults
+# Use all defaults (PostgreSQL on localhost)
+lockplane init --yes
+
+# Custom PostgreSQL configuration
+lockplane init --yes \
+  --env-name production \
+  --description "Production database" \
+  --host db.example.com \
+  --database myapp \
+  --user myuser \
+  --password "$DB_PASSWORD" \
+  --ssl-mode require
+
+# SQLite configuration
+lockplane init --yes \
+  --db-type sqlite \
+  --file-path ./myapp.db
+
+# libSQL/Turso configuration
+lockplane init --yes \
+  --db-type libsql \
+  --env-name production \
+  --url "libsql://mydb-myorg.turso.io" \
+  --auth-token "$TURSO_TOKEN"
 ```
+
+All configuration flags:
+- `--env-name` - Environment name (default: "local")
+- `--description` - Environment description
+- `--db-type` - Database type: postgres, sqlite, libsql (default: "postgres")
+- `--schema-path` - Schema path relative to config (default: ".")
+
+PostgreSQL flags:
+- `--host` - Host (default: "localhost")
+- `--port` - Port (default: "5432")
+- `--database` - Database name (default: "lockplane")
+- `--user` - User (default: "lockplane")
+- `--password` - Password (default: "lockplane")
+- `--ssl-mode` - SSL mode (auto-detected if not specified)
+- `--shadow-db-port` - Shadow database port (default: "5433")
+
+SQLite flags:
+- `--file-path` - Database file path (default: "schema/lockplane.db")
+
+libSQL flags:
+- `--url` - Database URL
+- `--auth-token` - Auth token
 
 ### Manual Configuration (Alternative)
 
