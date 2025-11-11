@@ -95,8 +95,19 @@ func loadSchemaFromDir(dir string, opts *SchemaLoadOptions) (*database.Schema, e
 			continue
 		}
 
-		if strings.HasSuffix(strings.ToLower(entry.Name()), ".lp.sql") {
-			sqlFiles = append(sqlFiles, filepath.Join(dir, entry.Name()))
+		name := entry.Name()
+		lowerName := strings.ToLower(name)
+
+		// Skip database files
+		if strings.HasSuffix(lowerName, ".db") ||
+			strings.HasSuffix(lowerName, ".sqlite") ||
+			strings.HasSuffix(lowerName, ".sqlite3") {
+			continue
+		}
+
+		// Only include .lp.sql files
+		if strings.HasSuffix(lowerName, ".lp.sql") {
+			sqlFiles = append(sqlFiles, filepath.Join(dir, name))
 		}
 	}
 

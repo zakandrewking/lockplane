@@ -431,6 +431,8 @@ func runPlan(args []string) {
 	fromEnvironment := fs.String("from-environment", "", "Environment providing the source database connection")
 	toEnvironment := fs.String("to-environment", "", "Environment providing the target database connection")
 	validate := fs.Bool("validate", false, "Validate migration safety and reversibility")
+	verbose := fs.Bool("verbose", false, "Enable verbose logging")
+	fs.BoolVar(verbose, "v", false, "Enable verbose logging (shorthand)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
@@ -486,14 +488,38 @@ func runPlan(args []string) {
 	}
 
 	var loadErr error
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "🔍 Loading 'from' schema: %s\n", fromInput)
+	}
 	before, loadErr = LoadSchemaOrIntrospectWithOptions(fromInput, buildSchemaLoadOptions(fromInput, fromFallback))
 	if loadErr != nil {
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "❌ Failed to load from schema\n")
+			fmt.Fprintf(os.Stderr, "   Input: %s\n", fromInput)
+			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", isConnectionString(fromInput))
+			fmt.Fprintf(os.Stderr, "   Error: %v\n", loadErr)
+		}
 		log.Fatalf("Failed to load from schema: %v", loadErr)
 	}
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "✓ Loaded 'from' schema (%d tables)\n", len(before.Tables))
+	}
 
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "🔍 Loading 'to' schema: %s\n", toInput)
+	}
 	after, loadErr = LoadSchemaOrIntrospectWithOptions(toInput, buildSchemaLoadOptions(toInput, toFallback))
 	if loadErr != nil {
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "❌ Failed to load to schema\n")
+			fmt.Fprintf(os.Stderr, "   Input: %s\n", toInput)
+			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", isConnectionString(toInput))
+			fmt.Fprintf(os.Stderr, "   Error: %v\n", loadErr)
+		}
 		log.Fatalf("Failed to load to schema: %v", loadErr)
+	}
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "✓ Loaded 'to' schema (%d tables)\n", len(after.Tables))
 	}
 
 	diff = schema.DiffSchemas(before, after)
@@ -736,6 +762,8 @@ func runApply(args []string) {
 	skipShadow := fs.Bool("skip-shadow", false, "Skip shadow DB validation (not recommended)")
 	shadowDBURL := fs.String("shadow-db", "", "Shadow database connection string (overrides environment settings)")
 	shadowEnvironment := fs.String("shadow-environment", "", "Named environment providing the shadow database connection (defaults to target environment)")
+	verbose := fs.Bool("verbose", false, "Enable verbose logging")
+	fs.BoolVar(verbose, "v", false, "Enable verbose logging (shorthand)")
 
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
