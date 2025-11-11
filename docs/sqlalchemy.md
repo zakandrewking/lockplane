@@ -233,10 +233,13 @@ Always generate a rollback before applying to production:
 
 ```bash
 # Generate rollback plan (using database connection string)
-lockplane rollback --plan migration.json --from-environment local > rollback.json
+lockplane plan-rollback --plan migration.json --from-environment local > rollback.json
 
 # If something goes wrong, apply the rollback
 lockplane apply rollback.json
+
+# Or use one-step rollback workflow
+lockplane rollback --plan migration.json --target-environment local
 ```
 
 ## Integration with CI/CD
@@ -290,7 +293,7 @@ jobs:
         run: ./lockplane plan --from-environment local --to desired.json --validate > migration.json
 
       - name: Generate rollback plan
-        run: ./lockplane rollback --plan migration.json --from-environment local > rollback.json
+        run: ./lockplane plan-rollback --plan migration.json --from-environment local > rollback.json
 
       - name: Upload rollback plan
         uses: actions/upload-artifact@v3

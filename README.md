@@ -673,10 +673,15 @@ lockplane apply \
   --target-environment local \
   --schema schema/
 
-# Generate rollback using live database state
-lockplane rollback \
+# Generate rollback plan (two-step workflow)
+lockplane plan-rollback \
   --plan migration.json \
   --from-environment local > rollback.json
+
+# Or apply rollback directly (one-step workflow)
+lockplane rollback \
+  --plan migration.json \
+  --target-environment local
 ```
 
 This is especially useful for:

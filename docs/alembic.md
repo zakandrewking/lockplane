@@ -63,7 +63,7 @@ lockplane plan --from-environment alembic --to schema.lp.sql --validate > migrat
 - `migration.json` contains ordered `steps` with SQL.
 - Optionally generate a rollback:
   ```bash
-  lockplane rollback --plan migration.json --from-environment alembic > rollback.json
+  lockplane plan-rollback --plan migration.json --from-environment alembic > rollback.json
   ```
 
 ### 4. Author Alembic revision using Lockplane SQL
