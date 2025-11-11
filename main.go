@@ -808,6 +808,13 @@ func runApply(args []string) {
 		if schemaPath == "" {
 			schemaPath = config.GetSchemaPath("", cfg, resolvedTarget, "")
 		}
+		// Auto-detect schema directory if not configured
+		if schemaPath == "" {
+			if info, err := os.Stat("schema"); err == nil && info.IsDir() {
+				schemaPath = "schema"
+				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
+			}
+		}
 		if schemaPath == "" {
 			fmt.Fprintf(os.Stderr, "Error: --schema required when generating a plan.\n\n")
 			fmt.Fprintf(os.Stderr, "Set schema_path in lockplane.toml or provide the flag explicitly.\n\n")
