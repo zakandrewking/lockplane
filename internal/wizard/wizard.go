@@ -196,9 +196,9 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.state = StateDatabaseType
 			m.addAnotherChoice = 0 // Reset for next time
 			return m, nil
-		case 1: // Review all environments
-			m.state = StateSummary
-			return m, nil
+		case 1: // Save and finish
+			m.state = StateCreating
+			return m, m.createFiles()
 		}
 		return m, nil
 
@@ -661,8 +661,8 @@ func (m WizardModel) renderAddAnother() string {
 	b.WriteString(renderOption(0, m.addAnotherChoice == 0, "Add another environment (e.g., staging, production)"))
 	b.WriteString("\n")
 
-	// Option 1: Review and save
-	b.WriteString(renderOption(1, m.addAnotherChoice == 1, "Review all environments and save"))
+	// Option 1: Save and finish
+	b.WriteString(renderOption(1, m.addAnotherChoice == 1, "Save and finish"))
 	b.WriteString("\n\n")
 
 	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  q/Esc/Ctrl-C: finish and save"))
