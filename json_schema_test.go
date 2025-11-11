@@ -420,10 +420,11 @@ func TestIsConnectionString_ExistingDBFile(t *testing.T) {
 		t.Fatalf("Failed to create test.db: %v", err)
 	}
 
-	// An existing .db file should NOT be treated as a connection string
+	// .db files should always be treated as SQLite databases (connection strings)
+	// regardless of whether they exist on disk
 	result := isConnectionString(dbPath)
-	if result {
-		t.Errorf("isConnectionString(%q) = true, want false (existing file should be treated as file path)", dbPath)
+	if !result {
+		t.Errorf("isConnectionString(%q) = false, want true (.db files should be treated as SQLite databases)", dbPath)
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/lockplane/lockplane/internal/schema"
@@ -23,14 +22,9 @@ func isConnectionString(s string) bool {
 		return true
 	}
 
-	// Check if it looks like a SQLite file path that doesn't exist as a regular file
-	// If the file exists, we'll let LoadSchema handle it
+	// Check if it looks like a SQLite file path
+	// Always treat .db files as SQLite databases to introspect, not JSON files
 	if strings.HasSuffix(lower, ".db") || strings.HasSuffix(lower, ".sqlite") || strings.HasSuffix(lower, ".sqlite3") {
-		// Check if the file exists using original path (not lowercased) - if it does, it's a file path
-		if _, err := os.Stat(s); err == nil {
-			return false
-		}
-		// If it doesn't exist as a file, treat it as a potential connection string
 		return true
 	}
 
