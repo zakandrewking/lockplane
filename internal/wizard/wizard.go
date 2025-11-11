@@ -485,16 +485,9 @@ type existingConfigMsg struct {
 }
 
 func checkForExistingConfig() tea.Msg {
-	// Check for config in schema/ (preferred)
-	configPath := "schema/lockplane.toml"
+	// Check for config in current directory
+	configPath := "lockplane.toml"
 	envNames, err := getEnvironmentNames(configPath)
-	if err == nil && len(envNames) > 0 {
-		return existingConfigMsg{path: configPath, envNames: envNames}
-	}
-
-	// Check for legacy config at root
-	configPath = "lockplane.toml"
-	envNames, err = getEnvironmentNames(configPath)
 	if err == nil && len(envNames) > 0 {
 		return existingConfigMsg{path: configPath, envNames: envNames}
 	}
@@ -792,9 +785,9 @@ func (m WizardModel) renderSummary() string {
 	b.WriteString("\n")
 	b.WriteString("Files to be created/updated:\n")
 	if len(m.existingEnvNames) > 0 {
-		b.WriteString("  • schema/lockplane.toml (will be updated)\n")
+		b.WriteString("  • lockplane.toml (will be updated)\n")
 	} else {
-		b.WriteString("  • schema/lockplane.toml (new)\n")
+		b.WriteString("  • lockplane.toml (new)\n")
 	}
 	for _, env := range m.environments {
 		b.WriteString(fmt.Sprintf("  • .env.%s (new)\n", env.Name))

@@ -34,7 +34,8 @@ type Config struct {
 	configFilePath     string                       `toml:"-"`
 }
 
-// LoadConfig loads the lockplane.toml file from the current directory or any parent directory.
+// LoadConfig loads the lockplane.toml file from the current directory or any parent directory,
+// stopping at project boundaries (.git, go.mod, package.json) or filesystem root.
 func LoadConfig() (*Config, error) {
 	startDir, err := os.Getwd()
 	if err != nil {
@@ -43,38 +44,57 @@ func LoadConfig() (*Config, error) {
 
 	dir := startDir
 	for {
-		candidates := []string{
-			filepath.Join(dir, "lockplane.toml"),
-			filepath.Join(dir, defaultSchemaDir, "lockplane.toml"),
-		}
-
-		for _, configPath := range candidates {
-			if _, err := os.Stat(configPath); err == nil {
-				data, err := os.ReadFile(configPath)
-				if err != nil {
-					return nil, err
-				}
-
-				var config Config
-				if err := toml.Unmarshal(data, &config); err != nil {
-					return nil, err
-				}
-
-				config.configFilePath = configPath
-				config.configDir = filepath.Dir(configPath)
-				config.projectDir = dir
-				return &config, nil
+		// Check if lockplane.toml exists in current directory
+		configPath := filepath.Join(dir, "lockplane.toml")
+		if _, err := os.Stat(configPath); err == nil {
+			data, err := os.ReadFile(configPath)
+			if err != nil {
+				return nil, err
 			}
+
+			var config Config
+			if err := toml.Unmarshal(data, &config); err != nil {
+				return nil, err
+			}
+
+			config.configFilePath = configPath
+			config.configDir = filepath.Dir(configPath)
+			config.projectDir = dir
+			return &config, nil
 		}
 
+		// Check if we've reached a project boundary
+		if isProjectRoot(dir) {
+			break
+		}
+
+		// Move to parent directory
 		parent := filepath.Dir(dir)
 		if parent == dir {
+			// Reached filesystem root
 			break
 		}
 		dir = parent
 	}
 
 	return &Config{configDir: startDir, projectDir: startDir}, nil
+}
+
+// isProjectRoot checks if the directory is a project root based on common markers
+func isProjectRoot(dir string) bool {
+	// Check for .git directory
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+		return true
+	}
+	// Check for go.mod file
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		return true
+	}
+	// Check for package.json file
+	if _, err := os.Stat(filepath.Join(dir, "package.json")); err == nil {
+		return true
+	}
+	return false
 }
 
 // ConfigDir returns the directory containing the resolved lockplane.toml (or the working directory if none exists).
