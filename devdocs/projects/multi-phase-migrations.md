@@ -8,17 +8,21 @@
 
 ## Progress Checklist
 
-### Phase 1: Research & Design ⏳
-- [ ] Review existing breaking change detection system
-- [ ] Design multi-phase plan structure (JSON format)
-- [ ] Design phase coordination mechanism
-- [ ] Identify which operations need multi-phase treatment
-- [ ] Design state tracking for migration phases
-- [ ] Plan integration points with existing planner
-- [ ] Document expand/contract patterns in detail
+### Phase 1: Research & Design ✅
+- [x] Review existing breaking change detection system
+- [x] Design multi-phase plan structure (JSON format)
+- [x] Design phase coordination mechanism
+- [x] Identify which operations need multi-phase treatment
+- [x] Design state tracking for migration phases
+- [x] Plan integration points with existing planner
+- [x] Document expand/contract patterns in detail
+- [x] Implement core types: MultiPhasePlan, Phase, PhaseRollback
+- [x] Implement state management: State, ActiveMigration
+- [x] Write and pass state management tests
+- [x] Make all design decisions
 
 ### Phase 2: Core Plan Generation 🎯
-- [ ] Implement MultiPhasePlan type and structure
+- [ ] Create `internal/planner/multiphase/` package
 - [ ] Implement phase generators for each pattern:
   - [ ] Column rename (expand/contract)
   - [ ] Column type change (dual-write)
@@ -661,27 +665,80 @@ lockplane monitor-phase --metrics \
 
 ---
 
-## Open Questions
+## Design Decisions
 
-1. **State storage location?**
-   - Option A: `.lockplane/state.json` in project (git-ignored)
-   - Option B: Database table `lockplane.migration_state`
-   - **Decision needed**
+### 1. State Storage Location ✅
 
-2. **How to handle concurrent migrations?**
-   - Block concurrent multi-phase migrations?
-   - Allow independent table migrations?
-   - **Decision needed**
+**Decision**: Use `.lockplane-state.json` in project root (git-ignored)
 
-3. **Automatic vs. manual phase transitions?**
-   - Require manual approval between phases?
-   - Allow automated execution with verification?
-   - **Decision needed**
+**Rationale**:
+- Simple file-based storage, no database dependency
+- Easy to inspect and debug
+- Git-ignored to avoid conflicts
+- Atomic writes (temp file + rename)
+- Version-controlled structure
+- Can be backed up/restored easily
 
-4. **Integration with CI/CD?**
-   - Generate GitHub Actions workflow?
-   - Provide phase execution artifacts?
-   - **Decision needed**
+**Alternative considered**: Database table `lockplane.migration_state`
+- Rejected: Adds complexity, requires database access for state queries
+- May revisit for multi-user scenarios
+
+**Implementation**: `internal/state/state.go`
+
+### 2. Concurrent Migrations ✅
+
+**Decision**: Block concurrent multi-phase migrations
+
+**Rationale**:
+- Multi-phase migrations require coordination and state tracking
+- Concurrent migrations on same table could conflict
+- Clear error message: "another migration is already in progress"
+- Simple to implement and reason about
+- Users can explicitly cancel/complete before starting new migration
+
+**Future enhancement**: Allow concurrent migrations on different tables with dependency checking
+
+**Implementation**: `State.StartMigration()` checks for active migration
+
+### 3. Phase Transitions ✅
+
+**Decision**: Manual approval required between phases
+
+**Rationale**:
+- Safety first: each phase requires explicit action
+- Allows time for code deployment and verification
+- User can inspect state between phases
+- Prevents accidental progression
+- CLI shows clear next steps
+
+**Command pattern**:
+```bash
+# Execute specific phase
+lockplane apply-phase plan.json --phase 2
+
+# Execute next phase (auto-detects from state)
+lockplane apply-phase plan.json --next
+```
+
+**Future enhancement**: `--auto` flag for automated execution with verification checks
+
+**Implementation**: Phase execution checks `State.CanExecutePhase()`
+
+### 4. CI/CD Integration 🔮
+
+**Decision**: Manual workflow first, CI/CD templates later
+
+**Rationale**:
+- Phase 1 focuses on core functionality
+- CI/CD patterns emerge from real usage
+- Different teams have different workflows
+- Can provide examples in documentation
+
+**Future work**:
+- GitHub Actions workflow templates
+- Phase execution artifacts
+- Automated verification scripts
+- Slack/email notifications between phases
 
 ---
 
