@@ -31,6 +31,11 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
+			// If we have environments configured, save them before quitting
+			if m.state == StateAddAnother && len(m.environments) > 0 {
+				m.state = StateCreating
+				return m, m.createFiles()
+			}
 			return m, tea.Quit
 
 		case "enter":
@@ -615,7 +620,7 @@ func (m WizardModel) renderAddAnother() string {
 	b.WriteString(fmt.Sprintf("✓ Added environment: %s\n\n", m.environments[len(m.environments)-1].Name))
 	b.WriteString("Would you like to add another environment?\n")
 	b.WriteString("(e.g., staging, production)\n\n")
-	b.WriteString(renderStatusBar("Press Enter to continue, q to quit"))
+	b.WriteString(renderStatusBar("Enter: add more  q: finish and save"))
 
 	return borderStyle.Render(b.String())
 }
