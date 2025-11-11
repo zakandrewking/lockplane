@@ -35,7 +35,6 @@ func GenerateTypeChangePlan(
 		conversionExpr = fmt.Sprintf("CAST(%s AS %s)", column, newType)
 	}
 
-	migrationID := fmt.Sprintf("alter_type_%s_%s_%d", table, column, time.Now().Unix())
 	newColumnName := column + "_new"
 
 	// Phase 1: Add new column
