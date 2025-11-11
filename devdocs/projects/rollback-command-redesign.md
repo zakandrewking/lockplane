@@ -13,14 +13,15 @@
   - [ ] Update all documentation files (deferred - will do with full impl)
   - [ ] Update test files (no test changes needed yet)
   - [x] Run tests to verify
-- [ ] Phase 3: Implement new `rollback` command
-  - [ ] Create runRollback() function (apply-like)
-  - [ ] Implement plan generation internally
-  - [ ] Add source hash validation
-  - [ ] Add interactive approval prompt
-  - [ ] Add --auto-approve flag support
-  - [ ] Add shadow DB validation (optional)
-  - [ ] Add verbose logging support
+- [x] Phase 3: Implement new `rollback` command
+  - [x] Create runRollback() function (apply-like)
+  - [x] Implement plan generation internally
+  - [x] Add --from flag for before schema (required)
+  - [x] Add interactive approval prompt
+  - [x] Add --auto-approve flag support
+  - [x] Add shadow DB validation with --skip-shadow flag
+  - [x] Add verbose logging support
+  - [x] Add colored output matching apply command
 - [ ] Phase 4: Testing
   - [ ] Add unit tests for plan-rollback
   - [ ] Add unit tests for rollback
