@@ -391,9 +391,9 @@ func TestApplyPlan_ShadowDB_CatchesTypeConversionFailure(t *testing.T) {
 	// Twitter/Snowflake IDs are typically 64-bit integers like 1234567890123456789
 	insertSQL := `
 		INSERT INTO analytics (user_id, event_name) VALUES
-		(9223372036854775807, 'page_view'),     -- max BIGINT value
+		(9223372036854775806, 'page_view'),     -- near-max BIGINT value
 		(1234567890123456789, 'signup'),        -- typical snowflake ID
-		(9876543210987654321, 'purchase'),      -- large ID
+		(8765432109876543210, 'purchase'),      -- large ID (< max BIGINT)
 		(123, 'login'),                          -- small ID (would fit in INTEGER)
 		(5000000000, 'click')                    -- > INTEGER max (2147483647)
 	`
@@ -470,8 +470,8 @@ func TestApplyPlan_ShadowDB_CatchesTypeConversionFailure(t *testing.T) {
 	}
 
 	// Verify data is still intact in main DB
-	if mainUserID != 9223372036854775807 {
-		t.Errorf("Main database was modified despite shadow DB failure! Expected user_id=9223372036854775807, got %d", mainUserID)
+	if mainUserID != 9223372036854775806 {
+		t.Errorf("Main database was modified despite shadow DB failure! Expected user_id=9223372036854775806, got %d", mainUserID)
 	}
 
 	// Verify column type is still BIGINT in main database
