@@ -41,12 +41,14 @@
 - [ ] Supabase-specific workflow tests
 - [ ] Security isolation tests
 
-### Phase 6: Documentation
-- [ ] Update README with schema-based examples
-- [ ] Update Supabase guides
-- [ ] Create migration guide for existing users
-- [ ] Document security model
-- [ ] Add troubleshooting section
+### Phase 6: Documentation ✅
+- [x] Update README with schema-based examples
+- [x] Update Supabase guides (existing + new project)
+- [x] Update main.go help text (printHelp, printApplyUsage)
+- [x] Document shadow database strategies
+- [x] Add configuration examples for all database types
+- [ ] Create migration guide for existing users (future)
+- [ ] Add troubleshooting section (future)
 
 ### Phase 7: Advanced Features (Future)
 - [ ] Automatic schema cleanup
