@@ -1234,6 +1234,14 @@ func printApplyUsage() {
 	fmt.Fprintf(os.Stderr, "  --shadow-db <url>      Shadow database URL (overrides environment settings)\n")
 	fmt.Fprintf(os.Stderr, "  --shadow-environment <name>\n")
 	fmt.Fprintf(os.Stderr, "                         Environment providing the shadow database connection\n\n")
+	fmt.Fprintf(os.Stderr, "Shadow Database Configuration:\n")
+	fmt.Fprintf(os.Stderr, "  PostgreSQL:\n")
+	fmt.Fprintf(os.Stderr, "    - Set SHADOW_SCHEMA=lockplane_shadow to use a schema (simple, same database)\n")
+	fmt.Fprintf(os.Stderr, "    - Set SHADOW_DATABASE_URL for a separate database (traditional)\n")
+	fmt.Fprintf(os.Stderr, "    - Combine both for schema in a different database (flexible)\n")
+	fmt.Fprintf(os.Stderr, "  SQLite/libSQL:\n")
+	fmt.Fprintf(os.Stderr, "    - Automatically uses :memory: (fast, zero config, free)\n")
+	fmt.Fprintf(os.Stderr, "    - Override with SHADOW_SQLITE_DB_PATH if debugging needed\n\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
 	fmt.Fprintf(os.Stderr, "  lockplane apply --target-environment local --schema schema/\n")
 	fmt.Fprintf(os.Stderr, "  lockplane apply migration.json --target-environment local\n")
@@ -1341,9 +1349,21 @@ ENVIRONMENTS:
     Database: postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable
     Shadow:   postgres://lockplane:lockplane@localhost:5433/lockplane_shadow?sslmode=disable
 
+SHADOW DATABASE STRATEGIES:
+  PostgreSQL:
+    - Use SHADOW_SCHEMA=lockplane_shadow for simple local development (same database)
+    - Use SHADOW_DATABASE_URL for maximum isolation (separate database)
+    - Combine both for flexible production workflows (different database + schema)
+  
+  SQLite/libSQL/Turso:
+    - Automatically uses :memory: (zero configuration, fastest option)
+    - Override with SHADOW_SQLITE_DB_PATH only if debugging needed
+    - For libSQL/Turso: saves 50% cost by testing locally with :memory:
+
 SUPPORTED DATABASES:
   - PostgreSQL (full support)
   - SQLite (with some limitations on ALTER operations)
+  - libSQL/Turso (SQLite-compatible, remote database)
 
 For more information: https://github.com/lockplane/lockplane
 `)
