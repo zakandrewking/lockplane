@@ -768,12 +768,42 @@ func runRollback(args []string) {
 	fromEnvironment := fs.String("from-environment", "", "Environment providing the before-state database connection")
 	verbose := fs.Bool("verbose", false, "Enable verbose logging")
 	fs.BoolVar(verbose, "v", false, "Enable verbose logging (shorthand)")
+
+	// Custom usage function
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: lockplane rollback --plan <forward.json> --from <before.json|db> [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Generate a rollback plan from a forward migration plan.\n\n")
+		fmt.Fprintf(os.Stderr, "The rollback command generates a reversible migration plan that undoes\n")
+		fmt.Fprintf(os.Stderr, "a forward migration. It outputs a plan JSON file (not SQL) that can be\n")
+		fmt.Fprintf(os.Stderr, "reviewed, saved, and applied later using 'lockplane apply'.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fs.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nTypical Workflow:\n")
+		fmt.Fprintf(os.Stderr, "  # 1. Generate forward migration plan\n")
+		fmt.Fprintf(os.Stderr, "  lockplane plan --from current.json --to desired.json > forward.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # 2. Generate rollback plan (before applying forward migration)\n")
+		fmt.Fprintf(os.Stderr, "  lockplane rollback --plan forward.json --from current.json > rollback.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # 3. Apply forward migration\n")
+		fmt.Fprintf(os.Stderr, "  lockplane apply forward.json --target-environment production\n\n")
+		fmt.Fprintf(os.Stderr, "  # 4. If something goes wrong, apply the rollback\n")
+		fmt.Fprintf(os.Stderr, "  lockplane apply rollback.json --target-environment production\n\n")
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  # Generate rollback from schema file\n")
+		fmt.Fprintf(os.Stderr, "  lockplane rollback --plan migration.json --from schema.json > rollback.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Generate rollback using database connection\n")
+		fmt.Fprintf(os.Stderr, "  lockplane rollback --plan migration.json --from postgres://localhost/mydb > rollback.json\n\n")
+		fmt.Fprintf(os.Stderr, "  # Generate rollback using named environment\n")
+		fmt.Fprintf(os.Stderr, "  lockplane rollback --plan migration.json --from-environment local > rollback.json\n\n")
+	}
+
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
 
 	if *planPath == "" {
-		log.Fatalf("Usage: lockplane rollback --plan <forward.json> --from <before.json|db> [--from-environment <name>]")
+		fmt.Fprintf(os.Stderr, "Error: --plan flag is required\n\n")
+		fs.Usage()
+		os.Exit(1)
 	}
 
 	sourceInput := strings.TrimSpace(*fromSchema)
@@ -803,14 +833,17 @@ func runRollback(args []string) {
 					fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
 				}
 			} else {
-				fmt.Fprintf(os.Stderr, "Error: environment %q does not define a database connection. Provide --from or configure .env.%s.\n", resolved.Name, resolved.Name)
+				fmt.Fprintf(os.Stderr, "Error: environment %q does not define a database connection. Provide --from or configure .env.%s.\n\n", resolved.Name, resolved.Name)
+				fs.Usage()
 				os.Exit(1)
 			}
 		}
 	}
 
 	if sourceInput == "" {
-		log.Fatalf("Usage: lockplane rollback --plan <forward.json> --from <before.json|db> [--from-environment <name>]")
+		fmt.Fprintf(os.Stderr, "Error: --from or --from-environment is required\n\n")
+		fs.Usage()
+		os.Exit(1)
 	}
 
 	// Load the forward plan
