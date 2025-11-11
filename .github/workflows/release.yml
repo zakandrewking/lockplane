@@ -10,8 +10,50 @@ permissions:
   packages: write
 
 jobs:
-  release:
+  # Run tests once before building
+  test:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run tests
+        run: go test -v ./...
+
+  # Build binaries natively on each platform
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          # Linux amd64 (native on ubuntu-latest)
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            artifact: lockplane-linux-amd64
+          # macOS amd64 (native on macos-13)
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            artifact: lockplane-darwin-amd64
+          # macOS arm64 (native on macos-14 / Apple Silicon)
+          - os: macos-14
+            goos: darwin
+            goarch: arm64
+            artifact: lockplane-darwin-arm64
+          # Windows amd64 (native on windows-latest)
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            artifact: lockplane-windows-amd64.exe
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,14 +65,82 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Run tests
-        run: go test -v ./...
+      - name: Get version
+        id: get_version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - name: Build binary
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: |
+          go build -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }} -X main.commit=${{ github.sha }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o ${{ matrix.artifact }} .
+
+      - name: Create tarball (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          tar -czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }} README.md LICENSE docs/getting_started.md
+
+      - name: Create zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ${{ matrix.artifact }},README.md,LICENSE,docs/getting_started.md -DestinationPath ${{ matrix.artifact }}.zip
+
+      - name: Upload artifact (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
         with:
-          distribution: goreleaser
-          version: '~> v2'
-          args: release --clean
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
+
+  # Create GitHub release with all binaries
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Display structure
+        run: ls -R dist/
+
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec sha256sum {} \; | sed 's|./||' | sed 's|.*/||' > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/**/*.tar.gz
+            dist/**/*.zip
+            dist/checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
