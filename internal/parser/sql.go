@@ -728,10 +728,14 @@ func parseCreateIndex(schema *database.Schema, stmt *pg_query.IndexStmt) error {
 		if elem.Node == nil {
 			continue
 		}
-		if indexElem, ok := elem.Node.(*pg_query.Node_IndexElem); ok {
-			if indexElem.IndexElem.Name != "" {
-				idx.Columns = append(idx.Columns, indexElem.IndexElem.Name)
-			}
+		indexElem, ok := elem.Node.(*pg_query.Node_IndexElem)
+		if !ok || indexElem.IndexElem == nil {
+			continue
+		}
+
+		colName := extractIndexColumnName(indexElem.IndexElem)
+		if colName != "" {
+			idx.Columns = append(idx.Columns, colName)
 		}
 	}
 
@@ -740,6 +744,50 @@ func parseCreateIndex(schema *database.Schema, stmt *pg_query.IndexStmt) error {
 	}
 
 	return nil
+}
+
+func extractIndexColumnName(elem *pg_query.IndexElem) string {
+	if elem == nil {
+		return ""
+	}
+
+	if elem.Name != "" {
+		return elem.Name
+	}
+
+	if elem.Indexcolname != "" {
+		return elem.Indexcolname
+	}
+
+	if expr := elem.Expr; expr != nil {
+		if colRefNode, ok := expr.Node.(*pg_query.Node_ColumnRef); ok {
+			if name := extractColumnRefName(colRefNode.ColumnRef); name != "" {
+				return name
+			}
+		}
+	}
+
+	return ""
+}
+
+func extractColumnRefName(colRef *pg_query.ColumnRef) string {
+	if colRef == nil {
+		return ""
+	}
+
+	var last string
+	for _, field := range colRef.Fields {
+		if field == nil || field.Node == nil {
+			continue
+		}
+
+		switch node := field.Node.(type) {
+		case *pg_query.Node_String_:
+			last = node.String_.Sval
+		}
+	}
+
+	return last
 }
 
 // getConstraintName returns the constraint name or generates one
