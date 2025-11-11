@@ -692,6 +692,8 @@ func runRollback(args []string) {
 	planPath := fs.String("plan", "", "Forward migration plan file")
 	fromSchema := fs.String("from", "", "Source schema path (before state)")
 	fromEnvironment := fs.String("from-environment", "", "Environment providing the before-state database connection")
+	verbose := fs.Bool("verbose", false, "Enable verbose logging")
+	fs.BoolVar(verbose, "v", false, "Enable verbose logging (shorthand)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
@@ -702,14 +704,34 @@ func runRollback(args []string) {
 
 	sourceInput := strings.TrimSpace(*fromSchema)
 	if sourceInput == "" {
-		resolved, err := config.ResolveEnvironment(cfg, *fromEnvironment)
+		// If no --from-environment provided, try to use default environment
+		envName := strings.TrimSpace(*fromEnvironment)
+		if envName == "" {
+			envName = cfg.DefaultEnvironment
+			if envName == "" {
+				envName = "local"
+			}
+			if *verbose {
+				fmt.Fprintf(os.Stderr, "ℹ️  Using default environment: %s\n", envName)
+			}
+		}
+
+		resolved, err := config.ResolveEnvironment(cfg, envName)
 		if err != nil {
 			log.Fatalf("Failed to resolve source environment: %v", err)
 		}
 		sourceInput = resolved.DatabaseURL
 		if sourceInput == "" {
-			fmt.Fprintf(os.Stderr, "Error: environment %q does not define a database connection. Provide --from or configure .env.%s.\n", resolved.Name, resolved.Name)
-			os.Exit(1)
+			// Try to auto-detect schema directory
+			if info, err := os.Stat("schema"); err == nil && info.IsDir() {
+				sourceInput = "schema"
+				if *verbose {
+					fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: environment %q does not define a database connection. Provide --from or configure .env.%s.\n", resolved.Name, resolved.Name)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -718,12 +740,18 @@ func runRollback(args []string) {
 	}
 
 	// Load the forward plan
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "📖 Loading forward plan: %s\n", *planPath)
+	}
 	forwardPlan, err := planner.LoadJSONPlan(*planPath)
 	if err != nil {
 		log.Fatalf("Failed to load forward plan: %v", err)
 	}
 
 	// Load the before schema (supports files, directories, or database connection strings)
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "🔍 Loading 'from' schema (before state): %s\n", sourceInput)
+	}
 	var rollbackFallback database.Dialect
 	if isConnectionString(sourceInput) {
 		rollbackFallback = schema.DriverNameToDialect(detectDriver(sourceInput))
@@ -731,7 +759,16 @@ func runRollback(args []string) {
 
 	beforeSchema, err := LoadSchemaOrIntrospectWithOptions(sourceInput, buildSchemaLoadOptions(sourceInput, rollbackFallback))
 	if err != nil {
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "❌ Failed to load before schema\n")
+			fmt.Fprintf(os.Stderr, "   Input: %s\n", sourceInput)
+			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", isConnectionString(sourceInput))
+			fmt.Fprintf(os.Stderr, "   Error: %v\n", err)
+		}
 		log.Fatalf("Failed to load before schema: %v", err)
+	}
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "✓ Loaded before schema (%d tables)\n", len(beforeSchema.Tables))
 	}
 
 	// Detect database driver from source (the "before" state we're rolling back to)
