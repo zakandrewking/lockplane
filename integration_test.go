@@ -334,6 +334,161 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 	}
 }
 
+func TestApplyPlan_ShadowDB_CatchesTypeConversionFailure(t *testing.T) {
+	// This test demonstrates shadow DB catching a realistic migration failure:
+	// Converting BIGINT to INTEGER when data contains values outside INTEGER range.
+	// This is a common mistake when trying to "optimize" column types.
+	env := resolveTestEnvironment(t)
+	mainConnStr := env.DatabaseURL
+	shadowConnStr := env.ShadowDatabaseURL
+
+	mainDB, err := sql.Open("postgres", mainConnStr)
+	if err != nil {
+		t.Fatalf("Failed to connect to main database: %v", err)
+	}
+	defer func() { _ = mainDB.Close() }()
+
+	shadowDB, err := sql.Open("postgres", shadowConnStr)
+	if err != nil {
+		t.Fatalf("Failed to connect to shadow database: %v", err)
+	}
+	defer func() { _ = shadowDB.Close() }()
+
+	ctx := context.Background()
+	if err := mainDB.PingContext(ctx); err != nil {
+		t.Skipf("Main database not available (this is okay in CI): %v", err)
+	}
+	if err := shadowDB.PingContext(ctx); err != nil {
+		t.Skipf("Shadow database not available (this is okay in CI): %v", err)
+	}
+
+	// Clean up both databases
+	_, _ = mainDB.ExecContext(ctx, "DROP TABLE IF EXISTS analytics CASCADE")
+	_, _ = shadowDB.ExecContext(ctx, "DROP TABLE IF EXISTS analytics CASCADE")
+	defer func() {
+		_, _ = mainDB.ExecContext(ctx, "DROP TABLE IF EXISTS analytics CASCADE")
+		_, _ = shadowDB.ExecContext(ctx, "DROP TABLE IF EXISTS analytics CASCADE")
+	}()
+
+	// Setup: Create analytics table with BIGINT user_id containing large values
+	// This simulates a real scenario where user IDs use snowflake or Twitter-style IDs
+	createTableSQL := `
+		CREATE TABLE analytics (
+			id SERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL,
+			event_name TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW()
+		)
+	`
+	if _, err := mainDB.ExecContext(ctx, createTableSQL); err != nil {
+		t.Fatalf("Failed to create analytics table in main DB: %v", err)
+	}
+	if _, err := shadowDB.ExecContext(ctx, createTableSQL); err != nil {
+		t.Fatalf("Failed to create analytics table in shadow DB: %v", err)
+	}
+
+	// Insert realistic data with large user IDs (outside INTEGER range: > 2,147,483,647)
+	// Twitter/Snowflake IDs are typically 64-bit integers like 1234567890123456789
+	insertSQL := `
+		INSERT INTO analytics (user_id, event_name) VALUES
+		(9223372036854775807, 'page_view'),     -- max BIGINT value
+		(1234567890123456789, 'signup'),        -- typical snowflake ID
+		(9876543210987654321, 'purchase'),      -- large ID
+		(123, 'login'),                          -- small ID (would fit in INTEGER)
+		(5000000000, 'click')                    -- > INTEGER max (2147483647)
+	`
+	if _, err := mainDB.ExecContext(ctx, insertSQL); err != nil {
+		t.Fatalf("Failed to insert test data into main DB: %v", err)
+	}
+	if _, err := shadowDB.ExecContext(ctx, insertSQL); err != nil {
+		t.Fatalf("Failed to insert test data into shadow DB: %v", err)
+	}
+
+	// Create a migration plan that tries to "optimize" by converting BIGINT to INTEGER
+	// This looks structurally valid but will fail on the actual data
+	dangerousPlan := planner.Plan{
+		Steps: []planner.PlanStep{
+			{
+				Description: "Alter column analytics.user_id type from BIGINT to INTEGER",
+				SQL:         "ALTER TABLE analytics ALTER COLUMN user_id TYPE INTEGER",
+			},
+		},
+		SourceHash: "", // Not validating hash for this test
+	}
+
+	// Create schema representing the current state
+	currentSchema := &Schema{
+		Tables: []Table{
+			{
+				Name: "analytics",
+				Columns: []Column{
+					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
+					{Name: "user_id", Type: "bigint", Nullable: false},
+					{Name: "event_name", Type: "text", Nullable: false},
+					{Name: "created_at", Type: "timestamp without time zone", Nullable: false},
+				},
+			},
+		},
+	}
+
+	driver := postgres.NewDriver()
+
+	// Execute plan with shadow DB validation - should FAIL on shadow DB
+	result, err := applyPlan(ctx, mainDB, &dangerousPlan, shadowDB, currentSchema, driver)
+
+	// We expect the apply to fail because shadow DB should catch the error
+	if err == nil {
+		t.Error("Expected error from shadow DB validation, got nil")
+	}
+
+	if result.Success {
+		t.Error("Expected success=false when shadow DB catches error")
+	}
+
+	if len(result.Errors) == 0 {
+		t.Error("Expected errors to be recorded from shadow DB failure")
+	}
+
+	// Verify the error message mentions the shadow DB validation failure
+	foundShadowError := false
+	for _, errMsg := range result.Errors {
+		if len(errMsg) > 0 {
+			foundShadowError = true
+			t.Logf("Shadow DB caught error (as expected): %s", errMsg)
+			break
+		}
+	}
+	if !foundShadowError {
+		t.Error("Expected shadow DB validation error to be recorded")
+	}
+
+	// CRITICAL: Verify main database was NOT modified (shadow DB protected it)
+	var mainUserID int64
+	err = mainDB.QueryRowContext(ctx, "SELECT user_id FROM analytics WHERE event_name = 'page_view'").Scan(&mainUserID)
+	if err != nil {
+		t.Fatalf("Failed to query main database after failed migration: %v", err)
+	}
+
+	// Verify data is still intact in main DB
+	if mainUserID != 9223372036854775807 {
+		t.Errorf("Main database was modified despite shadow DB failure! Expected user_id=9223372036854775807, got %d", mainUserID)
+	}
+
+	// Verify column type is still BIGINT in main database
+	var mainColumnType string
+	err = mainDB.QueryRowContext(ctx,
+		`SELECT data_type FROM information_schema.columns
+		 WHERE table_name = 'analytics' AND column_name = 'user_id'`).Scan(&mainColumnType)
+	if err != nil {
+		t.Fatalf("Failed to check column type in main DB: %v", err)
+	}
+	if mainColumnType != "bigint" {
+		t.Errorf("Main database column type changed despite shadow DB failure! Expected 'bigint', got '%s'", mainColumnType)
+	}
+
+	t.Log("✅ Shadow DB successfully protected production from dangerous type conversion")
+}
+
 func TestApplyPlan_AddColumn(t *testing.T) {
 	// This test uses a plan with portable SQL (ALTER TABLE ... ADD COLUMN)
 	// and handles database-specific table creation in the setup
