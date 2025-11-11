@@ -29,8 +29,9 @@ type WizardModel struct {
 	existingEnvNames   []string
 
 	// Current environment being configured
-	currentEnv   EnvironmentInput
-	environments []EnvironmentInput
+	currentEnv      EnvironmentInput
+	environments    []EnvironmentInput // New environments being added
+	allEnvironments []string           // All environment names (existing + new)
 
 	// Connection testing
 	testingConnection    bool

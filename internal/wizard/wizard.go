@@ -86,6 +86,8 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Found existing config
 			m.existingConfigPath = msg.path
 			m.existingEnvNames = msg.envNames
+			m.allEnvironments = make([]string, len(msg.envNames))
+			copy(m.allEnvironments, msg.envNames)
 			m.state = StateCheckExisting
 		} else {
 			// No existing config, go to welcome
@@ -161,6 +163,8 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.state = StateAddAnother
 			// Save the current environment
 			m.environments = append(m.environments, m.currentEnv)
+			// Add to all environments list
+			m.allEnvironments = append(m.allEnvironments, m.currentEnv.Name)
 			// Reset current environment
 			m.currentEnv = EnvironmentInput{}
 			// Reset add another choice
@@ -192,9 +196,9 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.state = StateDatabaseType
 			m.addAnotherChoice = 0 // Reset for next time
 			return m, nil
-		case 1: // Finish and save
-			m.state = StateCreating
-			return m, m.createFiles()
+		case 1: // Review all environments
+			m.state = StateSummary
+			return m, nil
 		}
 		return m, nil
 
@@ -496,14 +500,22 @@ func (m WizardModel) renderCheckExisting() string {
 	b.WriteString("\n\n")
 	b.WriteString(renderSuccess("Found existing configuration!"))
 	b.WriteString("\n\n")
-	b.WriteString(fmt.Sprintf("Config: %s\n", m.existingConfigPath))
-	b.WriteString(fmt.Sprintf("Environments: %s\n", strings.Join(m.existingEnvNames, ", ")))
+	b.WriteString(fmt.Sprintf("Config: %s\n\n", m.existingConfigPath))
+
+	if len(m.existingEnvNames) > 0 {
+		b.WriteString(renderSectionHeader("Existing Environments:"))
+		b.WriteString("\n")
+		for _, envName := range m.existingEnvNames {
+			b.WriteString(fmt.Sprintf("  • %s\n", envName))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString(renderInfo("You can add new environments or update existing ones.\n" +
+		"If you add an environment with the same name as an\n" +
+		"existing one, it will be updated."))
 	b.WriteString("\n\n")
-	b.WriteString(renderInfo("Let's set up your database environments.\n" +
-		"I'll walk you through adding new connections or\n" +
-		"updating existing ones."))
-	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to continue, q to quit"))
+	b.WriteString(renderStatusBar("Press Enter to add environment, q to quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -636,14 +648,21 @@ func (m WizardModel) renderAddAnother() string {
 	b.WriteString(renderSectionHeader("Environment Added"))
 	b.WriteString("\n\n")
 	b.WriteString(fmt.Sprintf("✓ Added environment: %s\n\n", m.environments[len(m.environments)-1].Name))
+
+	// Show current environment count
+	if len(m.allEnvironments) > 0 {
+		b.WriteString(renderInfo(fmt.Sprintf("Total environments configured: %d", len(m.allEnvironments))))
+		b.WriteString("\n\n")
+	}
+
 	b.WriteString("What would you like to do next?\n\n")
 
 	// Option 0: Add another environment
 	b.WriteString(renderOption(0, m.addAnotherChoice == 0, "Add another environment (e.g., staging, production)"))
 	b.WriteString("\n")
 
-	// Option 1: Finish and save
-	b.WriteString(renderOption(1, m.addAnotherChoice == 1, "Finish and save configuration"))
+	// Option 1: Review and save
+	b.WriteString(renderOption(1, m.addAnotherChoice == 1, "Review all environments and save"))
 	b.WriteString("\n\n")
 
 	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  q/Esc/Ctrl-C: finish and save"))
@@ -656,24 +675,83 @@ func (m WizardModel) renderSummary() string {
 
 	b.WriteString(renderHeader("Lockplane Init Wizard"))
 	b.WriteString("\n\n")
-	b.WriteString(renderSectionHeader("Summary"))
+	b.WriteString(renderSectionHeader("Configuration Summary"))
 	b.WriteString("\n\n")
-	b.WriteString(fmt.Sprintf("Ready to create configuration for %d environment(s):\n\n", len(m.environments)))
 
-	for _, env := range m.environments {
-		b.WriteString(fmt.Sprintf("  • %s (%s)\n", env.Name, env.DatabaseType))
+	// Show all configured environments
+	if len(m.allEnvironments) > 0 {
+		b.WriteString(fmt.Sprintf("Total configured environments: %d\n\n", len(m.allEnvironments)))
+
+		// Show existing environments that will be preserved
+		if len(m.existingEnvNames) > 0 {
+			b.WriteString(renderInfo("Existing environments (will be preserved):"))
+			b.WriteString("\n")
+			for _, envName := range m.existingEnvNames {
+				// Check if this environment is being updated
+				updated := false
+				for _, newEnv := range m.environments {
+					if newEnv.Name == envName {
+						updated = true
+						break
+					}
+				}
+				if updated {
+					b.WriteString(fmt.Sprintf("  • %s (will be updated)\n", envName))
+				} else {
+					b.WriteString(fmt.Sprintf("  • %s\n", envName))
+				}
+			}
+			b.WriteString("\n")
+		}
+
+		// Show new environments being added
+		newEnvCount := 0
+		for _, newEnv := range m.environments {
+			isNew := true
+			for _, existingName := range m.existingEnvNames {
+				if newEnv.Name == existingName {
+					isNew = false
+					break
+				}
+			}
+			if isNew {
+				newEnvCount++
+			}
+		}
+
+		if newEnvCount > 0 {
+			b.WriteString(renderSuccess("New environments to be added:"))
+			b.WriteString("\n")
+			for _, env := range m.environments {
+				isNew := true
+				for _, existingName := range m.existingEnvNames {
+					if env.Name == existingName {
+						isNew = false
+						break
+					}
+				}
+				if isNew {
+					b.WriteString(fmt.Sprintf("  • %s (%s)\n", env.Name, env.DatabaseType))
+				}
+			}
+			b.WriteString("\n")
+		}
 	}
 
 	b.WriteString("\n")
-	b.WriteString("This will create:\n")
-	b.WriteString("  • schema/lockplane.toml\n")
-	for _, env := range m.environments {
-		b.WriteString(fmt.Sprintf("  • .env.%s\n", env.Name))
+	b.WriteString("Files to be created/updated:\n")
+	if len(m.existingEnvNames) > 0 {
+		b.WriteString("  • schema/lockplane.toml (will be updated)\n")
+	} else {
+		b.WriteString("  • schema/lockplane.toml (new)\n")
 	}
-	b.WriteString("  • Update .gitignore\n")
+	for _, env := range m.environments {
+		b.WriteString(fmt.Sprintf("  • .env.%s (new)\n", env.Name))
+	}
+	b.WriteString("  • .gitignore (update if needed)\n")
 
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to create files, q to quit"))
+	b.WriteString(renderStatusBar("Press Enter to save configuration, q to quit"))
 
 	return borderStyle.Render(b.String())
 }

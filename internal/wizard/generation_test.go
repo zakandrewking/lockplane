@@ -272,3 +272,194 @@ func TestGetEnvironmentNamesNonexistent(t *testing.T) {
 		t.Error("expected error for nonexistent file, got nil")
 	}
 }
+
+func TestGenerateFilesPreservesExistingEnvironments(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir := t.TempDir()
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("failed to change back to original directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+
+	// Step 1: Create initial config with local environment
+	initialEnvs := []EnvironmentInput{
+		{
+			Name:         "local",
+			Description:  "Local development",
+			DatabaseType: "postgres",
+			Host:         "localhost",
+			Port:         "5432",
+			Database:     "testdb",
+			User:         "testuser",
+			Password:     "testpass",
+		},
+	}
+
+	result1, err := GenerateFiles(initialEnvs)
+	if err != nil {
+		t.Fatalf("GenerateFiles() first call error = %v", err)
+	}
+
+	if !result1.ConfigCreated {
+		t.Error("expected config to be created on first call")
+	}
+
+	// Step 2: Add more environments (staging and production)
+	newEnvs := []EnvironmentInput{
+		{
+			Name:         "staging",
+			Description:  "Staging environment",
+			DatabaseType: "postgres",
+			Host:         "staging.example.com",
+			Port:         "5432",
+			Database:     "stagingdb",
+			User:         "staginguser",
+			Password:     "stagingpass",
+		},
+		{
+			Name:         "production",
+			Description:  "Production environment",
+			DatabaseType: "postgres",
+			Host:         "prod.example.com",
+			Port:         "5432",
+			Database:     "proddb",
+			User:         "produser",
+			Password:     "prodpass",
+		},
+	}
+
+	result2, err := GenerateFiles(newEnvs)
+	if err != nil {
+		t.Fatalf("GenerateFiles() second call error = %v", err)
+	}
+
+	if !result2.ConfigUpdated {
+		t.Error("expected config to be updated on second call")
+	}
+
+	// Step 3: Verify all environments exist in the config
+	configContent, err := os.ReadFile("schema/lockplane.toml")
+	if err != nil {
+		t.Fatalf("failed to read config file: %v", err)
+	}
+
+	configStr := string(configContent)
+
+	// Check that all three environments exist
+	if !strings.Contains(configStr, "[environments.local]") {
+		t.Error("config should preserve local environment")
+	}
+
+	if !strings.Contains(configStr, "[environments.staging]") {
+		t.Error("config should contain new staging environment")
+	}
+
+	if !strings.Contains(configStr, "[environments.production]") {
+		t.Error("config should contain new production environment")
+	}
+
+	// Verify descriptions
+	if !strings.Contains(configStr, "Local development") {
+		t.Error("config should preserve local environment description")
+	}
+
+	if !strings.Contains(configStr, "Staging environment") {
+		t.Error("config should contain staging environment description")
+	}
+
+	if !strings.Contains(configStr, "Production environment") {
+		t.Error("config should contain production environment description")
+	}
+
+	// Verify default environment is preserved (should be the first one from the initial setup)
+	if !strings.Contains(configStr, "default_environment = \"local\"") {
+		t.Error("config should preserve default_environment")
+	}
+
+	// Verify new .env files were created
+	if _, err := os.Stat(".env.staging"); os.IsNotExist(err) {
+		t.Error(".env.staging was not created")
+	}
+
+	if _, err := os.Stat(".env.production"); os.IsNotExist(err) {
+		t.Error(".env.production was not created")
+	}
+
+	// Verify original .env.local still exists
+	if _, err := os.Stat(".env.local"); os.IsNotExist(err) {
+		t.Error(".env.local should still exist")
+	}
+}
+
+func TestGenerateFilesUpdatesExistingEnvironment(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir := t.TempDir()
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("failed to change back to original directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+
+	// Step 1: Create initial config with local environment
+	initialEnvs := []EnvironmentInput{
+		{
+			Name:         "local",
+			Description:  "Local development",
+			DatabaseType: "postgres",
+		},
+	}
+
+	_, err = GenerateFiles(initialEnvs)
+	if err != nil {
+		t.Fatalf("GenerateFiles() first call error = %v", err)
+	}
+
+	// Step 2: Update the local environment with a new description
+	updatedEnvs := []EnvironmentInput{
+		{
+			Name:         "local",
+			Description:  "Updated local development environment",
+			DatabaseType: "postgres",
+		},
+	}
+
+	_, err = GenerateFiles(updatedEnvs)
+	if err != nil {
+		t.Fatalf("GenerateFiles() second call error = %v", err)
+	}
+
+	// Step 3: Verify the environment was updated
+	configContent, err := os.ReadFile("schema/lockplane.toml")
+	if err != nil {
+		t.Fatalf("failed to read config file: %v", err)
+	}
+
+	configStr := string(configContent)
+
+	// Check that the updated description exists
+	if !strings.Contains(configStr, "Updated local development environment") {
+		t.Error("config should contain updated description")
+	}
+
+	// Old description should not exist
+	if strings.Contains(configStr, "description = \"Local development\"") {
+		t.Error("config should not contain old description")
+	}
+}

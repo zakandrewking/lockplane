@@ -211,6 +211,66 @@ libSQL flags:
 - `--url` - Database URL
 - `--auth-token` - Auth token
 
+### Adding Multiple Environments
+
+Lockplane makes it easy to manage multiple environments (local, staging, production, etc.) in the same project. When you run `lockplane init` after already having a configuration, the wizard will:
+
+1. **Detect your existing configuration** and show you what environments are already defined
+2. **Guide you through adding new environments** - just like the initial setup
+3. **Preserve all existing environments** - your old configurations stay intact
+4. **Show a summary** of all configured environments (both new and existing) before saving
+
+**Example workflow:**
+
+```bash
+# Initial setup - create local environment
+lockplane init
+# ... follow the wizard to set up your local database ...
+
+# Later, add staging environment
+lockplane init
+# The wizard will show:
+# "Found existing configuration!"
+# "Existing Environments: local"
+# Then guide you through adding staging
+
+# Add production environment
+lockplane init
+# The wizard will show:
+# "Found existing configuration!"
+# "Existing Environments: local, staging"
+# Then guide you through adding production
+```
+
+**What gets created:**
+- `schema/lockplane.toml` - Updated with all environments
+- `.env.local`, `.env.staging`, `.env.production` - One file per environment
+- `.gitignore` - Updated to protect credentials
+
+**Summary before saving:**
+Before finalizing, the wizard shows a clear summary:
+
+```
+Configuration Summary
+
+Total configured environments: 3
+
+Existing environments (will be preserved):
+  • local
+  • staging
+
+New environments to be added:
+  • production (postgres)
+
+Files to be created/updated:
+  • schema/lockplane.toml (will be updated)
+  • .env.production (new)
+  • .gitignore (update if needed)
+```
+
+**Updating an environment:**
+If you add an environment with the same name as an existing one, the wizard will update it with the new configuration.
+
 ### Manual Configuration (Alternative)
 
 If you prefer manual setup, create a `schema/lockplane.toml` file.
