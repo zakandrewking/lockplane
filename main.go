@@ -1137,6 +1137,21 @@ EXAMPLES:
   # Launch the interactive wizard
   lockplane init
 
+  # Non-interactive init with defaults
+  lockplane init --yes
+
+  # Non-interactive init with custom PostgreSQL config
+  lockplane init --yes \
+    --env-name production \
+    --description "Production database" \
+    --host db.example.com \
+    --database myapp \
+    --user myuser \
+    --password "$DB_PASSWORD"
+
+  # Non-interactive init with SQLite
+  lockplane init --yes --db-type sqlite --file-path ./myapp.db
+
   # Introspect current database
   lockplane introspect > current.json
 
