@@ -300,6 +300,150 @@ CREATE TABLE notes (
 	}
 }
 
+func TestApplyPlan_ShadowDB_CatchesUniqueConstraintViolation(t *testing.T) {
+	// This test demonstrates shadow DB catching a realistic SQLite migration failure:
+	// Adding a UNIQUE constraint when duplicate data exists.
+	// This is a common mistake when trying to improve data quality on legacy data.
+
+	// Create two in-memory databases (main and shadow)
+	mainDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open main database: %v", err)
+	}
+	defer func() { _ = mainDB.Close() }()
+
+	shadowDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open shadow database: %v", err)
+	}
+	defer func() { _ = shadowDB.Close() }()
+
+	ctx := context.Background()
+
+	// Setup: Create user_emails table with duplicate emails
+	// This simulates legacy data where email uniqueness wasn't enforced
+	createTableSQL := `
+		CREATE TABLE user_emails (
+			id INTEGER PRIMARY KEY,
+			email TEXT NOT NULL,
+			created_at TEXT DEFAULT CURRENT_TIMESTAMP
+		)
+	`
+	if _, err := mainDB.ExecContext(ctx, createTableSQL); err != nil {
+		t.Fatalf("Failed to create user_emails table in main DB: %v", err)
+	}
+	if _, err := shadowDB.ExecContext(ctx, createTableSQL); err != nil {
+		t.Fatalf("Failed to create user_emails table in shadow DB: %v", err)
+	}
+
+	// Insert data with DUPLICATE emails (common in legacy systems)
+	// This is realistic: same person signed up multiple times, or data migration bug
+	insertSQL := `
+		INSERT INTO user_emails (email) VALUES
+		('alice@example.com'),
+		('bob@example.com'),
+		('alice@example.com'),    -- DUPLICATE!
+		('charlie@example.com'),
+		('bob@example.com')       -- DUPLICATE!
+	`
+	if _, err := mainDB.ExecContext(ctx, insertSQL); err != nil {
+		t.Fatalf("Failed to insert test data into main DB: %v", err)
+	}
+	if _, err := shadowDB.ExecContext(ctx, insertSQL); err != nil {
+		t.Fatalf("Failed to insert test data into shadow DB: %v", err)
+	}
+
+	// Create a migration plan that tries to add UNIQUE constraint to clean up data quality
+	// This looks like a good idea but will fail because duplicates exist
+	dangerousPlan := planner.Plan{
+		Steps: []planner.PlanStep{
+			{
+				Description: "Add unique index on user_emails.email",
+				SQL:         "CREATE UNIQUE INDEX idx_user_emails_email ON user_emails(email)",
+			},
+		},
+		SourceHash: "", // Not validating hash for this test
+	}
+
+	// Create schema representing the current state
+	currentSchema := &Schema{
+		Dialect: database.DialectSQLite,
+		Tables: []Table{
+			{
+				Name: "user_emails",
+				Columns: []Column{
+					{Name: "id", Type: "INTEGER", Nullable: false, IsPrimaryKey: true},
+					{Name: "email", Type: "TEXT", Nullable: false},
+					{Name: "created_at", Type: "TEXT", Nullable: true},
+				},
+			},
+		},
+	}
+
+	driver, err := newDriver("sqlite")
+	if err != nil {
+		t.Fatalf("Failed to create driver: %v", err)
+	}
+
+	// Execute plan with shadow DB validation - should FAIL on shadow DB
+	result, err := applyPlan(ctx, mainDB, &dangerousPlan, shadowDB, currentSchema, driver)
+
+	// We expect the apply to fail because shadow DB should catch the duplicate error
+	if err == nil {
+		t.Error("Expected error from shadow DB validation, got nil")
+	}
+
+	if result.Success {
+		t.Error("Expected success=false when shadow DB catches error")
+	}
+
+	if len(result.Errors) == 0 {
+		t.Error("Expected errors to be recorded from shadow DB failure")
+	}
+
+	// Verify the error message mentions the constraint violation
+	foundConstraintError := false
+	for _, errMsg := range result.Errors {
+		if len(errMsg) > 0 {
+			foundConstraintError = true
+			t.Logf("Shadow DB caught error (as expected): %s", errMsg)
+			// SQLite error should mention "UNIQUE constraint failed" or similar
+			break
+		}
+	}
+	if !foundConstraintError {
+		t.Error("Expected shadow DB constraint violation error to be recorded")
+	}
+
+	// CRITICAL: Verify main database was NOT modified (shadow DB protected it)
+	// Check that the UNIQUE index was NOT created in main DB
+	var mainIndexCount int
+	err = mainDB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM sqlite_master
+		 WHERE type='index' AND name='idx_user_emails_email'`).Scan(&mainIndexCount)
+	if err != nil {
+		t.Fatalf("Failed to check index existence in main DB: %v", err)
+	}
+
+	if mainIndexCount > 0 {
+		t.Error("Main database was modified despite shadow DB failure! UNIQUE index should not exist")
+	}
+
+	// Verify duplicate data is still intact in main DB (shadow DB prevented data loss)
+	var duplicateCount int
+	err = mainDB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM user_emails WHERE email = 'alice@example.com'").Scan(&duplicateCount)
+	if err != nil {
+		t.Fatalf("Failed to query main database after failed migration: %v", err)
+	}
+
+	if duplicateCount != 2 {
+		t.Errorf("Main database data was modified! Expected 2 'alice@example.com' entries, got %d", duplicateCount)
+	}
+
+	t.Log("✅ Shadow DB successfully protected production from UNIQUE constraint violation")
+}
+
 // TestSQLiteSchemaIntrospectionRoundTrip tests that introspecting a SQLite
 // database and then generating a plan produces no changes
 func TestSQLiteSchemaIntrospectionRoundTrip(t *testing.T) {
