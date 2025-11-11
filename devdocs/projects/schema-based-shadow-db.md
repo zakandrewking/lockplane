@@ -21,11 +21,11 @@
 - [x] Add schema isolation for shadow operations in runApply()
 - [x] Unit tests for schema operations
 
-### Phase 3: SQLite/libSQL Implementation
-- [ ] Design file-based shadow DB for SQLite
-- [ ] Implement temporary file management
-- [ ] Add cleanup mechanisms
-- [ ] Handle in-memory databases appropriately
+### Phase 3: SQLite/libSQL Implementation ✅
+- [x] Use :memory: as default for SQLite/libSQL shadow
+- [x] Implement automatic fallback to :memory:
+- [x] Add support for explicit file path override
+- [x] Automatic cleanup (connection close handles it)
 
 ### Phase 4: Configuration & UX
 - [ ] Update `lockplane init` wizard with schema options
