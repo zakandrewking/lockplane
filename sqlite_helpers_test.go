@@ -99,7 +99,7 @@ func TestCheckSQLiteDatabase(t *testing.T) {
 		if err := createSQLiteDatabase(path); err != nil {
 			t.Fatalf("failed to create database: %v", err)
 		}
-		
+
 		exists, isEmpty, err := checkSQLiteDatabase(path)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -123,7 +123,7 @@ func TestCreateSQLiteDatabase(t *testing.T) {
 		if err := createSQLiteDatabase(path); err != nil {
 			t.Fatalf("failed to create database: %v", err)
 		}
-		
+
 		// Check file was created
 		info, err := os.Stat(path)
 		if err != nil {
@@ -133,7 +133,7 @@ func TestCreateSQLiteDatabase(t *testing.T) {
 		if info.Size() == 0 {
 			t.Error("database file has zero size (expected SQLite header)")
 		}
-		
+
 		// Check it's a valid database
 		exists, isEmpty, err := checkSQLiteDatabase(path)
 		if err != nil {

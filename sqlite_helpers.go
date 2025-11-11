@@ -108,7 +108,7 @@ func checkSQLiteDatabase(connStr string) (exists bool, isEmpty bool, err error) 
 // createSQLiteDatabase creates an empty SQLite database file
 func createSQLiteDatabase(connStr string) error {
 	filePath := extractSQLiteFilePath(connStr)
-	
+
 	// Create parent directory if it doesn't exist
 	dir := filepath.Dir(filePath)
 	if dir != "" && dir != "." {
@@ -116,14 +116,14 @@ func createSQLiteDatabase(connStr string) error {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
-	
+
 	// Create the database
 	db, err := sql.Open("sqlite", connStr)
 	if err != nil {
 		return fmt.Errorf("failed to create database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
-	
+
 	// Initialize the database by creating a minimal table
 	// SQLite won't create the file until we actually write something
 	// We create and immediately drop a table to ensure the file is created
@@ -131,7 +131,7 @@ func createSQLiteDatabase(connStr string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
-	
+
 	return nil
 }
 

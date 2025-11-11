@@ -109,7 +109,7 @@ func createSQLiteDatabaseFile(filePath string) error {
 	if _, err := os.Stat(filePath); err == nil {
 		return nil
 	}
-	
+
 	// Create parent directory if it doesn't exist
 	dir := filepath.Dir(filePath)
 	if dir != "" && dir != "." {
@@ -117,14 +117,14 @@ func createSQLiteDatabaseFile(filePath string) error {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
-	
+
 	// Create the database
 	db, err := sql.Open("sqlite", filePath)
 	if err != nil {
 		return fmt.Errorf("failed to create database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
-	
+
 	// Initialize the database by creating a minimal table
 	// SQLite won't create the file until we actually write something
 	// We create and immediately drop a table to ensure the file is created
@@ -132,7 +132,7 @@ func createSQLiteDatabaseFile(filePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
-	
+
 	return nil
 }
 
