@@ -192,11 +192,8 @@ func main() {
 		}
 
 		// Use a max distance of 2 for suggestions
-		if suggestion, distance := findClosestCommand(command, validCommands, 2); suggestion != "" {
+		if suggestion, _ := findClosestCommand(command, validCommands, 2); suggestion != "" {
 			fmt.Fprintf(os.Stderr, "\nDid you mean '%s'?\n", suggestion)
-			if distance == 1 {
-				fmt.Fprintf(os.Stderr, "  (Only 1 character difference)\n")
-			}
 		}
 
 		fmt.Fprintf(os.Stderr, "\nRun 'lockplane help' to see available commands.\n")
