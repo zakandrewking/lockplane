@@ -291,11 +291,7 @@ func startInitWizard() error {
 }
 
 func checkExistingConfig() (*string, error) {
-	legacyPath := lockplaneConfigFilename
-	if _, err := os.Stat(legacyPath); err == nil {
-		return &legacyPath, nil
-	}
-	configPath := filepath.Join(defaultSchemaDir, lockplaneConfigFilename)
+	configPath := lockplaneConfigFilename
 	if _, err := os.Stat(configPath); err == nil {
 		return &configPath, nil
 	}

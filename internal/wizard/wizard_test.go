@@ -190,7 +190,7 @@ func TestExistingConfigDetection(t *testing.T) {
 
 	// Test handling of existing config message
 	msg := existingConfigMsg{
-		path:     "schema/lockplane.toml",
+		path:     "lockplane.toml",
 		envNames: []string{"local", "staging"},
 	}
 
@@ -201,7 +201,7 @@ func TestExistingConfigDetection(t *testing.T) {
 		t.Errorf("expected state to be StateCheckExisting, got %v", m.state)
 	}
 
-	if m.existingConfigPath != "schema/lockplane.toml" {
+	if m.existingConfigPath != "lockplane.toml" {
 		t.Errorf("expected existingConfigPath to be set, got %s", m.existingConfigPath)
 	}
 

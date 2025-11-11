@@ -56,8 +56,8 @@ func TestGenerateFiles(t *testing.T) {
 		t.Error("expected config to be created")
 	}
 
-	if result.ConfigPath != "schema/lockplane.toml" {
-		t.Errorf("expected config path to be 'schema/lockplane.toml', got %s", result.ConfigPath)
+	if result.ConfigPath != "lockplane.toml" {
+		t.Errorf("expected config path to be 'lockplane.toml', got %s", result.ConfigPath)
 	}
 
 	if len(result.EnvFiles) != 2 {
@@ -77,7 +77,7 @@ func TestGenerateFiles(t *testing.T) {
 		t.Error("schema directory was not created")
 	}
 
-	if _, err := os.Stat("schema/lockplane.toml"); os.IsNotExist(err) {
+	if _, err := os.Stat("lockplane.toml"); os.IsNotExist(err) {
 		t.Error("lockplane.toml was not created")
 	}
 
@@ -94,7 +94,7 @@ func TestGenerateFiles(t *testing.T) {
 	}
 
 	// Verify file contents
-	configContent, err := os.ReadFile("schema/lockplane.toml")
+	configContent, err := os.ReadFile("lockplane.toml")
 	if err != nil {
 		t.Fatalf("failed to read config file: %v", err)
 	}
@@ -390,7 +390,7 @@ func TestGenerateFilesPreservesExistingEnvironments(t *testing.T) {
 	}
 
 	// Step 3: Verify all environments exist in the config
-	configContent, err := os.ReadFile("schema/lockplane.toml")
+	configContent, err := os.ReadFile("lockplane.toml")
 	if err != nil {
 		t.Fatalf("failed to read config file: %v", err)
 	}
@@ -864,7 +864,7 @@ func TestGenerateFilesUpdatesExistingEnvironment(t *testing.T) {
 	}
 
 	// Step 3: Verify the environment was updated
-	configContent, err := os.ReadFile("schema/lockplane.toml")
+	configContent, err := os.ReadFile("lockplane.toml")
 	if err != nil {
 		t.Fatalf("failed to read config file: %v", err)
 	}

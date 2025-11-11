@@ -151,7 +151,7 @@ The wizard will guide you through:
 - **Connection testing**: Verify your database is reachable before proceeding
 - **Environment setup**: Configure multiple environments (local, staging, production)
 - **Shadow DB configuration**: Automatically set up shadow databases for safe migrations (PostgreSQL only)
-- **File generation**: Creates `schema/lockplane.toml` and `.env.*` files with secure permissions
+- **File generation**: Creates `lockplane.toml` and `.env.*` files with secure permissions
 
 **Features:**
 - Detects existing configurations and offers to add new environments
@@ -243,7 +243,7 @@ lockplane init
 ```
 
 **What gets created:**
-- `schema/lockplane.toml` - Updated with all environments
+- `lockplane.toml` - Updated with all environments
 - `.env.local`, `.env.staging`, `.env.production` - One file per environment
 - `.gitignore` - Updated to protect credentials
 
@@ -263,7 +263,7 @@ New environments to be added:
   • production (postgres)
 
 Files to be created/updated:
-  • schema/lockplane.toml (will be updated)
+  • lockplane.toml (will be updated)
   • .env.production (new)
   • .gitignore (update if needed)
 ```
@@ -273,7 +273,7 @@ If you add an environment with the same name as an existing one, the wizard will
 
 ### Manual Configuration (Alternative)
 
-If you prefer manual setup, create a `schema/lockplane.toml` file.
+If you prefer manual setup, create a `lockplane.toml` file in your project root.
 You can also use the sample at `lockplane.toml.example` as a starting point.
 
 ```toml
@@ -386,9 +386,10 @@ my-app/
     └── main.go
 ```
 
-From `schema/lockplane.toml` you can reference `.env.<name>` files located either next
-to the config file or in the project root. CLI flags still take precedence, so you can
-override connections temporarily without moving the config file.
+From `lockplane.toml` you can reference `.env.<name>` files located in the project root.
+Lockplane searches for `lockplane.toml` starting from the current directory and walks up
+until it finds the file or reaches a project boundary (.git, go.mod, package.json).
+CLI flags still take precedence, so you can override connections temporarily.
 
 ### `lockplane.toml`
 
