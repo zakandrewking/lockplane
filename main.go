@@ -213,6 +213,8 @@ func runIntrospect(args []string) {
 	format := fs.String("format", "json", "Output format: json or sql")
 	sourceEnv := fs.String("source-environment", "", "Named environment to introspect (defaults to config default)")
 	useShadow := fs.Bool("shadow", false, "Use the shadow database URL for the selected environment")
+	verbose := fs.Bool("verbose", false, "Enable verbose logging")
+	fs.BoolVar(verbose, "v", false, "Enable verbose logging (shorthand)")
 
 	// Custom usage function
 	fs.Usage = func() {
@@ -242,7 +244,19 @@ func runIntrospect(args []string) {
 	connStr := strings.TrimSpace(*dbURL)
 	var resolvedEnv *config.ResolvedEnvironment
 	if connStr == "" {
-		resolvedEnv, err = config.ResolveEnvironment(cfg, *sourceEnv)
+		// If no source-environment provided, try to use default environment
+		envName := strings.TrimSpace(*sourceEnv)
+		if envName == "" {
+			envName = cfg.DefaultEnvironment
+			if envName == "" {
+				envName = "local"
+			}
+			if *verbose {
+				fmt.Fprintf(os.Stderr, "ℹ️  Using default environment: %s\n", envName)
+			}
+		}
+
+		resolvedEnv, err = config.ResolveEnvironment(cfg, envName)
 		if err != nil {
 			log.Fatalf("Failed to resolve source environment: %v", err)
 		}
@@ -263,6 +277,10 @@ func runIntrospect(args []string) {
 			envName = cfg.DefaultEnvironment
 		}
 		log.Fatalf("No database connection configured. Provide --db or configure environment %q in lockplane.toml / .env.%s.", envName, envName)
+	}
+
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "🔍 Introspecting database: %s\n", connStr)
 	}
 
 	// Detect database driver from connection string
@@ -352,6 +370,8 @@ func runDiff(args []string) {
 	fs := flag.NewFlagSet("diff", flag.ExitOnError)
 	beforeEnv := fs.String("before-environment", "", "Environment providing the before-state database connection")
 	afterEnv := fs.String("after-environment", "", "Environment providing the after-state database connection")
+	verbose := fs.Bool("verbose", false, "Enable verbose logging")
+	fs.BoolVar(verbose, "v", false, "Enable verbose logging (shorthand)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("Failed to parse flags: %v", err)
 	}
@@ -365,7 +385,19 @@ func runDiff(args []string) {
 	}
 
 	if beforeArg == "" {
-		env, err := config.ResolveEnvironment(cfg, *beforeEnv)
+		// If no before-environment provided, try to use default environment
+		envName := strings.TrimSpace(*beforeEnv)
+		if envName == "" {
+			envName = cfg.DefaultEnvironment
+			if envName == "" {
+				envName = "local"
+			}
+			if *verbose {
+				fmt.Fprintf(os.Stderr, "ℹ️  Using default environment for 'before': %s\n", envName)
+			}
+		}
+
+		env, err := config.ResolveEnvironment(cfg, envName)
 		if err != nil {
 			log.Fatalf("Failed to resolve before environment: %v", err)
 		}
@@ -373,11 +405,31 @@ func runDiff(args []string) {
 	}
 
 	if afterArg == "" {
-		env, err := config.ResolveEnvironment(cfg, *afterEnv)
-		if err != nil {
-			log.Fatalf("Failed to resolve after environment: %v", err)
+		// Try to auto-detect schema directory first
+		if info, err := os.Stat("schema"); err == nil && info.IsDir() {
+			afterArg = "schema"
+			if *verbose {
+				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory for 'after': schema/\n")
+			}
+		} else {
+			// Fall back to environment resolution
+			envName := strings.TrimSpace(*afterEnv)
+			if envName == "" {
+				envName = cfg.DefaultEnvironment
+				if envName == "" {
+					envName = "local"
+				}
+				if *verbose {
+					fmt.Fprintf(os.Stderr, "ℹ️  Using default environment for 'after': %s\n", envName)
+				}
+			}
+
+			env, err := config.ResolveEnvironment(cfg, envName)
+			if err != nil {
+				log.Fatalf("Failed to resolve after environment: %v", err)
+			}
+			afterArg = env.DatabaseURL
 		}
-		afterArg = env.DatabaseURL
 	}
 
 	if beforeArg == "" || afterArg == "" {
@@ -397,14 +449,36 @@ func runDiff(args []string) {
 	}
 
 	// Load schemas
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "🔍 Loading 'before' schema: %s\n", beforeArg)
+	}
 	before, err := LoadSchemaOrIntrospectWithOptions(beforeArg, buildSchemaLoadOptions(beforeArg, beforeFallback))
 	if err != nil {
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "❌ Failed to load before schema\n")
+			fmt.Fprintf(os.Stderr, "   Input: %s\n", beforeArg)
+			fmt.Fprintf(os.Stderr, "   Error: %v\n", err)
+		}
 		log.Fatalf("Failed to load before schema: %v", err)
 	}
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "✓ Loaded 'before' schema (%d tables)\n", len(before.Tables))
+	}
 
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "🔍 Loading 'after' schema: %s\n", afterArg)
+	}
 	after, err := LoadSchemaOrIntrospectWithOptions(afterArg, buildSchemaLoadOptions(afterArg, afterFallback))
 	if err != nil {
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "❌ Failed to load after schema\n")
+			fmt.Fprintf(os.Stderr, "   Input: %s\n", afterArg)
+			fmt.Fprintf(os.Stderr, "   Error: %v\n", err)
+		}
 		log.Fatalf("Failed to load after schema: %v", err)
+	}
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "✓ Loaded 'after' schema (%d tables)\n", len(after.Tables))
 	}
 
 	// Generate diff
