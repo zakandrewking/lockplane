@@ -1,4 +1,4 @@
-package main
+package validation
 
 import (
 	"testing"
@@ -261,7 +261,7 @@ func TestAddForeignKeyValidator_ValidReference(t *testing.T) {
 
 	validator := &AddForeignKeyValidator{
 		TableName: "posts",
-		ForeignKey: ForeignKey{
+		ForeignKey: database.ForeignKey{
 			Name:              "fk_posts_user_id",
 			Columns:           []string{"user_id"},
 			ReferencedTable:   "users",
@@ -300,7 +300,7 @@ func TestAddForeignKeyValidator_NonExistentTable(t *testing.T) {
 
 	validator := &AddForeignKeyValidator{
 		TableName: "posts",
-		ForeignKey: ForeignKey{
+		ForeignKey: database.ForeignKey{
 			Name:              "fk_posts_author_id",
 			Columns:           []string{"author_id"},
 			ReferencedTable:   "authors",
@@ -346,7 +346,7 @@ func TestAddForeignKeyValidator_NonExistentColumn(t *testing.T) {
 
 	validator := &AddForeignKeyValidator{
 		TableName: "posts",
-		ForeignKey: ForeignKey{
+		ForeignKey: database.ForeignKey{
 			Name:              "fk_posts_user_id",
 			Columns:           []string{"user_id"},
 			ReferencedTable:   "users",

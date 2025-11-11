@@ -12,6 +12,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 
+	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/internal/schema"
 )
 
@@ -69,7 +70,7 @@ func runValidateSQL(args []string) {
 		fmt.Fprintf(os.Stderr, "    1. SQL Syntax - Statement-by-statement parsing using PostgreSQL parser\n")
 		fmt.Fprintf(os.Stderr, "       - Detects multiple syntax errors in a single pass\n")
 		fmt.Fprintf(os.Stderr, "       - Reports exact line numbers for each error\n\n")
-		fmt.Fprintf(os.Stderr, "    2. Schema Structure - Referential integrity and consistency\n")
+		fmt.Fprintf(os.Stderr, "    2. database.Schema Structure - Referential integrity and consistency\n")
 		fmt.Fprintf(os.Stderr, "       - Duplicate column names\n")
 		fmt.Fprintf(os.Stderr, "       - Missing data types\n")
 		fmt.Fprintf(os.Stderr, "       - Missing primary keys (warning)\n")
@@ -225,7 +226,7 @@ func validateSQLFile(filePath string) []ValidationIssue {
 	return append(syntaxIssues, dangerousIssues...)
 }
 
-func validateSchemaStructure(schema *Schema, path string) []ValidationIssue {
+func validateSchemaStructure(schema *database.Schema, path string) []ValidationIssue {
 	var issues []ValidationIssue
 
 	if schema == nil {
@@ -234,7 +235,7 @@ func validateSchemaStructure(schema *Schema, path string) []ValidationIssue {
 			Line:     1,
 			Column:   1,
 			Severity: "error",
-			Message:  "Schema is empty",
+			Message:  "database.Schema is empty",
 		})
 		return issues
 	}

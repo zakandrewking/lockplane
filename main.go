@@ -18,6 +18,7 @@ import (
 	"github.com/lockplane/lockplane/internal/config"
 	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/lockplane/lockplane/internal/schema"
+	"github.com/lockplane/lockplane/internal/validation"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
 )
@@ -487,7 +488,7 @@ func runPlan(args []string) {
 
 	// Validate the diff if requested
 	if *validate {
-		validationResults := ValidateSchemaDiffWithSchema(diff, after)
+		validationResults := validation.ValidateSchemaDiffWithSchema(diff, after)
 
 		if len(validationResults) > 0 {
 			fmt.Fprintf(os.Stderr, "\n=== Validation Results ===\n\n")
@@ -518,12 +519,12 @@ func runPlan(args []string) {
 				fmt.Fprintf(os.Stderr, "\n")
 			}
 
-			if !AllValid(validationResults) {
+			if !validation.AllValid(validationResults) {
 				fmt.Fprintf(os.Stderr, "❌ Validation FAILED: Some operations are not safe\n\n")
 				os.Exit(1)
 			}
 
-			if AllReversible(validationResults) {
+			if validation.AllReversible(validationResults) {
 				fmt.Fprintf(os.Stderr, "✓ All operations are reversible\n")
 			} else {
 				fmt.Fprintf(os.Stderr, "⚠ Warning: Some operations are not reversible\n")
