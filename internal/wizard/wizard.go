@@ -26,7 +26,7 @@ func (m WizardModel) Init() tea.Cmd {
 }
 
 // Update handles state transitions (Bubble Tea Update)
-func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -122,7 +122,7 @@ func (m WizardModel) View() string {
 
 // State transition handlers
 
-func (m WizardModel) handleEnter() (tea.Model, tea.Cmd) {
+func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case StateWelcome:
 		m.state = StateDatabaseType
@@ -197,7 +197,7 @@ func (m WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m WizardModel) handleUp() (tea.Model, tea.Cmd) {
+func (m *WizardModel) handleUp() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case StateDatabaseType:
 		if m.dbTypeIndex > 0 {
@@ -216,7 +216,7 @@ func (m WizardModel) handleUp() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m WizardModel) handleDown() (tea.Model, tea.Cmd) {
+func (m *WizardModel) handleDown() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case StateDatabaseType:
 		if m.dbTypeIndex < len(DatabaseTypes)-1 {
@@ -235,7 +235,7 @@ func (m WizardModel) handleDown() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m WizardModel) handleTab() (tea.Model, tea.Cmd) {
+func (m *WizardModel) handleTab() (tea.Model, tea.Cmd) {
 	if m.state == StateConnectionDetails {
 		m.focusIndex = (m.focusIndex + 1) % len(m.inputs)
 		m.updateInputFocus()
@@ -243,7 +243,7 @@ func (m WizardModel) handleTab() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m WizardModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *WizardModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.state == StateConnectionDetails && len(m.inputs) > 0 {
 		var cmd tea.Cmd
 		m.inputs[m.focusIndex], cmd = m.inputs[m.focusIndex].Update(msg)
@@ -708,7 +708,8 @@ func (m WizardModel) renderError() string {
 
 // Run starts the wizard
 func Run() error {
-	p := tea.NewProgram(New())
+	m := New()
+	p := tea.NewProgram(&m)
 	_, err := p.Run()
 	return err
 }
