@@ -129,7 +129,7 @@ func (m WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case StateCheckExisting:
-		// User wants to add a new environment
+		// Continue with guided environment setup
 		m.state = StateDatabaseType
 		return m, nil
 
@@ -468,10 +468,12 @@ func (m WizardModel) renderCheckExisting() string {
 	b.WriteString("\n\n")
 	b.WriteString(fmt.Sprintf("Config: %s\n", m.existingConfigPath))
 	b.WriteString(fmt.Sprintf("Environments: %s\n", strings.Join(m.existingEnvNames, ", ")))
-	b.WriteString("\n")
-	b.WriteString(renderInfo("Would you like to add a new environment?"))
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to add new environment, q to quit"))
+	b.WriteString(renderInfo("Let's set up your database environments.\n" +
+		"I'll walk you through adding new connections or\n" +
+		"updating existing ones."))
+	b.WriteString("\n\n")
+	b.WriteString(renderStatusBar("Press Enter to continue, q to quit"))
 
 	return borderStyle.Render(b.String())
 }
