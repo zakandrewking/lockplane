@@ -1268,8 +1268,8 @@ func printApplyUsage() {
 	fmt.Fprintf(os.Stderr, "1. Plan, review, and apply (interactive):\n")
 	fmt.Fprintf(os.Stderr, "   lockplane apply --target-environment local --schema schema/\n")
 	fmt.Fprintf(os.Stderr, "   (Introspects target, generates plan, shows it, asks for confirmation)\n\n")
-	fmt.Fprintf(os.Stderr, "2. Apply a pre-generated plan:\n")
-	fmt.Fprintf(os.Stderr, "   lockplane apply plan.json --target-environment local\n")
+	fmt.Fprintf(os.Stderr, "2. Apply a pre-generated plan file (e.g., from 'lockplane plan'):\n")
+	fmt.Fprintf(os.Stderr, "   lockplane apply migration.json --target-environment local\n")
 	fmt.Fprintf(os.Stderr, "   (Loads plan from file and applies it)\n\n")
 	fmt.Fprintf(os.Stderr, "3. Plan and apply without confirmation:\n")
 	fmt.Fprintf(os.Stderr, "   lockplane apply --auto-approve --target-environment local --schema schema/\n")
@@ -1286,7 +1286,7 @@ func printApplyUsage() {
 	fmt.Fprintf(os.Stderr, "                         Environment providing the shadow database connection\n\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
 	fmt.Fprintf(os.Stderr, "  lockplane apply --target-environment local --schema schema/\n")
-	fmt.Fprintf(os.Stderr, "  lockplane apply plan.json --target-environment local\n")
+	fmt.Fprintf(os.Stderr, "  lockplane apply migration.json --target-environment local\n")
 	fmt.Fprintf(os.Stderr, "  lockplane apply --target mydriver://user:pass@host/db --schema schema/\n")
 }
 
@@ -1333,7 +1333,7 @@ EXAMPLES:
   # Compare schemas
   lockplane diff current.json schema/
 
-  # Generate and validate migration plan from files
+  # Generate and validate migration plan from files (save to file with >)
   lockplane plan --from current.json --to schema/ --validate > migration.json
 
   # Generate plan using database connection strings (auto-introspect)
@@ -1342,14 +1342,14 @@ EXAMPLES:
   # Generate plan comparing two live databases
   lockplane plan --from postgres://user:pass@localhost/db1 --to postgres://user:pass@localhost/db2 > migration.json
 
-  # Generate plan using named environments
+  # Generate plan using named environments and save to file
   lockplane plan --from-environment local --to-environment staging --validate > migration.json
 
   # Apply migration interactively (plan, review, confirm)
   lockplane apply --target-environment local --schema schema/
 
-  # Apply a pre-generated plan
-  lockplane apply plan.json --target-environment local
+  # Apply a pre-generated plan file (e.g., from 'lockplane plan')
+  lockplane apply migration.json --target-environment local
 
   # Auto-approve: plan and apply without confirmation
   lockplane apply --auto-approve --target-environment local --schema schema/
