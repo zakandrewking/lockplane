@@ -228,56 +228,65 @@ DATABASE_URL=postgres://localhost:5432/mydb
 
 ### SQLite/libSQL: In-Memory Shadow DB
 
-SQLite doesn't have schema namespaces, so we use an in-memory database for shadow testing.
+SQLite and libSQL don't have schema namespaces, so we use an in-memory database for shadow testing. **This works the same for both local SQLite files and remote libSQL/Turso databases.**
 
 #### How It Works
 
 ```go
 // Connect to in-memory shadow database
+// Same approach for both SQLite (local) and libSQL (remote)
 shadowDB, err := sql.Open("sqlite3", ":memory:")
 // ... test migrations ...
 // Automatic cleanup when connection closes
 ```
 
 **Benefits**:
-- ✅ Fastest possible (no disk I/O)
+- ✅ Fastest possible (no disk I/O, no network latency)
 - ✅ Automatic cleanup (no file management)
-- ✅ No configuration required
+- ✅ **Zero configuration** required (same for SQLite and libSQL)
 - ✅ No disk space concerns
 - ✅ Perfect for CI/CD
 - ✅ Complete isolation from main database
+- ✅ **For libSQL/Turso**: 50% cost savings (no remote shadow instance needed)
 
-**Configuration options**:
+**Configuration options** (same for both SQLite and libSQL):
 
 **Option 1: In-memory (default - recommended)**
 ```bash
-# No configuration needed!
+# No configuration needed for either SQLite or libSQL!
 lockplane apply migration.json
 # Uses :memory: automatically
 ```
 
 **Option 2: Explicit file path (for debugging)**
 ```bash
-# .env.local
+# .env.local (works for both SQLite and libSQL)
 SHADOW_SQLITE_DB_PATH=/tmp/my-shadow.db
 # Useful if you need to inspect shadow DB after run
+# Even for libSQL, this creates a LOCAL file for shadow testing
 ```
 
 **Option 3: Persistent file (for development)**
 ```bash
-# .env.local
+# .env.local (works for both SQLite and libSQL)
 SHADOW_SQLITE_DB_PATH=./shadow.db
-# Keeps shadow DB between runs
+# Keeps shadow DB between runs for inspection
 ```
 
-#### libSQL Special Case
+#### Why This Works for libSQL/Turso (Remote Databases)
 
-For libSQL (Turso), use local file as shadow:
+libSQL is SQLite-compatible, so the same `:memory:` approach works perfectly:
+
 ```bash
 # .env.local
 LIBSQL_URL=libsql://mydb.turso.io?authToken=...
-SHADOW_SQLITE_DB_PATH=./lockplane_shadow.db  # Local file for testing
+# No shadow config needed - uses :memory: automatically!
 ```
+
+**Key point**: Shadow testing happens **locally** (`:memory:`) even though your main database is remote. This provides:
+- ✅ 50% cost savings (no remote shadow instance)
+- ✅ Fast testing (no network latency for shadow operations)
+- ✅ Same validation guarantees
 
 ### Security Considerations
 
