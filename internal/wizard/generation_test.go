@@ -170,8 +170,14 @@ func TestGenerateFiles(t *testing.T) {
 		t.Error(".env.example should contain SHADOW_DATABASE_URL")
 	}
 
-	if !strings.Contains(exampleStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should contain LIBSQL_DB_TOKEN")
+	// Should use postgres examples since first environment is postgres
+	if !strings.Contains(exampleStr, "postgresql://") {
+		t.Error(".env.example should contain PostgreSQL examples")
+	}
+
+	// Should NOT contain LIBSQL_DB_TOKEN since no libsql environment was created
+	if strings.Contains(exampleStr, "LIBSQL_DB_TOKEN=") {
+		t.Error(".env.example should not contain LIBSQL_DB_TOKEN when no libsql environment is configured")
 	}
 }
 
@@ -444,8 +450,14 @@ func TestCreateOrUpdateEnvExampleNew(t *testing.T) {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
 
-	// Create .env.example from scratch
-	if err := createOrUpdateEnvExample(); err != nil {
+	// Create .env.example from scratch with a postgres environment
+	envs := []EnvironmentInput{
+		{
+			Name:         "development",
+			DatabaseType: "postgres",
+		},
+	}
+	if err := createOrUpdateEnvExample(envs); err != nil {
 		t.Fatalf("createOrUpdateEnvExample() error = %v", err)
 	}
 
@@ -456,20 +468,21 @@ func TestCreateOrUpdateEnvExampleNew(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, "DATABASE_URL=") {
-		t.Error(".env.example should contain DATABASE_URL")
+	if !strings.Contains(contentStr, "DATABASE_URL=postgresql://") {
+		t.Error(".env.example should contain PostgreSQL DATABASE_URL")
 	}
 
-	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=") {
-		t.Error(".env.example should contain SHADOW_DATABASE_URL")
+	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=postgresql://") {
+		t.Error(".env.example should contain PostgreSQL SHADOW_DATABASE_URL")
 	}
 
 	if !strings.Contains(contentStr, "Lockplane") {
 		t.Error(".env.example should contain Lockplane header")
 	}
 
-	if !strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should contain LIBSQL_DB_TOKEN")
+	// Should NOT contain LIBSQL_DB_TOKEN for postgres environment
+	if strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
+		t.Error(".env.example should not contain LIBSQL_DB_TOKEN for postgres environment")
 	}
 }
 
@@ -489,14 +502,20 @@ func TestCreateOrUpdateEnvExampleUpdate(t *testing.T) {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
 
-	// Create existing .env.example with only some content
-	existingContent := "# Existing config\nSOME_VAR=value\n"
+	// Create existing .env.example with DATABASE_URL and SHADOW_DATABASE_URL already set
+	existingContent := "# Existing config\nDATABASE_URL=postgresql://existing\nSHADOW_DATABASE_URL=postgresql://existing_shadow\n"
 	if err := os.WriteFile(".env.example", []byte(existingContent), 0644); err != nil {
 		t.Fatalf("failed to create .env.example: %v", err)
 	}
 
-	// Update .env.example
-	if err := createOrUpdateEnvExample(); err != nil {
+	// Add a libsql environment - should append LIBSQL_DB_TOKEN
+	envsWithLibSQL := []EnvironmentInput{
+		{
+			Name:         "turso",
+			DatabaseType: "libsql",
+		},
+	}
+	if err := createOrUpdateEnvExample(envsWithLibSQL); err != nil {
 		t.Fatalf("createOrUpdateEnvExample() error = %v", err)
 	}
 
@@ -509,21 +528,17 @@ func TestCreateOrUpdateEnvExampleUpdate(t *testing.T) {
 	contentStr := string(content)
 
 	// Should preserve existing content
-	if !strings.Contains(contentStr, "SOME_VAR=value") {
-		t.Error(".env.example should preserve existing content")
+	if !strings.Contains(contentStr, "DATABASE_URL=postgresql://existing") {
+		t.Error(".env.example should preserve existing DATABASE_URL")
 	}
 
-	// Should add new content
-	if !strings.Contains(contentStr, "DATABASE_URL=") {
-		t.Error(".env.example should contain DATABASE_URL")
+	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=postgresql://existing_shadow") {
+		t.Error(".env.example should preserve existing SHADOW_DATABASE_URL")
 	}
 
-	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=") {
-		t.Error(".env.example should contain SHADOW_DATABASE_URL")
-	}
-
+	// Should add LIBSQL_DB_TOKEN for libsql environment
 	if !strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
-		t.Error(".env.example should contain LIBSQL_DB_TOKEN")
+		t.Error(".env.example should contain LIBSQL_DB_TOKEN when libsql environment is added")
 	}
 }
 
@@ -549,8 +564,14 @@ func TestCreateOrUpdateEnvExampleIdempotent(t *testing.T) {
 		t.Fatalf("failed to create .env.example: %v", err)
 	}
 
-	// Call update again
-	if err := createOrUpdateEnvExample(); err != nil {
+	// Call update again with libsql environment
+	envsWithLibSQL := []EnvironmentInput{
+		{
+			Name:         "turso",
+			DatabaseType: "libsql",
+		},
+	}
+	if err := createOrUpdateEnvExample(envsWithLibSQL); err != nil {
 		t.Fatalf("createOrUpdateEnvExample() error = %v", err)
 	}
 
@@ -593,6 +614,102 @@ func TestCreateOrUpdateEnvExampleIdempotent(t *testing.T) {
 
 	if libsqlTokenCount != 1 {
 		t.Errorf("LIBSQL_DB_TOKEN appears %d times, want 1", libsqlTokenCount)
+	}
+}
+
+func TestCreateOrUpdateEnvExampleSQLite(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("failed to change back to original directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+
+	// Create .env.example with SQLite environment
+	envs := []EnvironmentInput{
+		{
+			Name:         "development",
+			DatabaseType: "sqlite",
+		},
+	}
+	if err := createOrUpdateEnvExample(envs); err != nil {
+		t.Fatalf("createOrUpdateEnvExample() error = %v", err)
+	}
+
+	// Verify file was created with SQLite examples
+	content, err := os.ReadFile(".env.example")
+	if err != nil {
+		t.Fatalf("failed to read .env.example: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "DATABASE_URL=sqlite://") {
+		t.Error(".env.example should contain SQLite DATABASE_URL")
+	}
+
+	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=sqlite://") {
+		t.Error(".env.example should contain SQLite SHADOW_DATABASE_URL")
+	}
+
+	// Should NOT contain LIBSQL_DB_TOKEN for sqlite environment
+	if strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
+		t.Error(".env.example should not contain LIBSQL_DB_TOKEN for sqlite environment")
+	}
+}
+
+func TestCreateOrUpdateEnvExampleLibSQL(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("failed to change back to original directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+
+	// Create .env.example with libSQL environment
+	envs := []EnvironmentInput{
+		{
+			Name:         "production",
+			DatabaseType: "libsql",
+		},
+	}
+	if err := createOrUpdateEnvExample(envs); err != nil {
+		t.Fatalf("createOrUpdateEnvExample() error = %v", err)
+	}
+
+	// Verify file was created with libSQL examples
+	content, err := os.ReadFile(".env.example")
+	if err != nil {
+		t.Fatalf("failed to read .env.example: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "DATABASE_URL=libsql://") {
+		t.Error(".env.example should contain libSQL DATABASE_URL")
+	}
+
+	if !strings.Contains(contentStr, "SHADOW_DATABASE_URL=sqlite://") {
+		t.Error(".env.example should contain SQLite SHADOW_DATABASE_URL for libSQL (uses local shadow)")
+	}
+
+	// Should contain LIBSQL_DB_TOKEN for libsql environment
+	if !strings.Contains(contentStr, "LIBSQL_DB_TOKEN=") {
+		t.Error(".env.example should contain LIBSQL_DB_TOKEN for libsql environment")
 	}
 }
 

@@ -55,7 +55,7 @@ func GenerateFiles(environments []EnvironmentInput) (*InitResult, error) {
 	if _, err := os.Stat(examplePath); err == nil {
 		exampleExists = true
 	}
-	if err := createOrUpdateEnvExample(); err != nil {
+	if err := createOrUpdateEnvExample(environments); err != nil {
 		return nil, fmt.Errorf("failed to create/update .env.example: %w", err)
 	}
 	if exampleExists {
@@ -195,7 +195,7 @@ func generateEnvFile(path string, env EnvironmentInput) error {
 	return os.WriteFile(path, []byte(b.String()), 0600)
 }
 
-func createOrUpdateEnvExample() error {
+func createOrUpdateEnvExample(environments []EnvironmentInput) error {
 	examplePath := ".env.example"
 
 	// Read existing .env.example if it exists
@@ -209,9 +209,29 @@ func createOrUpdateEnvExample() error {
 	hasShadowDatabaseURL := strings.Contains(existingContent, "SHADOW_DATABASE_URL=")
 	hasLibSQLToken := strings.Contains(existingContent, "LIBSQL_DB_TOKEN=")
 
-	// If all variables already exist, nothing to do
-	if hasDatabaseURL && hasShadowDatabaseURL && hasLibSQLToken {
+	// Determine if we need to add libSQL token based on environments
+	needsLibSQLToken := false
+	for _, env := range environments {
+		if env.DatabaseType == "libsql" {
+			needsLibSQLToken = true
+			break
+		}
+	}
+
+	// If all needed variables already exist, nothing to do
+	allExist := hasDatabaseURL && hasShadowDatabaseURL
+	if needsLibSQLToken {
+		allExist = allExist && hasLibSQLToken
+	}
+	if allExist {
 		return nil
+	}
+
+	// Determine database type for examples
+	// Use the first environment's type, or fall back to postgres
+	dbType := "postgres"
+	if len(environments) > 0 {
+		dbType = environments[0].DatabaseType
 	}
 
 	// Build the content to append
@@ -230,16 +250,30 @@ func createOrUpdateEnvExample() error {
 
 	// Add DATABASE_URL if missing
 	if !hasDatabaseURL {
-		b.WriteString("DATABASE_URL=postgresql://user:password@localhost:5432/database?sslmode=disable\n")
+		switch dbType {
+		case "sqlite":
+			b.WriteString("DATABASE_URL=sqlite://schema/lockplane.db\n")
+		case "libsql":
+			b.WriteString("DATABASE_URL=libsql://your-database.turso.io\n")
+		default: // postgres
+			b.WriteString("DATABASE_URL=postgresql://user:password@localhost:5432/database?sslmode=disable\n")
+		}
 	}
 
 	// Add SHADOW_DATABASE_URL if missing
 	if !hasShadowDatabaseURL {
-		b.WriteString("SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/database_shadow?sslmode=disable\n")
+		switch dbType {
+		case "sqlite":
+			b.WriteString("SHADOW_DATABASE_URL=sqlite://schema/lockplane_shadow.db\n")
+		case "libsql":
+			b.WriteString("SHADOW_DATABASE_URL=sqlite://schema/turso_shadow.db\n")
+		default: // postgres
+			b.WriteString("SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/database_shadow?sslmode=disable\n")
+		}
 	}
 
-	// Add LIBSQL_DB_TOKEN if missing
-	if !hasLibSQLToken {
+	// Add LIBSQL_DB_TOKEN if missing and needed
+	if !hasLibSQLToken && needsLibSQLToken {
 		b.WriteString("# libSQL/Turso auth token (only needed for libSQL databases)\n")
 		b.WriteString("LIBSQL_DB_TOKEN=your_turso_auth_token_here\n")
 	}
