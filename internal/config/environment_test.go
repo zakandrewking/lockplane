@@ -79,3 +79,137 @@ func TestResolveEnvironmentMissingDefinition(t *testing.T) {
 		t.Fatal("Expected error resolving undefined environment, got nil")
 	}
 }
+
+func TestResolveEnvironmentSQLiteFromDotenv(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dotenvPath := filepath.Join(tempDir, ".env.local")
+	if err := os.WriteFile(dotenvPath, []byte("SQLITE_DB_PATH=schema/lockplane.db\nSQLITE_SHADOW_DB_PATH=schema/lockplane_shadow.db\n"), 0o600); err != nil {
+		t.Fatalf("Failed to write dotenv file: %v", err)
+	}
+
+	config := &Config{
+		DefaultEnvironment: "local",
+		configDir:          tempDir,
+		Environments: map[string]EnvironmentConfig{
+			"local": {
+				Description: "SQLite database",
+			},
+		},
+	}
+
+	env, err := ResolveEnvironment(config, "local")
+	if err != nil {
+		t.Fatalf("ResolveEnvironment returned error: %v", err)
+	}
+
+	if env.DatabaseURL != "schema/lockplane.db" {
+		t.Fatalf("Expected SQLITE_DB_PATH value, got %q", env.DatabaseURL)
+	}
+
+	if env.ShadowDatabaseURL != "schema/lockplane_shadow.db" {
+		t.Fatalf("Expected SQLITE_SHADOW_DB_PATH value, got %q", env.ShadowDatabaseURL)
+	}
+}
+
+func TestResolveEnvironmentPostgresFromDotenv(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dotenvPath := filepath.Join(tempDir, ".env.prod")
+	if err := os.WriteFile(dotenvPath, []byte("POSTGRES_URL=postgresql://user:pass@localhost:5432/db\nPOSTGRES_SHADOW_URL=postgresql://user:pass@localhost:5433/db_shadow\n"), 0o600); err != nil {
+		t.Fatalf("Failed to write dotenv file: %v", err)
+	}
+
+	config := &Config{
+		DefaultEnvironment: "prod",
+		configDir:          tempDir,
+		Environments: map[string]EnvironmentConfig{
+			"prod": {
+				Description: "PostgreSQL database",
+			},
+		},
+	}
+
+	env, err := ResolveEnvironment(config, "prod")
+	if err != nil {
+		t.Fatalf("ResolveEnvironment returned error: %v", err)
+	}
+
+	if env.DatabaseURL != "postgresql://user:pass@localhost:5432/db" {
+		t.Fatalf("Expected POSTGRES_URL value, got %q", env.DatabaseURL)
+	}
+
+	if env.ShadowDatabaseURL != "postgresql://user:pass@localhost:5433/db_shadow" {
+		t.Fatalf("Expected POSTGRES_SHADOW_URL value, got %q", env.ShadowDatabaseURL)
+	}
+}
+
+func TestResolveEnvironmentLibSQLFromDotenv(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dotenvPath := filepath.Join(tempDir, ".env.turso")
+	if err := os.WriteFile(dotenvPath, []byte("LIBSQL_URL=libsql://example.turso.io\nLIBSQL_AUTH_TOKEN=test-token\nLIBSQL_SHADOW_DB_PATH=./schema/turso_shadow.db\n"), 0o600); err != nil {
+		t.Fatalf("Failed to write dotenv file: %v", err)
+	}
+
+	config := &Config{
+		DefaultEnvironment: "turso",
+		configDir:          tempDir,
+		Environments: map[string]EnvironmentConfig{
+			"turso": {
+				Description: "libSQL/Turso database",
+			},
+		},
+	}
+
+	env, err := ResolveEnvironment(config, "turso")
+	if err != nil {
+		t.Fatalf("ResolveEnvironment returned error: %v", err)
+	}
+
+	expectedURL := "libsql://example.turso.io?authToken=test-token"
+	if env.DatabaseURL != expectedURL {
+		t.Fatalf("Expected LIBSQL_URL with auth token, got %q", env.DatabaseURL)
+	}
+
+	if env.ShadowDatabaseURL != "./schema/turso_shadow.db" {
+		t.Fatalf("Expected LIBSQL_SHADOW_DB_PATH value, got %q", env.ShadowDatabaseURL)
+	}
+}
+
+func TestResolveEnvironmentShadowSQLiteDBPathVariant(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dotenvPath := filepath.Join(tempDir, ".env.local")
+	// Test the SHADOW_SQLITE_DB_PATH variant (user's actual configuration)
+	if err := os.WriteFile(dotenvPath, []byte("SQLITE_DB_PATH=schema/lockplane.db\nSHADOW_SQLITE_DB_PATH=schema/lockplane_shadow.db\n"), 0o600); err != nil {
+		t.Fatalf("Failed to write dotenv file: %v", err)
+	}
+
+	config := &Config{
+		DefaultEnvironment: "local",
+		configDir:          tempDir,
+		Environments: map[string]EnvironmentConfig{
+			"local": {
+				Description: "SQLite database",
+			},
+		},
+	}
+
+	env, err := ResolveEnvironment(config, "local")
+	if err != nil {
+		t.Fatalf("ResolveEnvironment returned error: %v", err)
+	}
+
+	if env.DatabaseURL != "schema/lockplane.db" {
+		t.Fatalf("Expected SQLITE_DB_PATH value, got %q", env.DatabaseURL)
+	}
+
+	if env.ShadowDatabaseURL != "schema/lockplane_shadow.db" {
+		t.Fatalf("Expected SHADOW_SQLITE_DB_PATH value, got %q", env.ShadowDatabaseURL)
+	}
+}

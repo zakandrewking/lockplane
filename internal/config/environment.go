@@ -108,12 +108,63 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 			return nil, fmt.Errorf("failed to read %s: %w", resolved.DotenvPath, err)
 		}
 		resolved.FromDotenv = true
+
+		// Check for generic DATABASE_URL first
 		if value := values["DATABASE_URL"]; value != "" {
 			resolved.DatabaseURL = value
 		}
 		if value := values["SHADOW_DATABASE_URL"]; value != "" {
 			resolved.ShadowDatabaseURL = value
 		}
+
+		// Then check for database-specific variables (these take precedence if DATABASE_URL wasn't set)
+		// PostgreSQL
+		if resolved.DatabaseURL == "" {
+			if value := values["POSTGRES_URL"]; value != "" {
+				resolved.DatabaseURL = value
+			}
+		}
+		if resolved.ShadowDatabaseURL == "" {
+			if value := values["POSTGRES_SHADOW_URL"]; value != "" {
+				resolved.ShadowDatabaseURL = value
+			}
+		}
+
+		// SQLite
+		if resolved.DatabaseURL == "" {
+			if value := values["SQLITE_DB_PATH"]; value != "" {
+				resolved.DatabaseURL = value
+			}
+		}
+		if resolved.ShadowDatabaseURL == "" {
+			if value := values["SQLITE_SHADOW_DB_PATH"]; value != "" {
+				resolved.ShadowDatabaseURL = value
+			}
+			// Also check the variant with different naming
+			if resolved.ShadowDatabaseURL == "" {
+				if value := values["SHADOW_SQLITE_DB_PATH"]; value != "" {
+					resolved.ShadowDatabaseURL = value
+				}
+			}
+		}
+
+		// libSQL
+		if resolved.DatabaseURL == "" {
+			if value := values["LIBSQL_URL"]; value != "" {
+				// Construct libSQL connection string with auth token if available
+				if authToken := values["LIBSQL_AUTH_TOKEN"]; authToken != "" {
+					resolved.DatabaseURL = fmt.Sprintf("%s?authToken=%s", value, authToken)
+				} else {
+					resolved.DatabaseURL = value
+				}
+			}
+		}
+		if resolved.ShadowDatabaseURL == "" {
+			if value := values["LIBSQL_SHADOW_DB_PATH"]; value != "" {
+				resolved.ShadowDatabaseURL = value
+			}
+		}
+
 		if resolved.SchemaPath == "" {
 			if value := values["SCHEMA_PATH"]; value != "" {
 				resolved.SchemaPath = value
