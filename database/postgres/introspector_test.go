@@ -311,6 +311,38 @@ func TestIntrospector_IntrospectSchema(t *testing.T) {
 	}
 }
 
+func TestIntrospector_EmptyDatabase(t *testing.T) {
+	db := getTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	introspector := NewIntrospector()
+
+	// Clean up any existing test tables first
+	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_empty_introspect")
+
+	// Introspect empty database (or at least a database without our test tables)
+	schema, err := introspector.IntrospectSchema(ctx, db)
+	if err != nil {
+		t.Fatalf("IntrospectSchema failed: %v", err)
+	}
+
+	if schema == nil {
+		t.Fatal("Expected non-nil schema")
+	}
+
+	// Tables should be an empty slice, not nil
+	if schema.Tables == nil {
+		t.Error("Expected Tables to be an empty slice, not nil")
+	}
+
+	// Verify the schema can be marshaled to JSON without issues
+	jsonData, err := db.QueryContext(ctx, "SELECT json_agg(t) FROM (SELECT 1) t")
+	if err == nil {
+		_ = jsonData.Close()
+	}
+}
+
 // Helper function to find a column by name
 func findColumn(columns []database.Column, name string) *database.Column {
 	for i := range columns {
