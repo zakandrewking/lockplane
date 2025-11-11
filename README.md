@@ -147,6 +147,7 @@ lockplane init
 
 The wizard will guide you through:
 - **Database type selection**: Choose PostgreSQL, SQLite, or libSQL/Turso
+- **Connection input method** (PostgreSQL): Choose to enter individual fields or paste a connection string
 - **Connection details**: Enter your database credentials with smart defaults
 - **Connection testing**: Verify your database is reachable before proceeding
 - **Environment setup**: Configure multiple environments (local, staging, production)
@@ -166,7 +167,7 @@ The wizard will guide you through:
 # Use all defaults (PostgreSQL on localhost)
 lockplane init --yes
 
-# Custom PostgreSQL configuration
+# Custom PostgreSQL configuration (individual fields)
 lockplane init --yes \
   --env-name production \
   --description "Production database" \
@@ -175,6 +176,11 @@ lockplane init --yes \
   --user myuser \
   --password "$DB_PASSWORD" \
   --ssl-mode require
+
+# PostgreSQL with connection string (easier for copying from cloud providers)
+lockplane init --yes \
+  --env-name production \
+  --connection-string "postgresql://user:pass@db.example.com:5432/myapp?sslmode=require"
 
 # SQLite configuration
 lockplane init --yes \
@@ -196,6 +202,7 @@ All configuration flags:
 - `--schema-path` - Schema path relative to config (default: ".")
 
 PostgreSQL flags:
+- `--connection-string` - Full connection string (alternative to individual fields below)
 - `--host` - Host (default: "localhost")
 - `--port` - Port (default: "5432")
 - `--database` - Database name (default: "lockplane")

@@ -42,12 +42,43 @@ func TestHandleEnterDatabaseType(t *testing.T) {
 	newModel, _ := m.handleEnter()
 	m = *newModel.(*WizardModel)
 
-	if m.state != StateConnectionDetails {
-		t.Errorf("expected state to be StateConnectionDetails after selecting database type, got %v", m.state)
+	// For Postgres, should go to input method selection first
+	if m.state != StatePostgresInputMethod {
+		t.Errorf("expected state to be StatePostgresInputMethod after selecting Postgres, got %v", m.state)
 	}
 
 	if m.currentEnv.DatabaseType != "postgres" {
 		t.Errorf("expected database type to be 'postgres', got %s", m.currentEnv.DatabaseType)
+	}
+
+	// Now select input method and proceed
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateConnectionDetails {
+		t.Errorf("expected state to be StateConnectionDetails after selecting input method, got %v", m.state)
+	}
+
+	if len(m.inputs) == 0 {
+		t.Error("expected inputs to be initialized after selecting input method")
+	}
+}
+
+func TestHandleEnterDatabaseTypeSQLite(t *testing.T) {
+	m := New()
+	m.state = StateDatabaseType
+	m.dbTypeIndex = 1 // SQLite
+
+	newModel, _ := m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	// For SQLite, should go directly to connection details
+	if m.state != StateConnectionDetails {
+		t.Errorf("expected state to be StateConnectionDetails after selecting SQLite, got %v", m.state)
+	}
+
+	if m.currentEnv.DatabaseType != "sqlite" {
+		t.Errorf("expected database type to be 'sqlite', got %s", m.currentEnv.DatabaseType)
 	}
 
 	if len(m.inputs) == 0 {

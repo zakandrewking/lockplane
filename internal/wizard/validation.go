@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -198,4 +199,72 @@ func BuildLibSQLShadowConnectionString(env EnvironmentInput) string {
 	// Use a local SQLite database for shadow testing
 	// This allows schema validation without needing a second Turso database
 	return "./schema/turso_shadow.db"
+}
+
+// ParsePostgresConnectionString parses a PostgreSQL connection string and extracts components
+// Supports formats:
+//   - postgresql://user:password@host:port/database?sslmode=disable
+//   - postgres://user:password@host:port/database?sslmode=disable
+func ParsePostgresConnectionString(connStr string) (EnvironmentInput, error) {
+	env := EnvironmentInput{
+		DatabaseType: "postgres",
+	}
+
+	// Remove postgres:// or postgresql:// prefix
+	if !strings.HasPrefix(connStr, "postgres://") && !strings.HasPrefix(connStr, "postgresql://") {
+		return env, fmt.Errorf("connection string must start with postgres:// or postgresql://")
+	}
+
+	// Parse the URL
+	u, err := url.Parse(connStr)
+	if err != nil {
+		return env, fmt.Errorf("invalid connection string format: %w", err)
+	}
+
+	// Extract user and password
+	if u.User != nil {
+		env.User = u.User.Username()
+		if password, ok := u.User.Password(); ok {
+			env.Password = password
+		}
+	}
+
+	// Extract host and port
+	env.Host = u.Hostname()
+	env.Port = u.Port()
+	if env.Port == "" {
+		env.Port = "5432" // Default PostgreSQL port
+	}
+
+	// Extract database name (path without leading /)
+	env.Database = strings.TrimPrefix(u.Path, "/")
+
+	// Extract SSL mode from query parameters
+	query := u.Query()
+	if sslMode := query.Get("sslmode"); sslMode != "" {
+		env.SSLMode = sslMode
+	} else {
+		// Auto-detect SSL mode based on host
+		if env.Host == "localhost" || env.Host == "127.0.0.1" {
+			env.SSLMode = "disable"
+		} else {
+			env.SSLMode = "require"
+		}
+	}
+
+	// Validate required fields
+	if env.Host == "" {
+		return env, fmt.Errorf("connection string missing host")
+	}
+	if env.Database == "" {
+		return env, fmt.Errorf("connection string missing database name")
+	}
+	if env.User == "" {
+		return env, fmt.Errorf("connection string missing user")
+	}
+
+	// Set default shadow DB port
+	env.ShadowDBPort = "5433"
+
+	return env, nil
 }

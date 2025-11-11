@@ -279,3 +279,187 @@ func TestBuildLibSQLShadowConnectionString(t *testing.T) {
 		t.Errorf("BuildLibSQLShadowConnectionString() = %q, want %q", connStr, expected)
 	}
 }
+
+func TestParsePostgresConnectionString(t *testing.T) {
+	tests := []struct {
+		name     string
+		connStr  string
+		wantEnv  EnvironmentInput
+		wantErr  bool
+		errMatch string
+	}{
+		{
+			name:    "valid postgresql:// with all components",
+			connStr: "postgresql://myuser:mypass@localhost:5432/mydb?sslmode=disable",
+			wantEnv: EnvironmentInput{
+				DatabaseType: "postgres",
+				Host:         "localhost",
+				Port:         "5432",
+				Database:     "mydb",
+				User:         "myuser",
+				Password:     "mypass",
+				SSLMode:      "disable",
+				ShadowDBPort: "5433",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "valid postgres:// prefix",
+			connStr: "postgres://testuser:testpass@db.example.com:5432/testdb?sslmode=require",
+			wantEnv: EnvironmentInput{
+				DatabaseType: "postgres",
+				Host:         "db.example.com",
+				Port:         "5432",
+				Database:     "testdb",
+				User:         "testuser",
+				Password:     "testpass",
+				SSLMode:      "require",
+				ShadowDBPort: "5433",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "no port specified (uses default)",
+			connStr: "postgresql://user:pass@localhost/mydb",
+			wantEnv: EnvironmentInput{
+				DatabaseType: "postgres",
+				Host:         "localhost",
+				Port:         "5432",
+				Database:     "mydb",
+				User:         "user",
+				Password:     "pass",
+				SSLMode:      "disable",
+				ShadowDBPort: "5433",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "no sslmode (auto-detect for localhost)",
+			connStr: "postgresql://user:pass@localhost:5432/mydb",
+			wantEnv: EnvironmentInput{
+				DatabaseType: "postgres",
+				Host:         "localhost",
+				Port:         "5432",
+				Database:     "mydb",
+				User:         "user",
+				Password:     "pass",
+				SSLMode:      "disable",
+				ShadowDBPort: "5433",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "no sslmode (auto-detect for remote)",
+			connStr: "postgresql://user:pass@db.example.com:5432/mydb",
+			wantEnv: EnvironmentInput{
+				DatabaseType: "postgres",
+				Host:         "db.example.com",
+				Port:         "5432",
+				Database:     "mydb",
+				User:         "user",
+				Password:     "pass",
+				SSLMode:      "require",
+				ShadowDBPort: "5433",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "password with special characters",
+			connStr: "postgresql://user:p@ss%3Aword@localhost:5432/mydb",
+			wantEnv: EnvironmentInput{
+				DatabaseType: "postgres",
+				Host:         "localhost",
+				Port:         "5432",
+				Database:     "mydb",
+				User:         "user",
+				Password:     "p@ss:word",
+				SSLMode:      "disable",
+				ShadowDBPort: "5433",
+			},
+			wantErr: false,
+		},
+		{
+			name:     "invalid prefix",
+			connStr:  "mysql://user:pass@localhost:3306/mydb",
+			wantErr:  true,
+			errMatch: "must start with postgres:// or postgresql://",
+		},
+		{
+			name:     "missing host",
+			connStr:  "postgresql://user:pass@:5432/mydb",
+			wantErr:  true,
+			errMatch: "missing host",
+		},
+		{
+			name:     "missing database",
+			connStr:  "postgresql://user:pass@localhost:5432",
+			wantErr:  true,
+			errMatch: "missing database name",
+		},
+		{
+			name:     "missing user",
+			connStr:  "postgresql://:pass@localhost:5432/mydb",
+			wantErr:  true,
+			errMatch: "missing user",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := ParsePostgresConnectionString(tt.connStr)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParsePostgresConnectionString() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr {
+				if tt.errMatch != "" && err != nil {
+					if !containsString(err.Error(), tt.errMatch) {
+						t.Errorf("ParsePostgresConnectionString() error = %q, want error containing %q", err.Error(), tt.errMatch)
+					}
+				}
+				return
+			}
+
+			// Compare environments
+			if env.DatabaseType != tt.wantEnv.DatabaseType {
+				t.Errorf("DatabaseType = %q, want %q", env.DatabaseType, tt.wantEnv.DatabaseType)
+			}
+			if env.Host != tt.wantEnv.Host {
+				t.Errorf("Host = %q, want %q", env.Host, tt.wantEnv.Host)
+			}
+			if env.Port != tt.wantEnv.Port {
+				t.Errorf("Port = %q, want %q", env.Port, tt.wantEnv.Port)
+			}
+			if env.Database != tt.wantEnv.Database {
+				t.Errorf("Database = %q, want %q", env.Database, tt.wantEnv.Database)
+			}
+			if env.User != tt.wantEnv.User {
+				t.Errorf("User = %q, want %q", env.User, tt.wantEnv.User)
+			}
+			if env.Password != tt.wantEnv.Password {
+				t.Errorf("Password = %q, want %q", env.Password, tt.wantEnv.Password)
+			}
+			if env.SSLMode != tt.wantEnv.SSLMode {
+				t.Errorf("SSLMode = %q, want %q", env.SSLMode, tt.wantEnv.SSLMode)
+			}
+			if env.ShadowDBPort != tt.wantEnv.ShadowDBPort {
+				t.Errorf("ShadowDBPort = %q, want %q", env.ShadowDBPort, tt.wantEnv.ShadowDBPort)
+			}
+		})
+	}
+}
+
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

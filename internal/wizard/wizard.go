@@ -108,6 +108,8 @@ func (m WizardModel) View() string {
 		return m.renderCheckExisting()
 	case StateDatabaseType:
 		return m.renderDatabaseType()
+	case StatePostgresInputMethod:
+		return m.renderPostgresInputMethod()
 	case StateConnectionDetails:
 		return m.renderConnectionDetails()
 	case StateTestConnection:
@@ -144,6 +146,18 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		// Set the selected database type
 		dbType := DatabaseTypes[m.dbTypeIndex]
 		m.currentEnv.DatabaseType = dbType.ID
+		// For Postgres, show input method selection
+		if dbType.ID == "postgres" {
+			m.state = StatePostgresInputMethod
+			m.postgresInputMethod = 0 // Reset to default (individual fields)
+		} else {
+			m.state = StateConnectionDetails
+			m.initializeInputs()
+		}
+		return m, nil
+
+	case StatePostgresInputMethod:
+		// User chose input method for Postgres
 		m.state = StateConnectionDetails
 		m.initializeInputs()
 		return m, nil
@@ -222,6 +236,10 @@ func (m *WizardModel) handleUp() (tea.Model, tea.Cmd) {
 		if m.dbTypeIndex > 0 {
 			m.dbTypeIndex--
 		}
+	case StatePostgresInputMethod:
+		if m.postgresInputMethod > 0 {
+			m.postgresInputMethod--
+		}
 	case StateConnectionDetails:
 		if m.focusIndex > 0 {
 			m.focusIndex--
@@ -244,6 +262,10 @@ func (m *WizardModel) handleDown() (tea.Model, tea.Cmd) {
 	case StateDatabaseType:
 		if m.dbTypeIndex < len(DatabaseTypes)-1 {
 			m.dbTypeIndex++
+		}
+	case StatePostgresInputMethod:
+		if m.postgresInputMethod < 1 {
+			m.postgresInputMethod++
 		}
 	case StateConnectionDetails:
 		if m.focusIndex < len(m.inputs)-1 {
@@ -281,11 +303,22 @@ func (m *WizardModel) handleBack() (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case StateConnectionDetails:
+	case StatePostgresInputMethod:
 		// Go back to database type selection
 		m.state = StateDatabaseType
-		// Clear current environment data
 		m.currentEnv = EnvironmentInput{}
+		return m, nil
+
+	case StateConnectionDetails:
+		// Go back to appropriate previous state
+		if m.currentEnv.DatabaseType == "postgres" {
+			// For Postgres, go back to input method selection
+			m.state = StatePostgresInputMethod
+		} else {
+			// For other databases, go back to database type selection
+			m.state = StateDatabaseType
+		}
+		// Clear input data
 		m.inputs = []textinput.Model{}
 		m.focusIndex = 0
 		m.errors = make(map[string]string)
@@ -338,14 +371,23 @@ func (m *WizardModel) initializeInputs() {
 
 	switch m.currentEnv.DatabaseType {
 	case "postgres":
-		m.inputs = append(m.inputs,
-			m.makeInput("Environment name", "local", false),
-			m.makeInput("Host", "localhost", false),
-			m.makeInput("Port", "5432", false),
-			m.makeInput("Database", "lockplane", false),
-			m.makeInput("User", "lockplane", false),
-			m.makeInput("Password", "lockplane", true),
-		)
+		if m.postgresInputMethod == 1 {
+			// Connection string input
+			m.inputs = append(m.inputs,
+				m.makeInput("Environment name", "local", false),
+				m.makeInput("Connection string", "postgresql://user:password@localhost:5432/database?sslmode=disable", false),
+			)
+		} else {
+			// Individual fields input
+			m.inputs = append(m.inputs,
+				m.makeInput("Environment name", "local", false),
+				m.makeInput("Host", "localhost", false),
+				m.makeInput("Port", "5432", false),
+				m.makeInput("Database", "lockplane", false),
+				m.makeInput("User", "lockplane", false),
+				m.makeInput("Password", "lockplane", true),
+			)
+		}
 	case "sqlite":
 		m.inputs = append(m.inputs,
 			m.makeInput("Environment name", "local", false),
@@ -395,24 +437,56 @@ func (m *WizardModel) updateInputFocus() {
 func (m *WizardModel) collectInputValues() error {
 	switch m.currentEnv.DatabaseType {
 	case "postgres":
-		if len(m.inputs) < 6 {
-			return fmt.Errorf("not enough inputs")
-		}
-		m.currentEnv.Name = m.inputs[0].Value()
-		m.currentEnv.Host = m.inputs[1].Value()
-		m.currentEnv.Port = m.inputs[2].Value()
-		m.currentEnv.Database = m.inputs[3].Value()
-		m.currentEnv.User = m.inputs[4].Value()
-		m.currentEnv.Password = m.inputs[5].Value()
+		if m.postgresInputMethod == 1 {
+			// Connection string input
+			if len(m.inputs) < 2 {
+				return fmt.Errorf("not enough inputs")
+			}
+			m.currentEnv.Name = m.inputs[0].Value()
+			connStr := m.inputs[1].Value()
 
-		// Validate
-		if err := ValidateEnvironmentName(m.currentEnv.Name); err != nil {
-			m.errors["name"] = err.Error()
-			return err
-		}
-		if err := ValidatePort(m.currentEnv.Port); err != nil {
-			m.errors["port"] = err.Error()
-			return err
+			// Validate environment name
+			if err := ValidateEnvironmentName(m.currentEnv.Name); err != nil {
+				m.errors["name"] = err.Error()
+				return err
+			}
+
+			// Parse connection string
+			parsedEnv, err := ParsePostgresConnectionString(connStr)
+			if err != nil {
+				m.errors["connection_string"] = err.Error()
+				return err
+			}
+
+			// Copy parsed values to current environment
+			m.currentEnv.Host = parsedEnv.Host
+			m.currentEnv.Port = parsedEnv.Port
+			m.currentEnv.Database = parsedEnv.Database
+			m.currentEnv.User = parsedEnv.User
+			m.currentEnv.Password = parsedEnv.Password
+			m.currentEnv.SSLMode = parsedEnv.SSLMode
+			m.currentEnv.ShadowDBPort = parsedEnv.ShadowDBPort
+		} else {
+			// Individual fields input
+			if len(m.inputs) < 6 {
+				return fmt.Errorf("not enough inputs")
+			}
+			m.currentEnv.Name = m.inputs[0].Value()
+			m.currentEnv.Host = m.inputs[1].Value()
+			m.currentEnv.Port = m.inputs[2].Value()
+			m.currentEnv.Database = m.inputs[3].Value()
+			m.currentEnv.User = m.inputs[4].Value()
+			m.currentEnv.Password = m.inputs[5].Value()
+
+			// Validate
+			if err := ValidateEnvironmentName(m.currentEnv.Name); err != nil {
+				m.errors["name"] = err.Error()
+				return err
+			}
+			if err := ValidatePort(m.currentEnv.Port); err != nil {
+				m.errors["port"] = err.Error()
+				return err
+			}
 		}
 
 	case "sqlite":
@@ -583,6 +657,38 @@ func (m WizardModel) renderDatabaseType() string {
 
 	b.WriteString("\n")
 	b.WriteString(renderInfo("PostgreSQL provides the most features including\nshadow databases for safe migration testing."))
+	b.WriteString("\n\n")
+	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  Esc: back  Ctrl-C: quit"))
+
+	return borderStyle.Render(b.String())
+}
+
+func (m WizardModel) renderPostgresInputMethod() string {
+	var b strings.Builder
+
+	b.WriteString(renderHeader("Lockplane Init Wizard"))
+	b.WriteString("\n\n")
+	b.WriteString(renderSectionHeader("PostgreSQL Connection Input"))
+	b.WriteString("\n\n")
+	b.WriteString(labelStyle.Render("How would you like to provide connection details?"))
+	b.WriteString("\n\n")
+
+	// Option 0: Individual fields
+	option0 := "Enter individual fields (host, port, database, user, password)"
+	b.WriteString(renderOption(0, m.postgresInputMethod == 0, option0))
+	b.WriteString("\n")
+
+	// Option 1: Connection string
+	option1 := "Paste connection string (postgresql://...)"
+	b.WriteString(renderOption(1, m.postgresInputMethod == 1, option1))
+	b.WriteString("\n\n")
+
+	if m.postgresInputMethod == 0 {
+		b.WriteString(renderInfo("Individual fields provide guided input with\ndefaults for local development."))
+	} else {
+		b.WriteString(renderInfo("Paste a connection string like:\npostgresql://user:pass@host:5432/db?sslmode=disable"))
+	}
+
 	b.WriteString("\n\n")
 	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  Esc: back  Ctrl-C: quit"))
 

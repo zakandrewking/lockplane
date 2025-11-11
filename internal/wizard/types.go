@@ -11,6 +11,7 @@ const (
 	StateWelcome WizardState = iota
 	StateCheckExisting
 	StateDatabaseType
+	StatePostgresInputMethod // New state: choose between individual fields or connection string
 	StateConnectionDetails
 	StateTestConnection
 	StateAddAnother
@@ -48,6 +49,9 @@ type WizardModel struct {
 
 	// Database type selection
 	dbTypeIndex int
+
+	// Postgres input method selection (0=individual fields, 1=connection string)
+	postgresInputMethod int
 
 	// Validation
 	errors map[string]string

@@ -47,6 +47,7 @@ func runInit(args []string) {
 	schemaPath := fs.String("schema-path", ".", "Schema path relative to config directory")
 
 	// PostgreSQL options
+	connectionString := fs.String("connection-string", "", "PostgreSQL connection string (alternative to individual fields)")
 	host := fs.String("host", "localhost", "PostgreSQL host")
 	port := fs.String("port", "5432", "PostgreSQL port")
 	database := fs.String("database", "lockplane", "PostgreSQL database name")
@@ -84,13 +85,15 @@ func runInit(args []string) {
 		_, _ = fmt.Fprintf(os.Stderr, "  --db-type          Database type: postgres, sqlite, libsql (default: postgres)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  --schema-path      Schema path relative to config (default: .)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nPostgreSQL flags:\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  --host             Host (default: localhost)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  --port             Port (default: 5432)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  --database         Database name (default: lockplane)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  --user             User (default: lockplane)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  --password         Password (default: lockplane)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  --ssl-mode         SSL mode (auto-detected if not specified)\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  --shadow-db-port   Shadow database port (default: 5433)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --connection-string  Full connection string (postgresql://user:pass@host:port/db?sslmode=...)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "                       Alternative to individual fields below\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --host               Host (default: localhost)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --port               Port (default: 5432)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --database           Database name (default: lockplane)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --user               User (default: lockplane)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --password           Password (default: lockplane)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --ssl-mode           SSL mode (auto-detected if not specified)\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  --shadow-db-port     Shadow database port (default: 5433)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nSQLite flags:\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  --file-path        Database file path (default: schema/lockplane.db)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "\nlibSQL flags:\n")
@@ -101,7 +104,7 @@ func runInit(args []string) {
 		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  # Non-interactive with defaults\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init --yes\n\n")
-		_, _ = fmt.Fprintf(os.Stderr, "  # Non-interactive with custom PostgreSQL config\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  # Non-interactive with custom PostgreSQL config (individual fields)\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init --yes \\\n")
 		_, _ = fmt.Fprintf(os.Stderr, "    --env-name production \\\n")
 		_, _ = fmt.Fprintf(os.Stderr, "    --description \"Production database\" \\\n")
@@ -111,6 +114,10 @@ func runInit(args []string) {
 		_, _ = fmt.Fprintf(os.Stderr, "    --user myuser \\\n")
 		_, _ = fmt.Fprintf(os.Stderr, "    --password \"$DB_PASSWORD\" \\\n")
 		_, _ = fmt.Fprintf(os.Stderr, "    --ssl-mode require\n\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  # Non-interactive with PostgreSQL connection string\n")
+		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init --yes \\\n")
+		_, _ = fmt.Fprintf(os.Stderr, "    --env-name production \\\n")
+		_, _ = fmt.Fprintf(os.Stderr, "    --connection-string \"postgresql://user:pass@db.example.com:5432/myapp?sslmode=require\"\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  # Non-interactive with SQLite\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  lockplane init --yes --db-type sqlite --file-path ./myapp.db\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "  # Non-interactive with libSQL/Turso\n")
@@ -143,16 +150,38 @@ func runInit(args []string) {
 			Description:  *description,
 			DatabaseType: *dbType,
 			SchemaPath:   *schemaPath,
-			Host:         *host,
-			Port:         *port,
-			Database:     *database,
-			User:         *user,
-			Password:     *password,
-			SSLMode:      *sslMode,
-			ShadowDBPort: *shadowDBPort,
 			FilePath:     *filePath,
 			URL:          *url,
 			AuthToken:    *authToken,
+		}
+
+		// For PostgreSQL, handle connection string or individual fields
+		if *dbType == "postgres" {
+			if *connectionString != "" {
+				// Parse connection string
+				parsedEnv, err := wizard.ParsePostgresConnectionString(*connectionString)
+				if err != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "Error: Invalid connection string: %v\n", err)
+					os.Exit(1)
+				}
+				// Copy parsed values
+				envInput.Host = parsedEnv.Host
+				envInput.Port = parsedEnv.Port
+				envInput.Database = parsedEnv.Database
+				envInput.User = parsedEnv.User
+				envInput.Password = parsedEnv.Password
+				envInput.SSLMode = parsedEnv.SSLMode
+				envInput.ShadowDBPort = parsedEnv.ShadowDBPort
+			} else {
+				// Use individual fields
+				envInput.Host = *host
+				envInput.Port = *port
+				envInput.Database = *database
+				envInput.User = *user
+				envInput.Password = *password
+				envInput.SSLMode = *sslMode
+				envInput.ShadowDBPort = *shadowDBPort
+			}
 		}
 
 		// Validate database type
