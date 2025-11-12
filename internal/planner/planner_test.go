@@ -47,6 +47,44 @@ func TestGeneratePlan_AddTable(t *testing.T) {
 	}
 }
 
+func TestGeneratePlan_AddTableWithIndexes(t *testing.T) {
+	diff := &schema.SchemaDiff{
+		AddedTables: []database.Table{
+			{
+				Name: "projects",
+				Columns: []database.Column{
+					{Name: "id", Type: "text", Nullable: false, IsPrimaryKey: true},
+					{Name: "user_id", Type: "text", Nullable: false},
+				},
+				Indexes: []database.Index{
+					{Name: "idx_projects_user_id", Columns: []string{"user_id"}},
+				},
+			},
+		},
+	}
+
+	driver := sqlite.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
+	if err != nil {
+		t.Fatalf("Failed to generate plan: %v", err)
+	}
+
+	if len(plan.Steps) != 2 {
+		t.Fatalf("Expected 2 steps (create table + index), got %d", len(plan.Steps))
+	}
+
+	createStep := plan.Steps[0]
+	if len(createStep.SQL) == 0 || !strings.Contains(createStep.SQL[0], "CREATE TABLE projects") {
+		t.Errorf("Expected CREATE TABLE for projects, got: %v", createStep.SQL)
+	}
+
+	indexStep := plan.Steps[1]
+	expectedSQL := "CREATE INDEX idx_projects_user_id ON projects (user_id)"
+	if len(indexStep.SQL) == 0 || indexStep.SQL[0] != expectedSQL {
+		t.Errorf("Expected %q, got: %v", expectedSQL, indexStep.SQL)
+	}
+}
+
 func TestGeneratePlan_DropTable(t *testing.T) {
 	diff := &schema.SchemaDiff{
 		RemovedTables: []database.Table{

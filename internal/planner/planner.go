@@ -58,6 +58,15 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 				})
 			}
 		}
+
+		// Add indexes defined on newly created tables
+		for _, idx := range table.Indexes {
+			sql, desc := driver.AddIndex(table.Name, idx)
+			plan.Steps = append(plan.Steps, PlanStep{
+				Description: desc,
+				SQL:         []string{sql},
+			})
+		}
 	}
 
 	// Step 2-4: Process table modifications

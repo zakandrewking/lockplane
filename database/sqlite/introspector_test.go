@@ -190,29 +190,35 @@ func TestIntrospector_GetIndexes(t *testing.T) {
 	}
 
 	// Verify indexes (should have 2 - not counting auto-created primary key index)
-	foundEmailIdx := false
-	foundUsernameIdx := false
+	if len(indexes) != 2 {
+		t.Fatalf("Expected 2 indexes, got %d", len(indexes))
+	}
 
+	indexMap := make(map[string]database.Index)
 	for _, idx := range indexes {
-		if idx.Name == "idx_email" {
-			foundEmailIdx = true
-			if !idx.Unique {
-				t.Error("Expected idx_email to be unique")
-			}
-		}
-		if idx.Name == "idx_username" {
-			foundUsernameIdx = true
-			if idx.Unique {
-				t.Error("Expected idx_username to be non-unique")
-			}
-		}
+		indexMap[idx.Name] = idx
 	}
 
-	if !foundEmailIdx {
-		t.Error("Expected to find idx_email index")
+	emailIdx, ok := indexMap["idx_email"]
+	if !ok {
+		t.Fatal("Expected to find idx_email index")
 	}
-	if !foundUsernameIdx {
-		t.Error("Expected to find idx_username index")
+	if !emailIdx.Unique {
+		t.Error("Expected idx_email to be unique")
+	}
+	if len(emailIdx.Columns) != 1 || emailIdx.Columns[0] != "email" {
+		t.Errorf("Expected idx_email columns to be [email], got %v", emailIdx.Columns)
+	}
+
+	usernameIdx, ok := indexMap["idx_username"]
+	if !ok {
+		t.Fatal("Expected to find idx_username index")
+	}
+	if usernameIdx.Unique {
+		t.Error("Expected idx_username to be non-unique")
+	}
+	if len(usernameIdx.Columns) != 1 || usernameIdx.Columns[0] != "username" {
+		t.Errorf("Expected idx_username columns to be [username], got %v", usernameIdx.Columns)
 	}
 }
 
