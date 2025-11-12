@@ -125,11 +125,13 @@ func (g *Generator) DropIndex(tableName string, idx database.Index) (string, str
 // AddForeignKey generates SQLite SQL to add a foreign key
 // SQLite doesn't support ALTER TABLE ADD FOREIGN KEY, so we use table recreation
 func (g *Generator) AddForeignKey(tableName string, fk database.ForeignKey) (string, string) {
-	// Note: This returns the foreign key constraint definition that will be used
-	// during table recreation. The actual table recreation logic is handled by
+	// Note: Foreign keys are added inline during CREATE TABLE in SQLite.
+	// When recreating the schema (e.g., for shadow DB), foreign keys are already
+	// included in the CREATE TABLE statement, so we return a comment here to indicate
+	// no additional action is needed. The actual table recreation logic is handled by
 	// RecreateTableWithForeignKey which generates multiple steps.
 	description := fmt.Sprintf("Add foreign key %s to table %s (requires table recreation)", fk.Name, tableName)
-	sql := g.FormatForeignKeyConstraint(fk)
+	sql := fmt.Sprintf("-- Foreign key %s already defined in CREATE TABLE", fk.Name)
 	return sql, description
 }
 
