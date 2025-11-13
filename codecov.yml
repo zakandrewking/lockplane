@@ -1,0 +1,70 @@
+# Codecov configuration
+# Documentation: https://docs.codecov.com/docs/codecov-yaml
+
+# Coverage settings
+coverage:
+  # Overall coverage targets
+  status:
+    # Disable project-level status checks
+    # This prevents Codecov from posting pass/fail checks to PRs
+    project:
+      default:
+        # Turn off status checks
+        informational: true
+
+    # Disable patch-level status checks
+    patch:
+      default:
+        # Turn off status checks
+        informational: true
+
+  # Precision for coverage percentages (2 decimal places)
+  precision: 2
+
+  # Round coverage values (down, up, or nearest)
+  round: down
+
+  # Coverage range for color coding (red to green)
+  range: 50..90
+
+# Comment settings - disable PR comments
+comment:
+  # Disable comments on pull requests
+  require_changes: false
+  require_base: false
+  require_head: false
+  layout: "reach, diff, flags, files"
+  behavior: default
+  after_n_builds: 2  # Wait for both integration test uploads
+
+# GitHub checks - disable all status checks
+github_checks:
+  annotations: false
+
+# Ignore paths from coverage
+ignore:
+  - "**/*_test.go"
+  - "**/testdata/**"
+  - "**/testutil/**"
+  - "tests/**"
+  - "examples/**"
+  - "devdocs/**"
+  - "docs/**"
+
+# Flags for different coverage uploads
+# This allows us to track coverage from different test suites separately
+flags:
+  postgres:
+    paths:
+      - "database/postgres/"
+    carryforward: true
+
+  sqlite:
+    paths:
+      - "database/sqlite/"
+    carryforward: true
+
+  unit:
+    paths:
+      - "."
+    carryforward: true
