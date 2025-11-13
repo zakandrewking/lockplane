@@ -1,4 +1,4 @@
-package main
+package validation
 
 import (
 	"encoding/json"
@@ -26,7 +26,7 @@ type PlanValidationResult struct {
 	Issues []PlanValidationIssue `json:"issues"`
 }
 
-func runValidatePlan(args []string) {
+func RunValidatePlan(args []string) {
 	fs := flag.NewFlagSet("validate plan", flag.ExitOnError)
 	formatFlag := fs.String("format", "text", "Output format: text or json")
 

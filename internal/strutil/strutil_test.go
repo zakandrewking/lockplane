@@ -1,4 +1,4 @@
-package main
+package strutil
 
 import (
 	"testing"
@@ -81,9 +81,9 @@ func TestLevenshteinDistance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			distance := levenshteinDistance(tt.s1, tt.s2)
+			distance := LevenshteinDistance(tt.s1, tt.s2)
 			if distance != tt.expected {
-				t.Errorf("levenshteinDistance(%q, %q) = %d; want %d",
+				t.Errorf("LevenshteinDistance(%q, %q) = %d; want %d",
 					tt.s1, tt.s2, distance, tt.expected)
 			}
 		})
@@ -191,15 +191,15 @@ func TestFindClosestCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd, _ := findClosestCommand(tt.input, validCommands, tt.maxDistance)
+			cmd, _ := FindClosestCommand(tt.input, validCommands, tt.maxDistance)
 			if tt.expectedMatches {
 				if cmd != tt.expectedCmd {
-					t.Errorf("findClosestCommand(%q) = %q; want %q",
+					t.Errorf("FindClosestCommand(%q) = %q; want %q",
 						tt.input, cmd, tt.expectedCmd)
 				}
 			} else {
 				if cmd != "" {
-					t.Errorf("findClosestCommand(%q) = %q; want no match (empty string)",
+					t.Errorf("FindClosestCommand(%q) = %q; want no match (empty string)",
 						tt.input, cmd)
 				}
 			}
@@ -238,9 +238,9 @@ func TestFindClosestCommandDistance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, distance := findClosestCommand(tt.input, validCommands, tt.maxDistance)
+			_, distance := FindClosestCommand(tt.input, validCommands, tt.maxDistance)
 			if distance != tt.expectedDistance {
-				t.Errorf("findClosestCommand(%q) distance = %d; want %d",
+				t.Errorf("FindClosestCommand(%q) distance = %d; want %d",
 					tt.input, distance, tt.expectedDistance)
 			}
 		})

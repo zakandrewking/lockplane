@@ -1,4 +1,4 @@
-package main
+package sqliteutil
 
 import (
 	"os"
@@ -26,9 +26,9 @@ func TestIsSQLiteFilePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isSQLiteFilePath(tt.input)
+			result := IsSQLiteFilePath(tt.input)
 			if result != tt.expected {
-				t.Errorf("isSQLiteFilePath(%q) = %v, want %v", tt.input, result, tt.expected)
+				t.Errorf("IsSQLiteFilePath(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -50,9 +50,9 @@ func TestExtractSQLiteFilePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractSQLiteFilePath(tt.input)
+			result := ExtractSQLiteFilePath(tt.input)
 			if result != tt.expected {
-				t.Errorf("extractSQLiteFilePath(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("ExtractSQLiteFilePath(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -64,7 +64,7 @@ func TestCheckSQLiteDatabase(t *testing.T) {
 
 	t.Run("non-existent file", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "nonexistent.db")
-		exists, isEmpty, err := checkSQLiteDatabase(path)
+		exists, isEmpty, err := CheckSQLiteDatabase(path)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -82,7 +82,7 @@ func TestCheckSQLiteDatabase(t *testing.T) {
 			t.Fatalf("failed to create empty file: %v", err)
 		}
 
-		exists, isEmpty, err := checkSQLiteDatabase(path)
+		exists, isEmpty, err := CheckSQLiteDatabase(path)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -96,11 +96,11 @@ func TestCheckSQLiteDatabase(t *testing.T) {
 
 	t.Run("valid database", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "valid.db")
-		if err := createSQLiteDatabase(path); err != nil {
+		if err := CreateSQLiteDatabase(path); err != nil {
 			t.Fatalf("failed to create database: %v", err)
 		}
 
-		exists, isEmpty, err := checkSQLiteDatabase(path)
+		exists, isEmpty, err := CheckSQLiteDatabase(path)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -120,7 +120,7 @@ func TestCreateSQLiteDatabase(t *testing.T) {
 
 	t.Run("create in existing directory", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "test.db")
-		if err := createSQLiteDatabase(path); err != nil {
+		if err := CreateSQLiteDatabase(path); err != nil {
 			t.Fatalf("failed to create database: %v", err)
 		}
 
@@ -135,7 +135,7 @@ func TestCreateSQLiteDatabase(t *testing.T) {
 		}
 
 		// Check it's a valid database
-		exists, isEmpty, err := checkSQLiteDatabase(path)
+		exists, isEmpty, err := CheckSQLiteDatabase(path)
 		if err != nil {
 			t.Fatalf("created database is not valid: %v", err)
 		}
@@ -150,7 +150,7 @@ func TestCreateSQLiteDatabase(t *testing.T) {
 
 	t.Run("create with nested directory", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "nested", "dir", "test.db")
-		if err := createSQLiteDatabase(path); err != nil {
+		if err := CreateSQLiteDatabase(path); err != nil {
 			t.Fatalf("failed to create database: %v", err)
 		}
 
@@ -183,9 +183,9 @@ func TestGenerateShadowDBPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := generateShadowDBPath(tt.input)
+			result := GenerateShadowDBPath(tt.input)
 			if result != tt.expected {
-				t.Errorf("generateShadowDBPath(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("GenerateShadowDBPath(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}

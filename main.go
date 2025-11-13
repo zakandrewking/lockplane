@@ -16,9 +16,14 @@ import (
 	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/database/postgres"
 	"github.com/lockplane/lockplane/database/sqlite"
+	initcmd "github.com/lockplane/lockplane/internal/commands/init"
 	"github.com/lockplane/lockplane/internal/config"
+	"github.com/lockplane/lockplane/internal/introspect"
 	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/lockplane/lockplane/internal/schema"
+	"github.com/lockplane/lockplane/internal/sqliteutil"
+	"github.com/lockplane/lockplane/internal/sqlvalidation"
+	"github.com/lockplane/lockplane/internal/strutil"
 	"github.com/lockplane/lockplane/internal/validation"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	_ "modernc.org/sqlite"
@@ -89,10 +94,72 @@ type Index = database.Index
 type ForeignKey = database.ForeignKey
 
 func buildSchemaLoadOptions(input string, dialect database.Dialect) *schema.SchemaLoadOptions {
-	if isConnectionString(input) || dialect == database.DialectUnknown {
+	if introspect.IsConnectionString(input) || dialect == database.DialectUnknown {
 		return nil
 	}
 	return &schema.SchemaLoadOptions{Dialect: dialect}
+}
+
+// loadSchemaFromConnectionString introspects a database and returns its schema
+func loadSchemaFromConnectionString(connStr string) (*Schema, error) {
+	// Detect database driver from connection string
+	driverType := detectDriver(connStr)
+
+	// For SQLite, check if the database file exists and create it if needed
+	// Also offer to create shadow database
+	if driverType == "sqlite" || driverType == "sqlite3" {
+		if err := sqliteutil.EnsureSQLiteDatabaseWithShadow(connStr, "target", false, true); err != nil {
+			return nil, err
+		}
+	}
+
+	driver, err := newDriver(driverType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database driver: %w", err)
+	}
+
+	// Get the SQL driver name (use detected type, not driver.Name())
+	sqlDriverName := getSQLDriverName(driverType)
+
+	db, err := sql.Open(sqlDriverName, connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	dbSchema, err := driver.IntrospectSchema(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to introspect schema: %w", err)
+	}
+
+	result := (*Schema)(dbSchema)
+	result.Dialect = schema.DriverNameToDialect(driverType)
+	return result, nil
+}
+
+// LoadSchemaOrIntrospect loads a schema from a file/directory or introspects from a database connection string
+func LoadSchemaOrIntrospect(pathOrConnStr string) (*Schema, error) {
+	return LoadSchemaOrIntrospectWithOptions(pathOrConnStr, nil)
+}
+
+// LoadSchemaOrIntrospectWithOptions loads a schema with optional parsing options.
+func LoadSchemaOrIntrospectWithOptions(pathOrConnStr string, opts *schema.SchemaLoadOptions) (*Schema, error) {
+	// Check if it's a connection string
+	if introspect.IsConnectionString(pathOrConnStr) {
+		return loadSchemaFromConnectionString(pathOrConnStr)
+	}
+
+	// Otherwise treat it as a file path
+	dbSchema, err := schema.LoadSchemaWithOptions(pathOrConnStr, opts)
+	if err != nil {
+		return nil, err
+	}
+	return (*Schema)(dbSchema), nil
 }
 
 // detectDriver detects the database driver type from a connection string
@@ -178,7 +245,7 @@ func main() {
 	case "apply":
 		runApply(os.Args[2:])
 	case "init":
-		runInit(os.Args[2:])
+		initcmd.RunInit(os.Args[2:])
 	case "validate":
 		runValidate(os.Args[2:])
 	case "convert":
@@ -193,7 +260,7 @@ func main() {
 		}
 
 		// Use a max distance of 2 for suggestions
-		if suggestion, _ := findClosestCommand(command, validCommands, 2); suggestion != "" {
+		if suggestion, _ := strutil.FindClosestCommand(command, validCommands, 2); suggestion != "" {
 			fmt.Fprintf(os.Stderr, "\nDid you mean '%s'?\n", suggestion)
 		}
 
@@ -426,13 +493,13 @@ func runPlan(args []string) {
 	var after *Schema
 
 	var fromFallback, toFallback database.Dialect
-	if isConnectionString(fromInput) {
+	if introspect.IsConnectionString(fromInput) {
 		fromFallback = schema.DriverNameToDialect(detectDriver(fromInput))
-		if !isConnectionString(toInput) {
+		if !introspect.IsConnectionString(toInput) {
 			toFallback = fromFallback
 		}
 	}
-	if isConnectionString(toInput) {
+	if introspect.IsConnectionString(toInput) {
 		toFallback = schema.DriverNameToDialect(detectDriver(toInput))
 		if fromFallback == database.DialectUnknown {
 			fromFallback = toFallback
@@ -448,7 +515,7 @@ func runPlan(args []string) {
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "❌ Failed to load from schema\n")
 			fmt.Fprintf(os.Stderr, "   Input: %s\n", fromInput)
-			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", isConnectionString(fromInput))
+			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", introspect.IsConnectionString(fromInput))
 			fmt.Fprintf(os.Stderr, "   Error: %v\n", loadErr)
 		}
 		log.Fatalf("Failed to load from schema: %v", loadErr)
@@ -465,7 +532,7 @@ func runPlan(args []string) {
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "❌ Failed to load to schema\n")
 			fmt.Fprintf(os.Stderr, "   Input: %s\n", toInput)
-			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", isConnectionString(toInput))
+			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", introspect.IsConnectionString(toInput))
 			fmt.Fprintf(os.Stderr, "   Error: %v\n", loadErr)
 		}
 		log.Fatalf("Failed to load to schema: %v", loadErr)
@@ -729,7 +796,7 @@ func runPlanRollback(args []string) {
 		fmt.Fprintf(os.Stderr, "🔍 Loading 'from' schema (before state): %s\n", sourceInput)
 	}
 	var rollbackFallback database.Dialect
-	if isConnectionString(sourceInput) {
+	if introspect.IsConnectionString(sourceInput) {
 		rollbackFallback = schema.DriverNameToDialect(detectDriver(sourceInput))
 	}
 
@@ -738,7 +805,7 @@ func runPlanRollback(args []string) {
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "❌ Failed to load before schema\n")
 			fmt.Fprintf(os.Stderr, "   Input: %s\n", sourceInput)
-			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", isConnectionString(sourceInput))
+			fmt.Fprintf(os.Stderr, "   isConnectionString: %v\n", introspect.IsConnectionString(sourceInput))
 			fmt.Fprintf(os.Stderr, "   Error: %v\n", err)
 		}
 		log.Fatalf("Failed to load before schema: %v", err)
@@ -1033,7 +1100,7 @@ func runRollback(args []string) {
 
 		// For SQLite shadow DB (not :memory:), check if the database file exists and create it if needed
 		if (shadowDriverType == "sqlite" || shadowDriverType == "sqlite3") && shadowConnStr != ":memory:" {
-			if err := ensureSQLiteDatabase(shadowConnStr, "shadow", false); err != nil {
+			if err := sqliteutil.EnsureSQLiteDatabase(shadowConnStr, "shadow", false); err != nil {
 				log.Fatalf("Failed to ensure shadow database: %v", err)
 			}
 		}
@@ -1360,7 +1427,7 @@ func runApply(args []string) {
 
 		// For SQLite shadow DB (not :memory:), check if the database file exists and create it if needed
 		if (shadowDriverType == "sqlite" || shadowDriverType == "sqlite3") && shadowConnStr != ":memory:" {
-			if err := ensureSQLiteDatabase(shadowConnStr, "shadow", false); err != nil {
+			if err := sqliteutil.EnsureSQLiteDatabase(shadowConnStr, "shadow", false); err != nil {
 				log.Fatalf("Failed to ensure shadow database: %v", err)
 			}
 		}
@@ -1500,9 +1567,9 @@ func runValidate(args []string) {
 	case "schema":
 		runValidateSchema(args[1:])
 	case "sql":
-		runValidateSQL(args[1:])
+		sqlvalidation.RunValidateSQL(args[1:])
 	case "plan":
-		runValidatePlan(args[1:])
+		validation.RunValidatePlan(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "Error: unknown validate subcommand %q\n\n", args[0])
 		fmt.Fprintf(os.Stderr, "Usage: lockplane validate <command> [options]\n\n")

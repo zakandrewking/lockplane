@@ -1,4 +1,4 @@
-package main
+package introspect
 
 import (
 	"context"
@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/internal/schema"
+	"github.com/lockplane/lockplane/internal/sqliteutil"
 )
 
-// isConnectionString checks if a string looks like a database connection string
-func isConnectionString(s string) bool {
+// IsConnectionString checks if a string looks like a database connection string
+func IsConnectionString(s string) bool {
 	lower := strings.ToLower(s)
 
 	// Check for common connection string prefixes
@@ -36,26 +38,26 @@ func isConnectionString(s string) bool {
 	return false
 }
 
-// loadSchemaFromConnectionString introspects a database and returns its schema
-func loadSchemaFromConnectionString(connStr string) (*Schema, error) {
+// LoadSchemaFromConnectionString introspects a database and returns its schema
+func LoadSchemaFromConnectionString(connStr string, detectDriverFunc func(string) string, newDriverFunc func(string) (database.Driver, error), getSQLDriverNameFunc func(string) string) (*database.Schema, error) {
 	// Detect database driver from connection string
-	driverType := detectDriver(connStr)
+	driverType := detectDriverFunc(connStr)
 
 	// For SQLite, check if the database file exists and create it if needed
 	// Also offer to create shadow database
 	if driverType == "sqlite" || driverType == "sqlite3" {
-		if err := ensureSQLiteDatabaseWithShadow(connStr, "target", false, true); err != nil {
+		if err := sqliteutil.EnsureSQLiteDatabaseWithShadow(connStr, "target", false, true); err != nil {
 			return nil, err
 		}
 	}
 
-	driver, err := newDriver(driverType)
+	driver, err := newDriverFunc(driverType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database driver: %w", err)
 	}
 
 	// Get the SQL driver name (use detected type, not driver.Name())
-	sqlDriverName := getSQLDriverName(driverType)
+	sqlDriverName := getSQLDriverNameFunc(driverType)
 
 	db, err := sql.Open(sqlDriverName, connStr)
 	if err != nil {
@@ -73,21 +75,21 @@ func loadSchemaFromConnectionString(connStr string) (*Schema, error) {
 		return nil, fmt.Errorf("failed to introspect schema: %w", err)
 	}
 
-	result := (*Schema)(dbSchema)
+	result := dbSchema
 	result.Dialect = schema.DriverNameToDialect(driverType)
 	return result, nil
 }
 
 // LoadSchemaOrIntrospect loads a schema from a file/directory or introspects from a database connection string
-func LoadSchemaOrIntrospect(pathOrConnStr string) (*Schema, error) {
-	return LoadSchemaOrIntrospectWithOptions(pathOrConnStr, nil)
+func LoadSchemaOrIntrospect(pathOrConnStr string, detectDriverFunc func(string) string, newDriverFunc func(string) (database.Driver, error), getSQLDriverNameFunc func(string) string) (*database.Schema, error) {
+	return LoadSchemaOrIntrospectWithOptions(pathOrConnStr, nil, detectDriverFunc, newDriverFunc, getSQLDriverNameFunc)
 }
 
 // LoadSchemaOrIntrospectWithOptions loads a schema with optional parsing options.
-func LoadSchemaOrIntrospectWithOptions(pathOrConnStr string, opts *schema.SchemaLoadOptions) (*Schema, error) {
+func LoadSchemaOrIntrospectWithOptions(pathOrConnStr string, opts *schema.SchemaLoadOptions, detectDriverFunc func(string) string, newDriverFunc func(string) (database.Driver, error), getSQLDriverNameFunc func(string) string) (*database.Schema, error) {
 	// Check if it's a connection string
-	if isConnectionString(pathOrConnStr) {
-		return loadSchemaFromConnectionString(pathOrConnStr)
+	if IsConnectionString(pathOrConnStr) {
+		return LoadSchemaFromConnectionString(pathOrConnStr, detectDriverFunc, newDriverFunc, getSQLDriverNameFunc)
 	}
 
 	// Otherwise treat it as a file path
@@ -95,5 +97,5 @@ func LoadSchemaOrIntrospectWithOptions(pathOrConnStr string, opts *schema.Schema
 	if err != nil {
 		return nil, err
 	}
-	return (*Schema)(dbSchema), nil
+	return dbSchema, nil
 }

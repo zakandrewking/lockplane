@@ -1,4 +1,4 @@
-package main
+package sqlvalidation
 
 import (
 	"fmt"

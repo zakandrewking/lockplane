@@ -1,4 +1,4 @@
-package main
+package initcmd
 
 import (
 	"errors"
@@ -36,7 +36,7 @@ type bootstrapResult struct {
 	EnvExampleUpdated bool
 }
 
-func runInit(args []string) {
+func RunInit(args []string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	yes := fs.Bool("yes", false, "Skip the wizard and use provided flag values")
 

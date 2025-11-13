@@ -1,4 +1,4 @@
-package main
+package sqlvalidation
 
 import (
 	"github.com/lockplane/lockplane/diagnostic"

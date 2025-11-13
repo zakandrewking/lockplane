@@ -1,12 +1,12 @@
-package main
+package strutil
 
 import (
 	"strings"
 )
 
-// levenshteinDistance calculates the Levenshtein distance between two strings
+// LevenshteinDistance calculates the Levenshtein distance between two strings
 // using a dynamic programming approach with space optimization
-func levenshteinDistance(s1, s2 string) int {
+func LevenshteinDistance(s1, s2 string) int {
 	s1Lower := strings.ToLower(s1)
 	s2Lower := strings.ToLower(s2)
 
@@ -47,9 +47,9 @@ func levenshteinDistance(s1, s2 string) int {
 	return prev[len(s2Lower)]
 }
 
-// findClosestCommand finds the closest command to the given input
+// FindClosestCommand finds the closest command to the given input
 // Returns the closest command and its distance, or empty string if no close match
-func findClosestCommand(input string, validCommands []string, maxDistance int) (string, int) {
+func FindClosestCommand(input string, validCommands []string, maxDistance int) (string, int) {
 	if len(validCommands) == 0 {
 		return "", -1
 	}
@@ -58,7 +58,7 @@ func findClosestCommand(input string, validCommands []string, maxDistance int) (
 	minDistance := maxDistance + 1
 
 	for _, cmd := range validCommands {
-		distance := levenshteinDistance(input, cmd)
+		distance := LevenshteinDistance(input, cmd)
 		if distance < minDistance {
 			minDistance = distance
 			closestCmd = cmd

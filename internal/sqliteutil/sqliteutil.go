@@ -1,4 +1,4 @@
-package main
+package sqliteutil
 
 import (
 	"database/sql"
@@ -10,8 +10,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// isSQLiteFilePath checks if a string looks like a SQLite file path
-func isSQLiteFilePath(s string) bool {
+// IsSQLiteFilePath checks if a string looks like a SQLite file path
+func IsSQLiteFilePath(s string) bool {
 	s = strings.ToLower(s)
 
 	// Skip special cases
@@ -39,8 +39,8 @@ func isSQLiteFilePath(s string) bool {
 	return false
 }
 
-// extractSQLiteFilePath extracts the actual file path from a SQLite connection string
-func extractSQLiteFilePath(connStr string) string {
+// ExtractSQLiteFilePath extracts the actual file path from a SQLite connection string
+func ExtractSQLiteFilePath(connStr string) string {
 	// Handle sqlite:// prefix
 	if strings.HasPrefix(connStr, "sqlite://") {
 		path := strings.TrimPrefix(connStr, "sqlite://")
@@ -65,10 +65,10 @@ func extractSQLiteFilePath(connStr string) string {
 	return connStr
 }
 
-// checkSQLiteDatabase checks if a SQLite database file exists and is valid
+// CheckSQLiteDatabase checks if a SQLite database file exists and is valid
 // Returns (exists, isEmpty, error)
-func checkSQLiteDatabase(connStr string) (exists bool, isEmpty bool, err error) {
-	filePath := extractSQLiteFilePath(connStr)
+func CheckSQLiteDatabase(connStr string) (exists bool, isEmpty bool, err error) {
+	filePath := ExtractSQLiteFilePath(connStr)
 
 	// Check if file exists
 	info, err := os.Stat(filePath)
@@ -105,9 +105,9 @@ func checkSQLiteDatabase(connStr string) (exists bool, isEmpty bool, err error) 
 	return true, false, nil
 }
 
-// createSQLiteDatabase creates an empty SQLite database file
-func createSQLiteDatabase(connStr string) error {
-	filePath := extractSQLiteFilePath(connStr)
+// CreateSQLiteDatabase creates an empty SQLite database file
+func CreateSQLiteDatabase(connStr string) error {
+	filePath := ExtractSQLiteFilePath(connStr)
 
 	// Create parent directory if it doesn't exist
 	dir := filepath.Dir(filePath)
@@ -135,41 +135,41 @@ func createSQLiteDatabase(connStr string) error {
 	return nil
 }
 
-// ensureSQLiteDatabase checks if a SQLite database exists and offers to create it
+// EnsureSQLiteDatabase checks if a SQLite database exists and offers to create it
 // If createShadow is true and a main database is created, also creates the shadow database
-func ensureSQLiteDatabase(connStr string, dbName string, autoCreate bool) error {
-	return ensureSQLiteDatabaseWithShadow(connStr, dbName, autoCreate, false)
+func EnsureSQLiteDatabase(connStr string, dbName string, autoCreate bool) error {
+	return EnsureSQLiteDatabaseWithShadow(connStr, dbName, autoCreate, false)
 }
 
-// ensureSQLiteDatabaseWithShadow checks if a SQLite database exists and offers to create it
+// EnsureSQLiteDatabaseWithShadow checks if a SQLite database exists and offers to create it
 // If createShadow is true and a main database is created, also creates the shadow database
-func ensureSQLiteDatabaseWithShadow(connStr string, dbName string, autoCreate bool, createShadow bool) error {
-	if !isSQLiteFilePath(connStr) {
+func EnsureSQLiteDatabaseWithShadow(connStr string, dbName string, autoCreate bool, createShadow bool) error {
+	if !IsSQLiteFilePath(connStr) {
 		return nil // Not a SQLite file path, skip
 	}
 
-	exists, isEmpty, err := checkSQLiteDatabase(connStr)
+	exists, isEmpty, err := CheckSQLiteDatabase(connStr)
 	if err != nil {
 		return err
 	}
 
-	filePath := extractSQLiteFilePath(connStr)
+	filePath := ExtractSQLiteFilePath(connStr)
 
 	if !exists {
 		if autoCreate {
 			fmt.Fprintf(os.Stderr, "📁 Creating %s database: %s\n", dbName, filePath)
-			if err := createSQLiteDatabase(connStr); err != nil {
+			if err := CreateSQLiteDatabase(connStr); err != nil {
 				return fmt.Errorf("failed to create %s database: %w", dbName, err)
 			}
 			fmt.Fprintf(os.Stderr, "✓ Created %s database\n", dbName)
 
 			// Also create shadow database if requested
 			if createShadow && dbName == "target" {
-				shadowPath := generateShadowDBPath(filePath)
-				shadowExists, _, _ := checkSQLiteDatabase(shadowPath)
+				shadowPath := GenerateShadowDBPath(filePath)
+				shadowExists, _, _ := CheckSQLiteDatabase(shadowPath)
 				if !shadowExists {
 					fmt.Fprintf(os.Stderr, "📁 Creating shadow database: %s\n", shadowPath)
-					if err := createSQLiteDatabase(shadowPath); err != nil {
+					if err := CreateSQLiteDatabase(shadowPath); err != nil {
 						fmt.Fprintf(os.Stderr, "⚠️  Warning: failed to create shadow database: %v\n", err)
 					} else {
 						fmt.Fprintf(os.Stderr, "✓ Created shadow database\n")
@@ -187,15 +187,15 @@ func ensureSQLiteDatabaseWithShadow(connStr string, dbName string, autoCreate bo
 		response = strings.ToLower(strings.TrimSpace(response))
 
 		if response == "" || response == "y" || response == "yes" {
-			if err := createSQLiteDatabase(connStr); err != nil {
+			if err := CreateSQLiteDatabase(connStr); err != nil {
 				return fmt.Errorf("failed to create %s database: %w", dbName, err)
 			}
 			fmt.Fprintf(os.Stderr, "✓ Created %s database: %s\n", dbName, filePath)
 
 			// Also create shadow database if requested
 			if createShadow && dbName == "target" {
-				shadowPath := generateShadowDBPath(filePath)
-				shadowExists, _, _ := checkSQLiteDatabase(shadowPath)
+				shadowPath := GenerateShadowDBPath(filePath)
+				shadowExists, _, _ := CheckSQLiteDatabase(shadowPath)
 				if !shadowExists {
 					fmt.Fprintf(os.Stderr, "\n⚠️  Shadow database file does not exist: %s\n", shadowPath)
 					fmt.Fprintf(os.Stderr, "Would you like to create it? [Y/n]: ")
@@ -205,7 +205,7 @@ func ensureSQLiteDatabaseWithShadow(connStr string, dbName string, autoCreate bo
 					shadowResponse = strings.ToLower(strings.TrimSpace(shadowResponse))
 
 					if shadowResponse == "" || shadowResponse == "y" || shadowResponse == "yes" {
-						if err := createSQLiteDatabase(shadowPath); err != nil {
+						if err := CreateSQLiteDatabase(shadowPath); err != nil {
 							fmt.Fprintf(os.Stderr, "⚠️  Warning: failed to create shadow database: %v\n", err)
 						} else {
 							fmt.Fprintf(os.Stderr, "✓ Created shadow database: %s\n", shadowPath)
@@ -223,7 +223,7 @@ func ensureSQLiteDatabaseWithShadow(connStr string, dbName string, autoCreate bo
 	if isEmpty {
 		fmt.Fprintf(os.Stderr, "⚠️  Warning: %s database file exists but is empty: %s\n", dbName, filePath)
 		fmt.Fprintf(os.Stderr, "Initializing empty database...\n")
-		if err := createSQLiteDatabase(connStr); err != nil {
+		if err := CreateSQLiteDatabase(connStr); err != nil {
 			return fmt.Errorf("failed to initialize %s database: %w", dbName, err)
 		}
 		fmt.Fprintf(os.Stderr, "✓ Initialized %s database\n", dbName)
@@ -232,9 +232,9 @@ func ensureSQLiteDatabaseWithShadow(connStr string, dbName string, autoCreate bo
 	return nil
 }
 
-// generateShadowDBPath generates a shadow database path from a main database path
+// GenerateShadowDBPath generates a shadow database path from a main database path
 // e.g., "lockplane.db" -> "lockplane_shadow.db"
-func generateShadowDBPath(mainPath string) string {
+func GenerateShadowDBPath(mainPath string) string {
 	ext := filepath.Ext(mainPath)
 	if ext == "" {
 		return mainPath + "_shadow"

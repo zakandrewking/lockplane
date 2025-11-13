@@ -1,4 +1,4 @@
-package main
+package sqlvalidation
 
 import (
 	"encoding/json"
@@ -32,7 +32,7 @@ type SQLValidationResult struct {
 	Issues []ValidationIssue `json:"issues"`
 }
 
-func runValidateSQL(args []string) {
+func RunValidateSQL(args []string) {
 	fs := flag.NewFlagSet("validate sql", flag.ExitOnError)
 	formatFlag := fs.String("format", "text", "Output format: text or json")
 
