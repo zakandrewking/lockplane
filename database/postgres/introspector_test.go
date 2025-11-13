@@ -44,7 +44,7 @@ func cleanupTestTables(t *testing.T, db *sql.DB) {
 	testTables := []string{
 		"test_table", "test_introspect_schema", "test_get_tables",
 		"test_columns", "test_indexes", "test_fk_users", "test_fk_posts",
-		"analytics", // This table was causing flaky test failures
+		"test_introspect_tables", "test_introspect_columns", "test_introspect_indexes",
 	}
 
 	for _, table := range testTables {
