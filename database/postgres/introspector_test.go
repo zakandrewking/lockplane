@@ -34,6 +34,24 @@ func getTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+// cleanupTestTables removes all test tables to prevent OID errors from stale metadata
+func cleanupTestTables(t *testing.T, db *sql.DB) {
+	t.Helper()
+	ctx := context.Background()
+
+	// Clean up common test tables that might be left over from previous runs
+	// This prevents "could not open relation with OID" errors
+	testTables := []string{
+		"test_table", "test_introspect_schema", "test_get_tables",
+		"test_columns", "test_indexes", "test_fk_users", "test_fk_posts",
+		"analytics", // This table was causing flaky test failures
+	}
+
+	for _, table := range testTables {
+		_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
+	}
+}
+
 func TestIntrospector_GetTables(t *testing.T) {
 	db := getTestDB(t)
 	defer func() { _ = db.Close() }()
@@ -272,9 +290,12 @@ func TestIntrospector_IntrospectSchema(t *testing.T) {
 	ctx := context.Background()
 	introspector := NewIntrospector()
 
+	// Clean up any leftover tables from previous test runs
+	cleanupTestTables(t, db)
+
 	// Create a test schema
 	_, err := db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS test_introspect_schema (
+		CREATE TABLE test_introspect_schema (
 			id integer PRIMARY KEY,
 			name text NOT NULL
 		)
@@ -282,7 +303,7 @@ func TestIntrospector_IntrospectSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test table: %v", err)
 	}
-	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_schema") }()
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_introspect_schema CASCADE") }()
 
 	// Introspect full schema
 	schema, err := introspector.IntrospectSchema(ctx, db)
