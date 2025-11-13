@@ -1743,7 +1743,7 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *planner.Plan, shadowDB *sq
 
 	// If shadow DB provided, run dry-run first
 	if shadowDB != nil {
-		if err := dryRunPlan(ctx, shadowDB, plan, currentSchema, driver); err != nil {
+		if err := dryRunPlan(ctx, shadowDB, plan, currentSchema, driver, verbose); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("dry-run failed: %v", err))
 			return result, fmt.Errorf("dry-run validation failed: %w", err)
 		}
@@ -1809,10 +1809,18 @@ func applyPlan(ctx context.Context, db *sql.DB, plan *planner.Plan, shadowDB *sq
 }
 
 // dryRunPlan validates a plan by executing it on shadow DB and rolling back
-func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *planner.Plan, currentSchema *Schema, driver database.Driver) error {
-	// First, apply the current schema to the shadow DB so it matches the target DB state
+func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *planner.Plan, currentSchema *Schema, driver database.Driver, verbose bool) error {
+	// First, clean up any existing tables in the shadow DB
+	if err := cleanupShadowDB(ctx, shadowDB, driver, verbose); err != nil {
+		return fmt.Errorf("failed to clean shadow DB: %w", err)
+	}
+
+	// Apply the current schema to the shadow DB so it matches the target DB state
 	// This is necessary because migration plans assume the DB is already in the "before" state
-	if err := applySchemaToDB(ctx, shadowDB, currentSchema, driver); err != nil {
+	if verbose {
+		_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "  [Shadow DB] Preparing database to match current state...\n")
+	}
+	if err := applySchemaToDB(ctx, shadowDB, currentSchema, driver, verbose); err != nil {
 		return fmt.Errorf("failed to prepare shadow DB: %w", err)
 	}
 
@@ -1824,12 +1832,28 @@ func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *planner.Plan, curre
 		_ = tx.Rollback() // Always rollback shadow DB changes
 	}()
 
+	if verbose {
+		_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "  [Shadow DB] Testing migration plan...\n")
+	}
+
 	// Execute each step
 	for i, step := range plan.Steps {
+		if verbose {
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "    [Step %d/%d] %s\n", i+1, len(plan.Steps), step.Description)
+		}
 		for j, sqlStmt := range step.SQL {
 			trimmedSQL := strings.TrimSpace(sqlStmt)
 			if trimmedSQL == "" || strings.HasPrefix(trimmedSQL, "--") {
 				continue
+			}
+
+			if verbose {
+				// Show SQL being executed
+				sqlPreview := sqlStmt
+				if len(sqlPreview) > 200 {
+					sqlPreview = sqlPreview[:200] + "..."
+				}
+				_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "      SQL: %s\n", sqlPreview)
 			}
 
 			_, err := tx.ExecContext(ctx, sqlStmt)
@@ -1837,14 +1861,75 @@ func dryRunPlan(ctx context.Context, shadowDB *sql.DB, plan *planner.Plan, curre
 				return fmt.Errorf("shadow DB step %d, statement %d/%d (%s) failed: %w",
 					i+1, j+1, len(step.SQL), step.Description, err)
 			}
+
+			if verbose {
+				_, _ = color.New(color.FgGreen).Fprintf(os.Stderr, "      ✓ Executed successfully\n")
+			}
 		}
+	}
+
+	if verbose {
+		_, _ = color.New(color.FgGreen).Fprintf(os.Stderr, "  [Shadow DB] ✓ Migration test successful\n")
+	}
+
+	return nil
+}
+
+// cleanupShadowDB drops all existing tables from the shadow database
+func cleanupShadowDB(ctx context.Context, db *sql.DB, driver database.Driver, verbose bool) error {
+	if verbose {
+		_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "  [Shadow DB] Cleaning up existing tables...\n")
+	}
+
+	// Get list of existing tables
+	tables, err := driver.GetTables(ctx, db)
+	if err != nil {
+		return fmt.Errorf("failed to get tables: %w", err)
+	}
+
+	if len(tables) == 0 {
+		if verbose {
+			_, _ = color.New(color.FgGreen).Fprintf(os.Stderr, "    ✓ Shadow database is clean (no tables)\n")
+		}
+		return nil
+	}
+
+	// Drop all tables in a transaction
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// For each table, drop it
+	for _, tableName := range tables {
+		table := database.Table{Name: tableName}
+		dropSQL, _ := driver.DropTable(table)
+
+		if verbose {
+			_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "    Dropping table %s\n", tableName)
+		}
+
+		if _, err := tx.ExecContext(ctx, dropSQL); err != nil {
+			return fmt.Errorf("failed to drop table %s: %w", tableName, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	if verbose {
+		_, _ = color.New(color.FgGreen).Fprintf(os.Stderr, "    ✓ Dropped %d tables\n", len(tables))
 	}
 
 	return nil
 }
 
 // applySchemaToDB applies a schema to a database by creating all tables, indexes, and constraints
-func applySchemaToDB(ctx context.Context, db *sql.DB, schema *Schema, driver database.Driver) error {
+func applySchemaToDB(ctx context.Context, db *sql.DB, schema *Schema, driver database.Driver, verbose bool) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -1856,6 +1941,9 @@ func applySchemaToDB(ctx context.Context, db *sql.DB, schema *Schema, driver dat
 	// Create all tables
 	for _, table := range schema.Tables {
 		sql, _ := driver.CreateTable(table)
+		if verbose {
+			_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "    Creating table %s\n", table.Name)
+		}
 		if _, err := tx.ExecContext(ctx, sql); err != nil {
 			return fmt.Errorf("failed to create table %s: %w", table.Name, err)
 		}
@@ -1863,6 +1951,9 @@ func applySchemaToDB(ctx context.Context, db *sql.DB, schema *Schema, driver dat
 		// Create indexes for this table
 		for _, idx := range table.Indexes {
 			sql, _ := driver.AddIndex(table.Name, idx)
+			if verbose {
+				_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "    Creating index %s\n", idx.Name)
+			}
 			if _, err := tx.ExecContext(ctx, sql); err != nil {
 				return fmt.Errorf("failed to create index %s: %w", idx.Name, err)
 			}
@@ -1877,6 +1968,9 @@ func applySchemaToDB(ctx context.Context, db *sql.DB, schema *Schema, driver dat
 			trimmedSQL := strings.TrimSpace(sql)
 			if trimmedSQL == "" || strings.HasPrefix(trimmedSQL, "--") {
 				continue
+			}
+			if verbose {
+				_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "    Creating foreign key %s\n", fk.Name)
 			}
 			if _, err := tx.ExecContext(ctx, sql); err != nil {
 				return fmt.Errorf("failed to create foreign key %s: %w", fk.Name, err)
