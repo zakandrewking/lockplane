@@ -1,10 +1,14 @@
 package schema
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lockplane/lockplane/database"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 // TestLoadJSONSchema_RejectsExtraFields tests that schemas with extra fields are rejected
@@ -198,4 +202,178 @@ func TestLoadJSONSchema_DisallowUnknownFields(t *testing.T) {
 	if !strings.Contains(err.Error(), "unknown field") {
 		t.Errorf("Error should mention 'unknown field', got: %v", err)
 	}
+}
+
+// TestSchemaJSON_ConsistencyWithGoTypes verifies that JSON schema matches Go struct definitions
+// This prevents bugs where we add/change fields in Go but forget to update JSON schema
+func TestSchemaJSON_ConsistencyWithGoTypes(t *testing.T) {
+	defaultValue := "nextval('users_id_seq'::regclass)"
+	onDelete := "CASCADE"
+
+	// Create fully-populated Schema with ALL fields that exist in Go struct
+	schema := &database.Schema{
+		Dialect: database.DialectPostgres,
+		Tables: []database.Table{
+			{
+				Name: "users",
+				Columns: []database.Column{
+					{
+						Name:         "id",
+						Type:         "bigint",
+						Nullable:     false,
+						IsPrimaryKey: true,
+						Default:      &defaultValue,
+						TypeMetadata: &database.TypeMetadata{
+							Logical: "integer",
+							Raw:     "pg_catalog.int8",
+							Dialect: database.DialectPostgres,
+						},
+						DefaultMetadata: &database.DefaultMetadata{
+							Raw:     "nextval('users_id_seq'::regclass)",
+							Dialect: database.DialectPostgres,
+							Kind:    "sequence",
+						},
+					},
+					{
+						Name:     "email",
+						Type:     "text",
+						Nullable: false,
+					},
+				},
+				Indexes: []database.Index{
+					{
+						Name:    "idx_users_email",
+						Columns: []string{"email"},
+						Unique:  true,
+					},
+				},
+				ForeignKeys: []database.ForeignKey{
+					{
+						Name:              "fk_users_org",
+						Columns:           []string{"org_id"},
+						ReferencedTable:   "orgs",
+						ReferencedColumns: []string{"id"},
+						OnDelete:          &onDelete,
+						OnUpdate:          nil,
+					},
+				},
+			},
+			{
+				Name: "posts",
+				Columns: []database.Column{
+					{
+						Name:         "id",
+						Type:         "bigint",
+						Nullable:     false,
+						IsPrimaryKey: true,
+					},
+				},
+				Indexes:     []database.Index{},      // Empty slice, not nil
+				ForeignKeys: []database.ForeignKey{}, // Empty slice, not nil
+			},
+		},
+	}
+
+	// Step 1: Marshal to JSON
+	jsonData, err := json.MarshalIndent(schema, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal schema to JSON: %v", err)
+	}
+
+	t.Logf("Generated JSON:\n%s", string(jsonData))
+
+	// Step 2: Validate against JSON Schema
+	// This will FAIL if JSON schema is missing fields or has wrong types
+	// Find schema file relative to project root (../../schema-json/schema.json from internal/schema/)
+	schemaPath := filepath.Join("..", "..", "schema-json", "schema.json")
+	schemaLoader := gojsonschema.NewReferenceLoader("file://" + schemaPath)
+	documentLoader := gojsonschema.NewBytesLoader(jsonData)
+
+	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
+	if err != nil {
+		t.Fatalf("JSON Schema validation failed to run: %v", err)
+	}
+
+	if !result.Valid() {
+		t.Errorf("JSON Schema validation failed! This means schema.json is missing fields or has incorrect types:")
+		for _, desc := range result.Errors() {
+			t.Errorf("  - %s", desc)
+		}
+		t.FailNow()
+	}
+
+	// Step 3: Round-trip test - unmarshal and verify all fields preserved
+	var decoded database.Schema
+	if err := json.Unmarshal(jsonData, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal JSON back to Schema: %v", err)
+	}
+
+	// Verify critical fields are preserved
+	if decoded.Dialect != schema.Dialect {
+		t.Errorf("Dialect not preserved: expected %v, got %v", schema.Dialect, decoded.Dialect)
+	}
+
+	if len(decoded.Tables) != len(schema.Tables) {
+		t.Errorf("Table count mismatch: expected %d, got %d", len(schema.Tables), len(decoded.Tables))
+	}
+
+	// Check first table
+	if len(decoded.Tables) > 0 {
+		origTable := schema.Tables[0]
+		decodedTable := decoded.Tables[0]
+
+		if decodedTable.Name != origTable.Name {
+			t.Errorf("Table name not preserved: expected %s, got %s", origTable.Name, decodedTable.Name)
+		}
+
+		// Check first column with all metadata
+		if len(decodedTable.Columns) > 0 && len(origTable.Columns) > 0 {
+			origCol := origTable.Columns[0]
+			decodedCol := decodedTable.Columns[0]
+
+			if decodedCol.Name != origCol.Name {
+				t.Errorf("Column name not preserved: expected %s, got %s", origCol.Name, decodedCol.Name)
+			}
+
+			if decodedCol.TypeMetadata == nil {
+				t.Error("TypeMetadata not preserved - this field is missing from JSON schema or not round-tripping correctly")
+			} else {
+				if decodedCol.TypeMetadata.Logical != origCol.TypeMetadata.Logical {
+					t.Errorf("TypeMetadata.Logical not preserved: expected %s, got %s",
+						origCol.TypeMetadata.Logical, decodedCol.TypeMetadata.Logical)
+				}
+				if decodedCol.TypeMetadata.Raw != origCol.TypeMetadata.Raw {
+					t.Errorf("TypeMetadata.Raw not preserved: expected %s, got %s",
+						origCol.TypeMetadata.Raw, decodedCol.TypeMetadata.Raw)
+				}
+			}
+
+			if decodedCol.DefaultMetadata == nil {
+				t.Error("DefaultMetadata not preserved - this field is missing from JSON schema or not round-tripping correctly")
+			} else {
+				if decodedCol.DefaultMetadata.Raw != origCol.DefaultMetadata.Raw {
+					t.Errorf("DefaultMetadata.Raw not preserved: expected %s, got %s",
+						origCol.DefaultMetadata.Raw, decodedCol.DefaultMetadata.Raw)
+				}
+				if decodedCol.DefaultMetadata.Kind != origCol.DefaultMetadata.Kind {
+					t.Errorf("DefaultMetadata.Kind not preserved: expected %s, got %s",
+						origCol.DefaultMetadata.Kind, decodedCol.DefaultMetadata.Kind)
+				}
+			}
+		}
+
+		// Check indexes
+		if len(decodedTable.Indexes) != len(origTable.Indexes) {
+			t.Errorf("Index count mismatch: expected %d, got %d",
+				len(origTable.Indexes), len(decodedTable.Indexes))
+		}
+
+		// Check foreign keys
+		if len(decodedTable.ForeignKeys) != len(origTable.ForeignKeys) {
+			t.Errorf("Foreign key count mismatch: expected %d, got %d",
+				len(origTable.ForeignKeys), len(decodedTable.ForeignKeys))
+		}
+	}
+
+	t.Log("✅ JSON schema is consistent with Go types - all fields validated and round-tripped successfully")
 }

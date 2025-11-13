@@ -13,6 +13,11 @@
       "items": {
         "$ref": "#/definitions/Table"
       }
+    },
+    "dialect": {
+      "type": "string",
+      "enum": ["postgres", "sqlite", ""],
+      "description": "Database dialect (postgres, sqlite, or empty for unknown). Optional field used by introspection."
     }
   },
   "definitions": {
@@ -75,6 +80,14 @@
         "is_primary_key": {
           "type": "boolean",
           "description": "Whether this column is part of the primary key"
+        },
+        "type_metadata": {
+          "$ref": "#/definitions/TypeMetadata",
+          "description": "Optional metadata about the column type (logical vs raw type representation)"
+        },
+        "default_metadata": {
+          "$ref": "#/definitions/DefaultMetadata",
+          "description": "Optional metadata about the default value expression"
         }
       }
     },
@@ -140,6 +153,46 @@
           "type": "string",
           "enum": ["NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"],
           "description": "Action to take when referenced row is updated"
+        }
+      }
+    },
+    "TypeMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Metadata about a column's type representation. Captures both logical (normalized) and raw (database-specific) type information.",
+      "properties": {
+        "logical": {
+          "type": "string",
+          "description": "Normalized type name used for cross-database comparisons (e.g., 'integer', 'text')"
+        },
+        "raw": {
+          "type": "string",
+          "description": "Database-specific raw type (e.g., 'pg_catalog.int4', 'INTEGER', 'character varying(255)')"
+        },
+        "dialect": {
+          "type": "string",
+          "enum": ["postgres", "sqlite", ""],
+          "description": "Database dialect this type metadata comes from"
+        }
+      }
+    },
+    "DefaultMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Metadata about a column's default value expression. Captures raw database-specific default expressions.",
+      "properties": {
+        "raw": {
+          "type": "string",
+          "description": "Raw default expression as returned by the database (e.g., 'nextval(\\'users_id_seq\\'::regclass)', 'CURRENT_TIMESTAMP')"
+        },
+        "dialect": {
+          "type": "string",
+          "enum": ["postgres", "sqlite", ""],
+          "description": "Database dialect this default metadata comes from"
+        },
+        "kind": {
+          "type": "string",
+          "description": "Kind of default expression (e.g., 'sequence', 'function', 'literal')"
         }
       }
     }

@@ -1,0 +1,201 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lockplane.dev/plan-multi-phase.json",
+  "title": "Lockplane Multi-Phase Migration Plan",
+  "description": "A multi-phase migration plan for complex schema changes that require coordination between database migrations and application code deployments. Each phase contains a complete migration plan that can be validated and executed independently.",
+  "type": "object",
+  "required": ["multi_phase", "operation", "description", "pattern", "total_phases", "phases", "safety_notes"],
+  "additionalProperties": false,
+  "properties": {
+    "multi_phase": {
+      "type": "boolean",
+      "const": true,
+      "description": "Always true for multi-phase plans. Used to distinguish from single-phase plans."
+    },
+    "operation": {
+      "type": "string",
+      "description": "The high-level operation being performed",
+      "examples": ["rename_column", "drop_column", "alter_type", "split_table"]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable description of what this multi-phase migration does"
+    },
+    "pattern": {
+      "type": "string",
+      "enum": ["expand_contract", "deprecation", "validation", "type_change"],
+      "description": "The migration pattern being used: expand_contract (dual-write), deprecation (gradual removal), validation (add constraints), type_change (column type modification)"
+    },
+    "total_phases": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Total number of phases in this migration. Must be at least 2."
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "$ref": "#/definitions/Phase"
+      },
+      "description": "Array of migration phases. Each phase is executed sequentially with application code deployments between phases where needed."
+    },
+    "safety_notes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      },
+      "description": "Important safety information about this migration, including risks, rollback considerations, and timing requirements"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this plan was created"
+    },
+    "schema_path": {
+      "type": "string",
+      "description": "Path to the desired schema file that this migration will achieve"
+    }
+  },
+  "definitions": {
+    "Phase": {
+      "type": "object",
+      "required": ["phase_number", "name", "description", "requires_code_deploy", "plan", "verification", "rollback"],
+      "additionalProperties": false,
+      "description": "A single phase in a multi-phase migration. Each phase is executed atomically and may require code deployment before or after execution.",
+      "properties": {
+        "phase_number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-indexed phase number. Phases must be executed in order."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Phase name (e.g., 'expand', 'migrate_reads', 'migrate_writes', 'contract')"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Detailed description of what this phase does"
+        },
+        "requires_code_deploy": {
+          "type": "boolean",
+          "description": "Whether this phase requires application code changes to be deployed. If true, code must be deployed before proceeding to next phase."
+        },
+        "depends_on_phase": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The phase number that must complete successfully before this phase can run. Used to enforce ordering dependencies."
+        },
+        "code_changes_required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of code changes that must be deployed for this phase. Empty if requires_code_deploy is false."
+        },
+        "plan": {
+          "$ref": "#/definitions/Plan",
+          "description": "The actual migration plan for this phase. Contains the SQL steps to execute."
+        },
+        "verification": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Steps to verify this phase completed successfully (e.g., SQL queries to check data, commands to test application)"
+        },
+        "rollback": {
+          "$ref": "#/definitions/PhaseRollback",
+          "description": "How to rollback this phase if something goes wrong"
+        },
+        "estimated_duration": {
+          "type": "string",
+          "description": "Estimated time to run this phase (e.g., '5 seconds', '2 minutes', '1 hour')"
+        },
+        "lock_impact": {
+          "type": "string",
+          "description": "Description of database locks acquired during this phase (e.g., 'No locks', 'Brief ACCESS EXCLUSIVE lock', 'Long-running table lock')"
+        }
+      }
+    },
+    "Plan": {
+      "type": "object",
+      "required": ["steps"],
+      "additionalProperties": false,
+      "description": "A single-phase migration plan embedded within a multi-phase plan phase. Same structure as plan.json.",
+      "properties": {
+        "source_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hash of the source database schema for this phase. Used to verify the plan is being applied to the correct database state."
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/PlanStep"
+          },
+          "description": "Array of migration steps for this phase. Each step is executed atomically within a transaction."
+        }
+      }
+    },
+    "PlanStep": {
+      "type": "object",
+      "required": ["description", "sql"],
+      "additionalProperties": false,
+      "description": "A single logical migration operation within a phase.",
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of what this step does"
+        },
+        "sql": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Array of SQL statements to execute for this step. All statements are executed in order within the same transaction."
+        }
+      }
+    },
+    "PhaseRollback": {
+      "type": "object",
+      "required": ["description"],
+      "additionalProperties": false,
+      "description": "Instructions for rolling back a phase if it fails or needs to be reverted.",
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of the rollback process"
+        },
+        "sql": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "SQL statements to execute for rollback. May be empty if rollback is not SQL-based."
+        },
+        "note": {
+          "type": "string",
+          "description": "Additional notes about the rollback process"
+        },
+        "warning": {
+          "type": "string",
+          "description": "Warnings about the rollback (e.g., 'May cause data loss', 'Requires application restart')"
+        },
+        "requires_code": {
+          "type": "boolean",
+          "description": "Whether rollback requires reverting code changes. If true, must redeploy previous application version."
+        }
+      }
+    }
+  }
+}
