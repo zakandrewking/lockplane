@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -197,28 +198,28 @@ func LoadJSONSchema(path string) (*database.Schema, error) {
 		return nil, fmt.Errorf("failed to read JSON file: %w", err)
 	}
 
-	// Parse into Schema
-	var schema database.Schema
-	if err := json.Unmarshal(data, &schema); err != nil {
-		return nil, fmt.Errorf("failed to parse schema JSON: %w", err)
-	}
-
-	// Validate against JSON Schema
+	// Step 1: Validate against JSON Schema FIRST (catches extra fields via additionalProperties: false)
 	schemaLoader := gojsonschema.NewReferenceLoader("file://schema-json/schema.json")
 	documentLoader := gojsonschema.NewStringLoader(string(data))
 
 	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
 	if err != nil {
 		// If schema file doesn't exist, skip validation (backwards compatibility)
-		return &schema, nil
-	}
-
-	if !result.Valid() {
+		// Fall through to unmarshaling with strict mode
+	} else if !result.Valid() {
 		errMsg := "JSON Schema validation failed:\n"
 		for _, desc := range result.Errors() {
 			errMsg += fmt.Sprintf("- %s\n", desc)
 		}
 		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	// Step 2: Unmarshal with strict mode (DisallowUnknownFields for extra protection)
+	var schema database.Schema
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&schema); err != nil {
+		return nil, fmt.Errorf("failed to parse schema JSON: %w", err)
 	}
 
 	return &schema, nil

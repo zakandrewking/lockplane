@@ -5,6 +5,7 @@
   "description": "Defines the structure of a database schema with tables, columns, and indexes",
   "type": "object",
   "required": ["tables"],
+  "additionalProperties": false,
   "properties": {
     "tables": {
       "type": "array",
@@ -18,6 +19,7 @@
     "Table": {
       "type": "object",
       "required": ["name", "columns"],
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
@@ -51,6 +53,7 @@
     "Column": {
       "type": "object",
       "required": ["name", "type", "nullable", "is_primary_key"],
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
@@ -78,6 +81,7 @@
     "Index": {
       "type": "object",
       "required": ["name", "columns", "unique"],
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
@@ -100,6 +104,7 @@
     "ForeignKey": {
       "type": "object",
       "required": ["name", "columns", "referenced_table", "referenced_columns"],
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
