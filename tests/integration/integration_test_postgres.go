@@ -2,7 +2,7 @@
 //
 // Tests cover end-to-end workflows including schema introspection, migration
 // planning, plan application with shadow DB validation, and rollback generation.
-package main
+package integration_test
 
 import (
 	"context"

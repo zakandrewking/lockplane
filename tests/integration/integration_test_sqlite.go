@@ -2,7 +2,7 @@
 //
 // Tests verify SQLite-specific behaviors including file-based databases,
 // DDL generation, and migration execution.
-package main
+package integration_test
 
 import (
 	"context"
