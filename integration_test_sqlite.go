@@ -7,12 +7,13 @@ package main
 import (
 	"context"
 	"database/sql"
-	"github.com/lockplane/lockplane/internal/planner"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/lockplane/lockplane/database"
+	"github.com/lockplane/lockplane/internal/executor"
+	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/lockplane/lockplane/internal/schema"
 	_ "modernc.org/sqlite"
 )
@@ -21,9 +22,9 @@ import (
 // for SQLite schemas are generated correctly
 func TestSQLitePlanGeneration_CreateTable(t *testing.T) {
 	// Empty schema (before)
-	before := &Schema{
+	before := &database.Schema{
 		Dialect: database.DialectSQLite,
-		Tables:  []Table{},
+		Tables:  []database.Table{},
 	}
 
 	// Schema with one table (after)
@@ -45,7 +46,7 @@ CREATE TABLE tasks (
 	diff := schema.DiffSchemas(before, after)
 
 	// Create SQLite driver for plan generation
-	driver, err := newDriver("sqlite")
+	driver, err := executor.NewDriver("sqlite")
 	if err != nil {
 		t.Fatalf("failed to create driver: %v", err)
 	}
@@ -111,7 +112,7 @@ CREATE TABLE users (
 	diff := schema.DiffSchemas(before, after)
 
 	// Create SQLite driver for plan generation
-	driver, err := newDriver("sqlite")
+	driver, err := executor.NewDriver("sqlite")
 	if err != nil {
 		t.Fatalf("failed to create driver: %v", err)
 	}
@@ -160,9 +161,9 @@ func TestSQLitePlanExecution_EndToEnd(t *testing.T) {
 	ctx := context.Background()
 
 	// Empty starting state
-	before := &Schema{
+	before := &database.Schema{
 		Dialect: database.DialectSQLite,
-		Tables:  []Table{},
+		Tables:  []database.Table{},
 	}
 
 	// Target schema
@@ -185,7 +186,7 @@ CREATE INDEX idx_products_name ON products(name);
 	diff := schema.DiffSchemas(before, after)
 
 	// Create SQLite driver for plan generation
-	driver, err := newDriver("sqlite")
+	driver, err := executor.NewDriver("sqlite")
 	if err != nil {
 		t.Fatalf("failed to create driver: %v", err)
 	}
@@ -259,16 +260,16 @@ CREATE TABLE notes (
 	}
 
 	// Empty schema (after - simulating DROP TABLE)
-	after := &Schema{
+	after := &database.Schema{
 		Dialect: database.DialectSQLite,
-		Tables:  []Table{},
+		Tables:  []database.Table{},
 	}
 
 	// Compute diff
 	diff := schema.DiffSchemas(before, after)
 
 	// Create SQLite driver
-	driver, err := newDriver("sqlite")
+	driver, err := executor.NewDriver("sqlite")
 	if err != nil {
 		t.Fatalf("failed to create driver: %v", err)
 	}
@@ -380,12 +381,12 @@ func TestApplyPlan_ShadowDB_CatchesUniqueConstraintViolation(t *testing.T) {
 	}
 
 	// Create schema representing the current state
-	currentSchema := &Schema{
+	currentSchema := &database.Schema{
 		Dialect: database.DialectSQLite,
-		Tables: []Table{
+		Tables: []database.Table{
 			{
 				Name: "user_emails",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "INTEGER", Nullable: false, IsPrimaryKey: true},
 					{Name: "email", Type: "TEXT", Nullable: false},
 					{Name: "created_at", Type: "TEXT", Nullable: true},
@@ -394,13 +395,13 @@ func TestApplyPlan_ShadowDB_CatchesUniqueConstraintViolation(t *testing.T) {
 		},
 	}
 
-	driver, err := newDriver("sqlite")
+	driver, err := executor.NewDriver("sqlite")
 	if err != nil {
 		t.Fatalf("Failed to create driver: %v", err)
 	}
 
 	// Execute plan with shadow DB validation - should FAIL on shadow DB
-	result, err := applyPlan(ctx, mainDB, &dangerousPlan, shadowDB, currentSchema, driver, false)
+	result, err := executor.ApplyPlan(ctx, mainDB, &dangerousPlan, shadowDB, currentSchema, driver, false)
 
 	// We expect the apply to fail because shadow DB should catch the duplicate error
 	if err == nil {
@@ -496,7 +497,7 @@ CREATE INDEX idx_books_author ON books(author_id);
 	}
 
 	// Introspect the database
-	driver, err := newDriver("sqlite")
+	driver, err := executor.NewDriver("sqlite")
 	if err != nil {
 		t.Fatalf("failed to create driver: %v", err)
 	}
@@ -515,8 +516,8 @@ CREATE INDEX idx_books_author ON books(author_id);
 	}
 
 	// Generate plan between introspected and target
-	diff := schema.DiffSchemas((*Schema)(introspectedSchema), targetSchema)
-	plan, err := planner.GeneratePlanWithHash(diff, (*Schema)(introspectedSchema), driver)
+	diff := schema.DiffSchemas((*database.Schema)(introspectedSchema), targetSchema)
+	plan, err := planner.GeneratePlanWithHash(diff, (*database.Schema)(introspectedSchema), driver)
 	if err != nil {
 		t.Fatalf("failed to generate plan: %v", err)
 	}

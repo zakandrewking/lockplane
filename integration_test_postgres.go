@@ -11,8 +11,10 @@ import (
 	"testing"
 
 	_ "github.com/lib/pq"
+	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/database/postgres"
 	"github.com/lockplane/lockplane/internal/config"
+	"github.com/lockplane/lockplane/internal/executor"
 	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/lockplane/lockplane/internal/schema"
 	"github.com/lockplane/lockplane/internal/testutil"
@@ -62,10 +64,10 @@ func TestApplyPlan_CreateTable(t *testing.T) {
 	plan := *planPtr
 
 	// Create empty schema for apply
-	emptySchema := &Schema{Tables: []Table{}}
+	emptySchema := &database.Schema{Tables: []database.Table{}}
 
 	// Execute plan
-	result, err := applyPlan(ctx, tdb.DB, &plan, nil, emptySchema, tdb.Driver, false)
+	result, err := executor.ApplyPlan(ctx, tdb.DB, &plan, nil, emptySchema, tdb.Driver, false)
 	if err != nil {
 		t.Fatalf("Failed to apply plan: %v", err)
 	}
@@ -136,11 +138,11 @@ func TestApplyPlan_WithShadowDB(t *testing.T) {
 	plan := *planPtr
 
 	// Create empty schema and driver for apply
-	emptySchema := &Schema{Tables: []Table{}}
+	emptySchema := &database.Schema{Tables: []database.Table{}}
 	driver := postgres.NewDriver()
 
 	// Execute plan with shadow DB validation
-	result, err := applyPlan(ctx, mainDB, &plan, shadowDB, emptySchema, driver, false)
+	result, err := executor.ApplyPlan(ctx, mainDB, &plan, shadowDB, emptySchema, driver, false)
 	if err != nil {
 		t.Fatalf("Failed to apply plan: %v", err)
 	}
@@ -187,10 +189,10 @@ func TestApplyPlan_InvalidSQL(t *testing.T) {
 			}
 
 			// Create empty schema for apply
-			emptySchema := &Schema{Tables: []Table{}}
+			emptySchema := &database.Schema{Tables: []database.Table{}}
 
 			// Execute plan - should fail
-			result, err := applyPlan(ctx, tdb.DB, &plan, nil, emptySchema, tdb.Driver, false)
+			result, err := executor.ApplyPlan(ctx, tdb.DB, &plan, nil, emptySchema, tdb.Driver, false)
 			if err == nil {
 				t.Error("Expected error for invalid SQL, got nil")
 			}
@@ -289,11 +291,11 @@ func TestApplyPlan_ShadowDB_CatchesTypeConversionFailure(t *testing.T) {
 	}
 
 	// Create schema representing the current state
-	currentSchema := &Schema{
-		Tables: []Table{
+	currentSchema := &database.Schema{
+		Tables: []database.Table{
 			{
 				Name: "analytics",
-				Columns: []Column{
+				Columns: []database.Column{
 					{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 					{Name: "user_id", Type: "bigint", Nullable: false},
 					{Name: "event_name", Type: "text", Nullable: false},
@@ -306,7 +308,7 @@ func TestApplyPlan_ShadowDB_CatchesTypeConversionFailure(t *testing.T) {
 	driver := postgres.NewDriver()
 
 	// Execute plan with shadow DB validation - should FAIL on shadow DB
-	result, err := applyPlan(ctx, mainDB, &dangerousPlan, shadowDB, currentSchema, driver, false)
+	result, err := executor.ApplyPlan(ctx, mainDB, &dangerousPlan, shadowDB, currentSchema, driver, false)
 
 	// We expect the apply to fail because shadow DB should catch the error
 	if err == nil {
@@ -393,11 +395,11 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 			plan := *planPtr
 
 			// Create schema with the existing users table
-			existingSchema := &Schema{
-				Tables: []Table{
+			existingSchema := &database.Schema{
+				Tables: []database.Table{
 					{
 						Name: "users",
-						Columns: []Column{
+						Columns: []database.Column{
 							{Name: "id", Type: "integer", Nullable: false, IsPrimaryKey: true},
 							{Name: "name", Type: "text", Nullable: false},
 						},
@@ -406,7 +408,7 @@ func TestApplyPlan_AddColumn(t *testing.T) {
 			}
 
 			// Execute plan
-			result, err := applyPlan(ctx, tdb.DB, &plan, nil, existingSchema, tdb.Driver, false)
+			result, err := executor.ApplyPlan(ctx, tdb.DB, &plan, nil, existingSchema, tdb.Driver, false)
 			if err != nil {
 				t.Fatalf("Failed to apply plan: %v", err)
 			}
@@ -513,9 +515,9 @@ func TestDetectDriver(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := detectDriver(tt.connStr)
+			result := executor.DetectDriver(tt.connStr)
 			if result != tt.expected {
-				t.Errorf("detectDriver(%q) = %q, want %q", tt.connStr, result, tt.expected)
+				t.Errorf("executor.DetectDriver(%q) = %q, want %q", tt.connStr, result, tt.expected)
 			}
 		})
 	}
@@ -565,9 +567,9 @@ func TestGetSQLDriverName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getSQLDriverName(tt.driverType)
+			result := executor.GetSQLDriverName(tt.driverType)
 			if result != tt.expected {
-				t.Errorf("getSQLDriverName(%q) = %q, want %q", tt.driverType, result, tt.expected)
+				t.Errorf("executor.GetSQLDriverName(%q) = %q, want %q", tt.driverType, result, tt.expected)
 			}
 		})
 	}
@@ -605,7 +607,7 @@ func TestApplyPlan_ValidHashAcceptance(t *testing.T) {
 			}
 
 			// Step 3: Compute hash of current state
-			hash, err := schema.ComputeSchemaHash((*Schema)(currentSchema))
+			hash, err := schema.ComputeSchemaHash((*database.Schema)(currentSchema))
 			if err != nil {
 				t.Fatalf("Failed to compute schema hash: %v", err)
 			}
@@ -622,7 +624,7 @@ func TestApplyPlan_ValidHashAcceptance(t *testing.T) {
 			}
 
 			// Step 5: Apply the plan - should succeed
-			result, err := applyPlan(ctx, tdb.DB, &plan, nil, (*Schema)(currentSchema), tdb.Driver, false)
+			result, err := executor.ApplyPlan(ctx, tdb.DB, &plan, nil, (*database.Schema)(currentSchema), tdb.Driver, false)
 			if err != nil {
 				t.Fatalf("Failed to apply plan with valid hash: %v", err)
 			}
@@ -698,7 +700,7 @@ func TestApplyPlan_InvalidHashRejection(t *testing.T) {
 			}
 
 			// Step 4: Try to apply the plan - should FAIL
-			result, err := applyPlan(ctx, tdb.DB, &plan, nil, (*Schema)(currentSchema), tdb.Driver, false)
+			result, err := executor.ApplyPlan(ctx, tdb.DB, &plan, nil, (*database.Schema)(currentSchema), tdb.Driver, false)
 
 			// Expect error
 			if err == nil {
@@ -791,7 +793,7 @@ func TestApplyPlan_EmptyHashSkipsValidation(t *testing.T) {
 			}
 
 			// Step 4: Apply the plan - should succeed (validation skipped)
-			result, err := applyPlan(ctx, tdb.DB, &plan, nil, (*Schema)(currentSchema), tdb.Driver, false)
+			result, err := executor.ApplyPlan(ctx, tdb.DB, &plan, nil, (*database.Schema)(currentSchema), tdb.Driver, false)
 			if err != nil {
 				t.Fatalf("Failed to apply plan with empty hash: %v", err)
 			}
@@ -854,7 +856,7 @@ func TestApplyPlan_HashMismatchAfterDatabaseChange(t *testing.T) {
 				t.Fatalf("Failed to introspect schema: %v", err)
 			}
 
-			hashBeforeChange, err := schema.ComputeSchemaHash((*Schema)(schemaBeforeChange))
+			hashBeforeChange, err := schema.ComputeSchemaHash((*database.Schema)(schemaBeforeChange))
 			if err != nil {
 				t.Fatalf("Failed to compute schema hash: %v", err)
 			}
@@ -882,7 +884,7 @@ func TestApplyPlan_HashMismatchAfterDatabaseChange(t *testing.T) {
 				t.Fatalf("Failed to introspect schema after change: %v", err)
 			}
 
-			hashAfterChange, err := schema.ComputeSchemaHash((*Schema)(schemaAfterChange))
+			hashAfterChange, err := schema.ComputeSchemaHash((*database.Schema)(schemaAfterChange))
 			if err != nil {
 				t.Fatalf("Failed to compute schema hash after change: %v", err)
 			}
@@ -893,7 +895,7 @@ func TestApplyPlan_HashMismatchAfterDatabaseChange(t *testing.T) {
 			}
 
 			// Step 6: Try to apply the plan - should FAIL because hash doesn't match
-			result, err := applyPlan(ctx, tdb.DB, &plan, nil, (*Schema)(schemaAfterChange), tdb.Driver, false)
+			result, err := executor.ApplyPlan(ctx, tdb.DB, &plan, nil, (*database.Schema)(schemaAfterChange), tdb.Driver, false)
 
 			// In the real runApply (main.go), this would call os.Exit(1)
 			// Our applyPlan function doesn't validate hashes, so we document this
