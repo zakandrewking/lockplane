@@ -1,3 +1,8 @@
+// Package sqlvalidation provides SQL schema validation for lockplane .lp.sql files.
+//
+// This package validates SQL DDL schemas for syntax correctness, referential integrity,
+// and safety (detecting dangerous operations like DROP TABLE). It includes LSP-compatible
+// error reporting for IDE integration.
 package sqlvalidation
 
 import (

@@ -1,3 +1,7 @@
+// Package initcmd implements the 'lockplane init' command.
+//
+// This command provides an interactive wizard for setting up lockplane in a project,
+// including database configuration, connection testing, and environment setup.
 package initcmd
 
 import (

@@ -1,3 +1,5 @@
+// This file contains enhanced SQL validation logic including statement-level
+// syntax checking, schema structure validation, and multi-file SQL parsing.
 package sqlvalidation
 
 import (

@@ -1,3 +1,7 @@
+// Package sqliteutil provides utilities for SQLite database file handling.
+//
+// This includes detecting SQLite file paths, creating database files,
+// validating existing databases, and generating shadow database paths.
 package sqliteutil
 
 import (

@@ -1,3 +1,9 @@
+// Package main implements the lockplane CLI for Postgres-first schema management.
+//
+// This file contains the CLI entry point and command routing for all lockplane
+// commands including introspect, plan, apply, rollback, validate, and init.
+// Business logic is delegated to internal packages - this file handles only
+// argument parsing, command dispatch, and driver/database setup.
 package main
 
 import (

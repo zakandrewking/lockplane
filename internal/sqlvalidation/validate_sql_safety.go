@@ -1,3 +1,5 @@
+// This file implements safety checks for SQL schemas, detecting dangerous
+// operations (DROP, TRUNCATE) and non-declarative patterns (IF NOT EXISTS).
 package sqlvalidation
 
 import (

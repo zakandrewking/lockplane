@@ -1,3 +1,7 @@
+// Package introspect provides utilities for database introspection.
+//
+// This includes detecting connection strings and loading schemas from
+// database connections vs. file paths.
 package introspect
 
 import (
