@@ -5,12 +5,10 @@
 package initcmd
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/lockplane/lockplane/internal/wizard"
 )
@@ -237,50 +235,6 @@ func RunInit(args []string) {
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func ensureSchemaDir(path string) (bool, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		path = defaultSchemaDir
-	}
-
-	info, err := os.Stat(path)
-	if err == nil {
-		if info.IsDir() {
-			return false, nil
-		}
-		return false, fmt.Errorf("%s exists but is not a directory", path)
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return false, err
-	}
-	return true, os.MkdirAll(path, 0o755)
-}
-
-func bootstrapSchemaDirectory() (*bootstrapResult, error) {
-	dirCreated, err := ensureSchemaDir(defaultSchemaDir)
-	if err != nil {
-		return nil, err
-	}
-
-	configPath := filepath.Join(defaultSchemaDir, lockplaneConfigFilename)
-	if info, err := os.Stat(configPath); err == nil && !info.IsDir() {
-		return nil, fmt.Errorf("/%s already exists. Edit the existing file or delete it if you want to re-initialize", configPath)
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-
-	if err := os.WriteFile(configPath, []byte(defaultLockplaneTomlBody), 0o644); err != nil {
-		return nil, err
-	}
-
-	return &bootstrapResult{
-		SchemaDir:        defaultSchemaDir,
-		ConfigPath:       configPath,
-		SchemaDirCreated: dirCreated,
-		ConfigCreated:    true,
-	}, nil
 }
 
 func reportBootstrapResult(out *os.File, result *bootstrapResult) {

@@ -1,3 +1,7 @@
+// This file contains integration tests for lockplane with PostgreSQL.
+//
+// Tests cover end-to-end workflows including schema introspection, migration
+// planning, plan application with shadow DB validation, and rollback generation.
 package main
 
 import (
@@ -30,7 +34,7 @@ func resolveTestEnvironment(t *testing.T) *config.ResolvedEnvironment {
 	return env
 }
 
-// compareSchemas compares two Schema objects (used by json_schema_test.go)
+//nolint:unused // Test helper function, may be used in future tests
 func compareSchemas(t *testing.T, expected, actual *Schema) {
 	t.Helper()
 
@@ -71,7 +75,7 @@ func compareSchemas(t *testing.T, expected, actual *Schema) {
 	}
 }
 
-// compareTable compares two Table objects
+//nolint:unused // Test helper function, may be used in future tests
 func compareTable(t *testing.T, expected, actual *Table) {
 	t.Helper()
 
@@ -122,7 +126,7 @@ func compareTable(t *testing.T, expected, actual *Table) {
 	}
 }
 
-// compareColumn compares two Column objects
+//nolint:unused // Test helper function, may be used in future tests
 func compareColumn(t *testing.T, tableName string, expected, actual *Column) {
 	t.Helper()
 
@@ -149,7 +153,7 @@ func compareColumn(t *testing.T, tableName string, expected, actual *Column) {
 	}
 }
 
-// compareIndex compares two Index objects
+//nolint:unused // Test helper function, may be used in future tests
 func compareIndex(t *testing.T, tableName string, expected, actual *Index) {
 	t.Helper()
 

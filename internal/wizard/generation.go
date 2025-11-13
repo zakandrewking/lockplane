@@ -1,3 +1,5 @@
+// This file handles configuration file generation and validation during
+// the init wizard, including lockplane.toml and environment-specific configs.
 package wizard
 
 import (

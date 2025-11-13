@@ -1,3 +1,7 @@
+// Package parser provides SQL DDL parsing utilities for lockplane.
+//
+// This package uses pg_query to parse PostgreSQL DDL statements and extract
+// schema information including tables, columns, indexes, and constraints.
 package parser
 
 import (

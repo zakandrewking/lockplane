@@ -1,3 +1,7 @@
+// Package validation provides schema validation and integrity checking.
+//
+// This package validates database schemas for correctness including foreign key
+// references, duplicate names, missing primary keys, and other schema issues.
 package validation
 
 import (

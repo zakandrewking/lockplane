@@ -1,3 +1,7 @@
+// Package wizard implements the interactive setup wizard for lockplane init.
+//
+// This file contains the main wizard flow, prompting users for database
+// configuration, testing connections, and generating lockplane.toml files.
 package wizard
 
 import (

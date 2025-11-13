@@ -1,3 +1,7 @@
+// Package diagnostic provides SQL parsing diagnostics for better error messages.
+//
+// This package enhances pg_query parser errors with contextual information,
+// suggestions, and user-friendly error messages for SQL syntax issues.
 package diagnostic
 
 import (

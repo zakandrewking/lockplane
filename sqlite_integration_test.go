@@ -1,3 +1,7 @@
+// This file contains integration tests for lockplane with SQLite/libSQL.
+//
+// Tests verify SQLite-specific behaviors including file-based databases,
+// DDL generation, and migration execution.
 package main
 
 import (
