@@ -61,7 +61,7 @@ psql -U myuser -d notesapp < migrations/001_initial.sql
 Start by bootstrapping your schema workspace:
 
 ```bash
-lockplane init --yes
+npx lockplane init --yes
 ```
 
 The wizard creates a `schema/` directory (or your chosen path) that will hold the
@@ -143,13 +143,13 @@ CREATE INDEX idx_notes_user_id ON notes(user_id);
 If you prefer a single file, use `schema/schema.lp.sql`:
 
 ```bash
-lockplane plan --from current.json --to schema/schema.lp.sql --validate
+npx lockplane plan --from current.json --to schema/schema.lp.sql --validate
 ```
 
 **Convert to JSON when needed:**
 
 ```bash
-lockplane convert --input schema/ --output schema.json
+npx lockplane convert --input schema/ --output schema.json
 ```
 
 **Key insight:** This describes WHAT you want, not HOW to get there. Lockplane generates the migration plans.
@@ -169,7 +169,7 @@ Both databases are empty.
 **2. See current state:**
 
 ```bash
-lockplane introspect > current.json
+npx lockplane introspect > current.json
 cat current.json
 ```
 
@@ -186,7 +186,7 @@ Nothing yet. This is your baseline.
 
 ```bash
 # Compare current state to desired schema
-lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
+npx lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 ```
 
 > **💡 Tip:** You can skip the introspect step by using a database connection string directly:
@@ -240,16 +240,16 @@ You have two options:
 **Option A: Two-step (save plan first, then apply)**
 ```bash
 # Generate and save plan (from step 3)
-lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
+npx lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 
 # Apply it (uses DATABASE_URL and SHADOW_DATABASE_URL from environment)
-lockplane apply migration.json --target-environment local
+npx lockplane apply migration.json --target-environment local
 ```
 
 **Option B: One-step (auto-approve)**
 ```bash
 # Generate and apply in a single command (uses DATABASE_URL from environment)
-lockplane apply --auto-approve --target-environment local --schema schema.lp.sql --validate
+npx lockplane apply --auto-approve --target-environment local --schema schema.lp.sql --validate
 ```
 
 **What happens in both cases:**
@@ -269,7 +269,7 @@ psql -U lockplane -h localhost -d notesapp < migration.sql
 **5. Verify it worked:**
 
 ```bash
-lockplane introspect
+npx lockplane introspect
 ```
 
 Output:
@@ -318,7 +318,7 @@ A week later, you need tags.
 **1. See current state:**
 
 ```bash
-lockplane introspect > current.json
+npx lockplane introspect > current.json
 ```
 
 Claude can now see exactly what exists.
@@ -349,16 +349,16 @@ CREATE TABLE note_tags (
 
 **Option A: Two-step (generate plan, then apply)**
 ```bash
-lockplane plan --from current.json --to schema.lp.sql --validate > add_tags.json
+npx lockplane plan --from current.json --to schema.lp.sql --validate > add_tags.json
 # Review the plan
 cat add_tags.json
 # Apply it
-lockplane apply add_tags.json --target-environment local
+npx lockplane apply add_tags.json --target-environment local
 ```
 
 **Option B: One-step (auto-approve)**
 ```bash
-lockplane apply --auto-approve --target-environment local --schema schema.lp.sql --validate
+npx lockplane apply --auto-approve --target-environment local --schema schema.lp.sql --validate
 ```
 
 Lockplane generates:
@@ -409,10 +409,10 @@ Your `schema/` directory (or single `.lp.sql` file) is both:
 
 ```bash
 # Convert your schema to JSON for the frontend
-lockplane convert --input schema/ --output frontend/schema.json
+npx lockplane convert --input schema/ --output frontend/schema.json
 
 # Or introspect current state if you need it
-lockplane introspect > frontend/current-schema.json
+npx lockplane introspect > frontend/current-schema.json
 ```
 
 Your frontend can now:
@@ -423,7 +423,7 @@ Your frontend can now:
 **When schema changes:**
 
 1. Update files in `schema/` (your source of truth)
-2. Generate migration plan: `lockplane plan --from current.json --to schema/ --validate`
+2. Generate migration plan: `npx lockplane plan --from current.json --to schema/ --validate`
 3. Test with shadow DB
 4. Apply to main DB
 5. Frontend already has the new schema (regenerate from `schema/`)
@@ -470,7 +470,7 @@ services:
 
 1. Git push to staging branch
 2. CI runs: `go test` (verifies migrations work)
-3. Generate migration plan: `lockplane plan --from current.json --to schema/ --validate`
+3. Generate migration plan: `npx lockplane plan --from current.json --to schema/ --validate`
 4. Apply migrations to staging DB:
    ```bash
    lockplane apply migration.json --target-environment local
@@ -507,13 +507,13 @@ services:
 pg_dump notesapp > backup_$(date +%Y%m%d).sql
 
 # 2. Apply migrations (skip shadow DB in production)
-lockplane apply migration.json --target-environment local --skip-shadow
+npx lockplane apply migration.json --target-environment local --skip-shadow
 
 # 3. Deploy new app code
 docker compose up -d app
 
 # 4. Verify
-lockplane introspect  # Confirm schema is correct
+npx lockplane introspect  # Confirm schema is correct
 curl /health          # Confirm app works
 ```
 
@@ -580,7 +580,7 @@ Your schema file is the single source of truth. Everything else is generated on 
 
 **The big wins:**
 
-- **For Claude:** `lockplane introspect` shows exact current state - no guessing
+- **For Claude:** `npx lockplane introspect` shows exact current state - no guessing
 - **For you:** Validate migrations before they run - catch errors early
 - **For your team:** Schema is readable SQL (and convertible to JSON) - everyone understands it
 - **For production:** Shadow DB testing - safe migrations every time
@@ -623,7 +623,7 @@ This approach helps:
 **Two-step approach:**
 ```bash
 # 1. See current state
-lockplane introspect > current.json
+npx lockplane introspect > current.json
 
 # 2. Tell Claude what you need
 # "Add user profiles with avatar URLs"
@@ -632,19 +632,19 @@ lockplane introspect > current.json
 # (adds columns to users table)
 
 # 4. Generate and validate migration
-lockplane plan --from current.json --to schema/ --validate > add_profiles.json
+npx lockplane plan --from current.json --to schema/ --validate > add_profiles.json
 
 # 5. Review the plan
 cat add_profiles.json
 
 # 6. Apply it
-lockplane apply add_profiles.json --target-environment local
+npx lockplane apply add_profiles.json --target-environment local
 ```
 
 **One-step auto-approve approach:**
 ```bash
 # 1. See current state
-lockplane introspect > current.json
+npx lockplane introspect > current.json
 
 # 2. Tell Claude what you need
 # "Add user profiles with avatar URLs"
@@ -653,7 +653,7 @@ lockplane introspect > current.json
 # (adds columns to users table)
 
 # 4. Generate and apply in one command
-lockplane apply --auto-approve --target-environment local --schema schema/ --validate
+npx lockplane apply --auto-approve --target-environment local --schema schema/ --validate
 ```
 
 **Reviewing a pull request:**

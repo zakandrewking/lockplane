@@ -106,10 +106,10 @@ Now use Lockplane CLI to introspect the shadow database:
 
 ```bash
 # Export the schema to JSON (using the shadow database from the environment)
-lockplane introspect --source-environment local --shadow > desired.json
+npx lockplane introspect --source-environment local --shadow > desired.json
 
 # Or specify the connection string directly
-lockplane introspect --db postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow > desired.json
+npx lockplane introspect --db postgresql://lockplane:lockplane@localhost:5433/lockplane_shadow > desired.json
 ```
 
 **Note:** The shadow database gets cleaned automatically during migrations (each test runs in a rolled-back transaction), but if you need to manually clear it:
@@ -162,13 +162,13 @@ Now you can generate a migration plan directly from your database:
 
 ```bash
 # Generate a safe migration plan with validation (using database connection string)
-lockplane plan --from-environment local --to desired.json --validate > migration.json
+npx lockplane plan --from-environment local --to desired.json --validate > migration.json
 
 # Or if you generated SQL DDL:
-lockplane plan --from-environment local --to desired.lp.sql --validate > migration.json
+npx lockplane plan --from-environment local --to desired.lp.sql --validate > migration.json
 ```
 
-> **💡 Tip:** Lockplane automatically introspects your database when you provide a connection string, so you don't need to run `lockplane introspect` first!
+> **💡 Tip:** Lockplane automatically introspects your database when you provide a connection string, so you don't need to run `npx lockplane introspect` first!
 
 Lockplane will:
 - Compute the difference between schemas
@@ -203,7 +203,7 @@ Example output:
 
 ```bash
 # Apply to production database
-lockplane apply migration.json
+npx lockplane apply migration.json
 ```
 
 Lockplane will:
@@ -221,10 +221,10 @@ For development environments, you can skip the intermediate plan file:
 python generate_schema.py
 
 # 2. Introspect to JSON
-lockplane introspect --source-environment local --shadow > desired.json
+npx lockplane introspect --source-environment local --shadow > desired.json
 
 # 3. Apply in one command (directly from your actual database)
-lockplane apply --auto-approve --target-environment local --schema desired.json --validate
+npx lockplane apply --auto-approve --target-environment local --schema desired.json --validate
 ```
 
 ## Rollback Plan
@@ -233,13 +233,13 @@ Always generate a rollback before applying to production:
 
 ```bash
 # Generate rollback plan (using database connection string)
-lockplane plan-rollback --plan migration.json --from-environment local > rollback.json
+npx lockplane plan-rollback --plan migration.json --from-environment local > rollback.json
 
 # If something goes wrong, apply the rollback
-lockplane apply rollback.json
+npx lockplane apply rollback.json
 
 # Or use one-step rollback workflow
-lockplane rollback --plan migration.json --target-environment local
+npx lockplane rollback --plan migration.json --target-environment local
 ```
 
 ## Integration with CI/CD
@@ -312,7 +312,7 @@ jobs:
 Lockplane's `apply` command reads from the active environment. Keep `.env.local` up to date:
 
 ```bash
-lockplane apply migration.json --target-environment local
+npx lockplane apply migration.json --target-environment local
 ```
 
 The shadow database is tested first - if the migration fails there, your production database is never touched.
@@ -338,13 +338,13 @@ In your local development workflow:
 
 # Regenerate desired schema (using shadow database)
 python generate_schema.py
-lockplane introspect --source-environment local --shadow > desired.json
+npx lockplane introspect --source-environment local --shadow > desired.json
 
 # Generate and review migration plan (directly from your database)
-lockplane plan --from-environment local --to desired.json --validate > migration.json
+npx lockplane plan --from-environment local --to desired.json --validate > migration.json
 
 # Apply changes locally
-lockplane apply --auto-approve --target-environment local --schema desired.json
+npx lockplane apply --auto-approve --target-environment local --schema desired.json
 ```
 
 ### 4. Alembic Migration
@@ -354,10 +354,10 @@ If you're currently using Alembic, you can migrate to Lockplane easily:
 ```bash
 # Generate desired state from SQLAlchemy models (using shadow database)
 python generate_schema.py
-lockplane introspect --source-environment local --shadow > desired.json
+npx lockplane introspect --source-environment local --shadow > desired.json
 
 # Use Lockplane for future migrations (directly from your database)
-lockplane plan --from-environment local --to desired.json --validate > migration.json
+npx lockplane plan --from-environment local --to desired.json --validate > migration.json
 ```
 
 See also: [Migrating from Alembic](alembic.md)
@@ -367,7 +367,7 @@ See also: [Migrating from Alembic](alembic.md)
 You can save schema snapshots at each release for audit purposes:
 
 ```bash
-lockplane introspect > schemas/v2.1.0.json
+npx lockplane introspect > schemas/v2.1.0.json
 git add schemas/v2.1.0.json
 git commit -m "chore: snapshot schema for v2.1.0"
 ```
@@ -409,13 +409,13 @@ For data migrations or complex schema changes, use Lockplane for DDL and a separ
 
 ```bash
 # 1. Run DDL migration with Lockplane
-lockplane apply migration.json
+npx lockplane apply migration.json
 
 # 2. Run data migration
 python migrate_data.py
 
 # 3. Verify (introspect the database to check)
-lockplane introspect
+npx lockplane introspect
 ```
 
 ## Troubleshooting
@@ -425,7 +425,7 @@ lockplane introspect
 Your migration might contain unsafe operations. Check the error message:
 
 ```bash
-lockplane plan --from-environment local --to desired.json --validate
+npx lockplane plan --from-environment local --to desired.json --validate
 ```
 
 Common issues:

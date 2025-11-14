@@ -5,7 +5,7 @@
 1. Download the latest release for your platform from [GitHub Releases](https://github.com/zakandrewking/lockplane/releases/latest)
 2. Extract the archive: `tar -xzf lockplane_*.tar.gz`
 3. Move to your PATH: `sudo mv lockplane /usr/local/bin/`
-4. Verify: `lockplane --version`
+4. Verify: `npx lockplane --version`
 
 ## Build from Source
 
@@ -19,6 +19,6 @@ go install .
 
 ```bash
 lockplane
-lockplane --version
-lockplane help
+npx lockplane --version
+npx lockplane help
 ```

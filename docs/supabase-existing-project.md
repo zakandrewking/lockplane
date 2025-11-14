@@ -56,13 +56,13 @@ Edit `desired.json` to define your target schema. You can use `examples/schemas-
 
 ```bash
 # Optional: capture current state to use as a template
-lockplane introspect > desired.json
+npx lockplane introspect > desired.json
 # Edit desired.json with your changes
 ```
 
 Validate your changes:
 ```bash
-lockplane validate schema desired.json
+npx lockplane validate schema desired.json
 ```
 
 ### 3. Plan and Review
@@ -71,10 +71,10 @@ Generate a migration plan directly from your database:
 
 ```bash
 # Lockplane will automatically introspect your current state
-lockplane plan --from-environment supabase --to desired.json --validate > migration.json
+npx lockplane plan --from-environment supabase --to desired.json --validate > migration.json
 ```
 
-> **💡 Tip:** You don't need to run `lockplane introspect` first—Lockplane automatically introspects your database when you provide a connection string!
+> **💡 Tip:** You don't need to run `npx lockplane introspect` first—Lockplane automatically introspects your database when you provide a connection string!
 
 The validation report highlights risky operations (e.g., adding NOT NULL columns without defaults). Fix `desired.json` or add backfill steps before proceeding.
 
@@ -83,7 +83,7 @@ The validation report highlights risky operations (e.g., adding NOT NULL columns
 Dry-run the migration on your shadow database:
 
 ```bash
-lockplane apply migration.json --target-environment supabase
+npx lockplane apply migration.json --target-environment supabase
 ```
 
 Lockplane applies to the shadow database first for safety.
@@ -92,7 +92,7 @@ Lockplane applies to the shadow database first for safety.
 
 **Option A: Direct apply**
 ```bash
-lockplane apply migration.json --target-environment supabase
+npx lockplane apply migration.json --target-environment supabase
 ```
 
 **Option B: Via Supabase CLI**

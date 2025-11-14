@@ -37,13 +37,32 @@ Get started by following these steps:
 
 ## 1. 📦 Installation
 
-### Download Pre-built Binary
+### Quick Start with npx (Recommended)
+
+No installation needed! Run lockplane directly with npx:
+
+```bash
+npx lockplane --version
+```
+
+This works on any platform (Linux, macOS, Windows) and always uses the latest version.
+
+### Global Installation
+
+If you prefer a permanent installation:
+
+```bash
+npm install -g lockplane
+npx lockplane --version
+```
+
+### Alternative: Download Pre-built Binary
 
 1. Download the latest release for your platform from [GitHub
    Releases](https://github.com/zakandrewking/lockplane/releases/latest)
 2. Extract the archive: `tar -xzf lockplane_*.tar.gz`
 3. Move to your PATH: `sudo mv lockplane /usr/local/bin/`
-4. Verify: `lockplane --version`
+4. Verify: `npx lockplane --version`
 
 For more options, see the [Installation Guide](docs/installation.md).
 
@@ -111,7 +130,7 @@ column.
 Now, let's validate our schema:
 
 ```bash
-lockplane validate sql schema/users.lp.sql
+npx lockplane validate sql schema/users.lp.sql
 ```
 
 This will output a report of any issues with your schema. If there are no issues,
@@ -130,7 +149,7 @@ interacting with a live database, but for schema definition we want to focus on
 creating a structure. Later, we'll see how lockplane can drop tables and columns
 when needed.
 
-For more information on `.lp.sql` files, run `lockplane validate sql --help`.
+For more information on `.lp.sql` files, run `npx lockplane validate sql --help`.
 
 ## 4. 📜 Run your first migration
 
@@ -142,7 +161,7 @@ database.
 The easiest way to get started is with the interactive wizard:
 
 ```bash
-lockplane init
+npx lockplane init
 ```
 
 The wizard will guide you through:
@@ -165,10 +184,10 @@ The wizard will guide you through:
 
 ```bash
 # Use all defaults (PostgreSQL on localhost)
-lockplane init --yes
+npx lockplane init --yes
 
 # Custom PostgreSQL configuration (individual fields)
-lockplane init --yes \
+npx lockplane init --yes \
   --env-name production \
   --description "Production database" \
   --host db.example.com \
@@ -178,17 +197,17 @@ lockplane init --yes \
   --ssl-mode require
 
 # PostgreSQL with connection string (easier for copying from cloud providers)
-lockplane init --yes \
+npx lockplane init --yes \
   --env-name production \
   --connection-string "postgresql://user:pass@db.example.com:5432/myapp?sslmode=require"
 
 # SQLite configuration
-lockplane init --yes \
+npx lockplane init --yes \
   --db-type sqlite \
   --file-path ./myapp.db
 
 # libSQL/Turso configuration
-lockplane init --yes \
+npx lockplane init --yes \
   --db-type libsql \
   --env-name production \
   --url "libsql://mydb-myorg.turso.io" \
@@ -220,7 +239,7 @@ libSQL flags:
 
 ### Adding Multiple Environments
 
-Lockplane makes it easy to manage multiple environments (local, staging, production, etc.) in the same project. When you run `lockplane init` after already having a configuration, the wizard will:
+Lockplane makes it easy to manage multiple environments (local, staging, production, etc.) in the same project. When you run `npx lockplane init` after already having a configuration, the wizard will:
 
 1. **Detect your existing configuration** and show you what environments are already defined
 2. **Guide you through adding new environments** - just like the initial setup
@@ -231,18 +250,18 @@ Lockplane makes it easy to manage multiple environments (local, staging, product
 
 ```bash
 # Initial setup - create local environment
-lockplane init
+npx lockplane init
 # ... follow the wizard to set up your local database ...
 
 # Later, add staging environment
-lockplane init
+npx lockplane init
 # The wizard will show:
 # "Found existing configuration!"
 # "Existing Environments: local"
 # Then guide you through adding staging
 
 # Add production environment
-lockplane init
+npx lockplane init
 # The wizard will show:
 # "Found existing configuration!"
 # "Existing Environments: local, staging"
@@ -370,7 +389,7 @@ such as `--target` or `--shadow-db` when needed.
 Now, we can generate a migration plan to apply our schema to our database with the following command:
 
 ```bash
-lockplane apply --auto-approve --target-environment local --schema schema/
+npx lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 
 This will introspect the target database, generate a migration plan, and apply it immediately (with shadow database validation).
@@ -392,7 +411,7 @@ CREATE TABLE users (
 Now to apply the change, we can run the following command:
 
 ```bash
-lockplane apply --auto-approve --target-environment local --schema schema/
+npx lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 
 And that's it! You've successfully made a change to your schema and applied it to your database.
@@ -428,7 +447,7 @@ Use multi-phase migrations for:
 Let's safely rename `users.email` to `users.email_address`:
 
 ```bash
-lockplane plan-multiphase \
+npx lockplane plan-multiphase \
   --pattern expand_contract \
   --table users \
   --old-column email \
@@ -457,37 +476,37 @@ ALTER TABLE users DROP COLUMN email;
 
 **Expand/Contract** - Column rename or compatible type change
 ```bash
-lockplane plan-multiphase --pattern expand_contract \
+npx lockplane plan-multiphase --pattern expand_contract \
   --table users --old-column name --new-column full_name --type TEXT
 ```
 
 **Deprecation** - Safe column removal with deprecation period
 ```bash
-lockplane plan-multiphase --pattern deprecation \
+npx lockplane plan-multiphase --pattern deprecation \
   --table users --column last_login --type TIMESTAMP
 ```
 
 **Drop Table** - Safe table removal with optional archiving
 ```bash
 # With data archiving
-lockplane plan-multiphase --pattern drop_table \
+npx lockplane plan-multiphase --pattern drop_table \
   --table old_logs --archive-data
 
 # Without archiving
-lockplane plan-multiphase --pattern drop_table \
+npx lockplane plan-multiphase --pattern drop_table \
   --table temp_table
 ```
 
 **Validation** - Add constraints with backfill
 ```bash
-lockplane plan-multiphase --pattern validation \
+npx lockplane plan-multiphase --pattern validation \
   --table posts --column status --type TEXT \
   --constraint "CHECK (status IN ('draft', 'published'))"
 ```
 
 **Type Change** - Incompatible type changes with dual-write
 ```bash
-lockplane plan-multiphase --pattern type_change \
+npx lockplane plan-multiphase --pattern type_change \
   --table users --column age \
   --old-type TEXT --new-type INTEGER
 ```
@@ -531,7 +550,7 @@ Once you have a multi-phase plan, execute it phase by phase:
 
 **Phase 1: Execute first database changes**
 ```bash
-lockplane apply-phase rename-email.json --phase 1
+npx lockplane apply-phase rename-email.json --phase 1
 ```
 
 Lockplane tracks progress in `.lockplane-state.json` (git-ignored) to ensure phases are executed in order.
@@ -539,18 +558,18 @@ Lockplane tracks progress in `.lockplane-state.json` (git-ignored) to ensure pha
 **Phase 2: Deploy code, then continue**
 After deploying code changes for phase 1:
 ```bash
-lockplane apply-phase rename-email.json --next
+npx lockplane apply-phase rename-email.json --next
 # or explicitly: --phase 2
 ```
 
 **Phase 3: Complete the migration**
 ```bash
-lockplane apply-phase rename-email.json --next
+npx lockplane apply-phase rename-email.json --next
 ```
 
 **Check status at any time:**
 ```bash
-lockplane phase-status
+npx lockplane phase-status
 ```
 
 Output:
@@ -573,10 +592,10 @@ Next: Execute phase 3
 **Rollback if needed:**
 ```bash
 # Rollback current phase
-lockplane rollback-phase rename-email.json
+npx lockplane rollback-phase rename-email.json
 
 # Rollback specific phase
-lockplane rollback-phase rename-email.json --phase 2
+npx lockplane rollback-phase rename-email.json --phase 2
 ```
 
 See [Multi-Phase Migration Guide](devdocs/projects/multi-phase-migrations.md) for detailed documentation.
@@ -642,7 +661,7 @@ Flags override any configured environment:
 
 ```bash
 # Override target connection once-off
-lockplane apply plan.json \
+npx lockplane apply plan.json \
   --target-environment staging \
   --target "postgresql://override@host/db" \
   --shadow-db "postgresql://override@host/db_shadow"
@@ -675,8 +694,8 @@ CREATE UNIQUE INDEX users_email_key ON users(email);
 If you need JSON (for example, to integrate with existing tooling), convert on demand:
 
 ```bash
-lockplane convert --input schema.lp.sql --output schema.json
-lockplane convert --input schema.json --output schema.lp.sql --to sql
+npx lockplane convert --input schema.lp.sql --output schema.json
+npx lockplane convert --input schema.json --output schema.lp.sql --to sql
 ```
 
 Editors that support JSON Schema validation can point at `schema-json/schema.json` for autocomplete when working in JSON. See [examples/schemas-json/](./examples/schemas-json/) for reference files.
@@ -687,8 +706,8 @@ Prefer keeping related DDL in separate `.lp.sql` files? Point Lockplane at the d
 
 ```bash
 # Combine all .lp.sql files in a directory into a single schema (non-recursive)
-lockplane plan --from current.json --to schema/ --validate
-lockplane convert --input schema/ --output schema.json
+npx lockplane plan --from current.json --to schema/ --validate
+npx lockplane convert --input schema/ --output schema.json
 ```
 
 Files are read in lexicographic order, so you can prefix them with numbers (for example `001_tables.lp.sql`, `010_indexes.lp.sql`) to make the order explicit. Only top-level files are considered—subdirectories and symlinks are skipped to avoid accidental recursion.
@@ -701,13 +720,13 @@ Lockplane provides comprehensive validation for schema and plan files to catch e
 
 ```bash
 # Validate SQL schema file
-lockplane validate sql schema.lp.sql
+npx lockplane validate sql schema.lp.sql
 
 # Validate with JSON output (for IDE integration)
-lockplane validate sql --output-format json schema.lp.sql
+npx lockplane validate sql --output-format json schema.lp.sql
 
 # Validate directory of SQL files
-lockplane validate sql lockplane/schema/
+npx lockplane validate sql lockplane/schema/
 ```
 
 **What's validated:**
@@ -750,7 +769,7 @@ Found 2 syntax error(s). Please fix these before running validation.
 
 ```bash
 # Validate JSON schema file
-lockplane validate schema schema.json
+npx lockplane validate schema schema.json
 ```
 
 **What's validated:**
@@ -763,10 +782,10 @@ lockplane validate schema schema.json
 
 ```bash
 # Validate migration plan file
-lockplane validate plan migration.json
+npx lockplane validate plan migration.json
 
 # Validate with JSON output
-lockplane validate plan --format json migration.json
+npx lockplane validate plan --format json migration.json
 ```
 
 **What's validated:**
@@ -806,13 +825,13 @@ Your desired schema is the single source of truth. Lockplane generates everythin
 cat schema.lp.sql
 
 # Current database state
-lockplane introspect > current.json
+npx lockplane introspect > current.json
 
 # Forward migration (current → desired)
-lockplane plan --from current.json --to schema.lp.sql --validate > forward.json
+npx lockplane plan --from current.json --to schema.lp.sql --validate > forward.json
 
 # Reverse migration (desired → current)
-lockplane plan --from schema.lp.sql --to current.json --validate > reverse.json
+npx lockplane plan --from schema.lp.sql --to current.json --validate > reverse.json
 ```
 
 **No migration files to maintain.** Just update your schema and regenerate plans as needed.
@@ -829,30 +848,30 @@ Instead of introspecting to a file, you can use database connection strings dire
 
 ```bash
 # Compare two live databases
-lockplane plan \
+npx lockplane plan \
   --from postgres://user:pass@localhost:5432/production \
   --to postgres://user:pass@localhost:5433/staging \
   --validate > migration.json
 
 # Compare live database to schema file
-lockplane plan \
+npx lockplane plan \
   --from-environment local \
   --to schema.lp.sql \
   --validate > migration.json
 
 # Auto-approve: plan and apply directly to database
-lockplane apply \
+npx lockplane apply \
   --auto-approve \
   --target-environment local \
   --schema schema/
 
 # Generate rollback plan (two-step workflow)
-lockplane plan-rollback \
+npx lockplane plan-rollback \
   --plan migration.json \
   --from-environment local > rollback.json
 
 # Or apply rollback directly (one-step workflow)
-lockplane rollback \
+npx lockplane rollback \
   --plan migration.json \
   --target-environment local
 ```
@@ -876,19 +895,19 @@ This is especially useful for:
 **Two-step approach (traditional):**
 ```bash
 # 1. Introspect current database state
-lockplane introspect > current.json
+npx lockplane introspect > current.json
 
 # 2. Update your desired schema
 vim schema.lp.sql  # Your single source of truth
 
 # 3. Generate and validate migration plan
-lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
+npx lockplane plan --from current.json --to schema.lp.sql --validate > migration.json
 
 # 4. Review the generated plan
 cat migration.json
 
 # 5. Apply the migration (validates on shadow DB first)
-lockplane apply migration.json
+npx lockplane apply migration.json
 ```
 
 **One-step approach (auto-approve):**
@@ -897,7 +916,7 @@ lockplane apply migration.json
 vim schema.lp.sql  # Your single source of truth
 
 # 2. Plan and apply in one command (validates on shadow DB first)
-lockplane apply --auto-approve --target $DATABASE_URL --schema schema.lp.sql
+npx lockplane apply --auto-approve --target $DATABASE_URL --schema schema.lp.sql
 ```
 
 ### Example
@@ -979,7 +998,7 @@ Given two schemas:
 
 **Generated plan**:
 ```bash
-lockplane plan --from current.json --to schema.lp.sql
+npx lockplane plan --from current.json --to schema.lp.sql
 ```
 
 ```json
@@ -1003,7 +1022,7 @@ Lockplane validates that migrations are safe and reversible **before** they run:
 
 ```bash
 # Validate a migration plan
-lockplane plan --from current.json --to schema.lp.sql
+npx lockplane plan --from current.json --to schema.lp.sql
 ```
 
 **Example: Safe migration** (nullable column):
@@ -1047,7 +1066,7 @@ Lockplane automatically classifies every migration operation by its safety level
 
 **Example: Dangerous operation detected**
 ```bash
-lockplane plan --from current.json --to schema.lp.sql --validate
+npx lockplane plan --from current.json --to schema.lp.sql --validate
 ```
 
 ```
@@ -1116,7 +1135,7 @@ Always use shadow DB validation to test dangerous migrations before production:
 
 ```bash
 # Test on shadow DB first (automatic with apply command)
-lockplane apply migration.json --target $DATABASE_URL --shadow-db $SHADOW_DB_URL
+npx lockplane apply migration.json --target $DATABASE_URL --shadow-db $SHADOW_DB_URL
 
 # Shadow DB validation will:
 # 1. Apply migration to shadow DB
@@ -1194,7 +1213,7 @@ Every migration plan includes a `source_hash` field - a SHA-256 hash of the sour
 
 When you generate a plan:
 ```bash
-lockplane plan --from current.json --to schema.lp.sql > migration.json
+npx lockplane plan --from current.json --to schema.lp.sql > migration.json
 ```
 
 The plan includes the hash of `current.json`:
@@ -1207,7 +1226,7 @@ The plan includes the hash of `current.json`:
 
 When you apply the plan:
 ```bash
-lockplane apply migration.json
+npx lockplane apply migration.json
 ```
 
 Lockplane:

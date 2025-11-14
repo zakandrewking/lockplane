@@ -74,14 +74,14 @@ Example:
 
 Validate immediately:
 ```bash
-lockplane validate schema desired.json
+npx lockplane validate schema desired.json
 ```
 
 ### 3. Generate Your First Migration
 
 ```bash
 # Since this is a new project with no tables, you can read from the Supabase environment
-lockplane plan --from-environment supabase --to desired.json --validate > migration.json
+npx lockplane plan --from-environment supabase --to desired.json --validate > migration.json
 ```
 
 > **💡 Tip:** Lockplane automatically introspects your database when you provide a connection string. For a brand new project, the introspection will return an empty schema.
@@ -91,7 +91,7 @@ The validation report highlights risky operations. Review and fix before proceed
 ### 4. Apply
 
 ```bash
-lockplane apply migration.json --target-environment supabase
+npx lockplane apply migration.json --target-environment supabase
 ```
 
 This runs on the shadow database first, then applies to production.

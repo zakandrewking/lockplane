@@ -26,11 +26,11 @@ EOF
 ## Hybrid Workflow Overview
 
 1. **Track schema declaratively with Lockplane**
-   - `schema.lp.sql` (preferred, or a directory of `.lp.sql` files) describes the target state. Convert from JSON if needed with `lockplane convert`.
+   - `schema.lp.sql` (preferred, or a directory of `.lp.sql` files) describes the target state. Convert from JSON if needed with `npx lockplane convert`.
    - Lockplane can introspect your current database state directly using connection strings, so you don't need to maintain `current.json`.
 
 2. **Use Lockplane for safety analysis**
-   - `lockplane plan` highlights unsafe operations and generates SQL/rollback steps.
+   - `npx lockplane plan` highlights unsafe operations and generates SQL/rollback steps.
    - Feed those steps into Alembic migration scripts when you need custom logic.
 
 3. **Apply with Alembic**
@@ -48,16 +48,16 @@ Configure `sqlalchemy.url` in `alembic.ini` to match the `DATABASE_URL` stored i
 ### 2. Define desired schema
 Update `schema.lp.sql` to express the new state. Validate immediately:
 ```bash
-lockplane validate schema schema.lp.sql
+npx lockplane validate schema schema.lp.sql
 ```
 
 ### 3. Generate a plan and review
 ```bash
 # Lockplane will automatically introspect your current database state
-lockplane plan --from-environment alembic --to schema.lp.sql --validate > migration.json
+npx lockplane plan --from-environment alembic --to schema.lp.sql --validate > migration.json
 ```
 
-> **💡 Tip:** You don't need to run `lockplane introspect` first—Lockplane automatically introspects your database when you provide a connection string!
+> **💡 Tip:** You don't need to run `npx lockplane introspect` first—Lockplane automatically introspects your database when you provide a connection string!
 
 - Read the stderr validation summary for warnings.
 - `migration.json` contains ordered `steps` with SQL.
@@ -94,18 +94,18 @@ Use `op.create_table`/`op.add_column` where convenient; Lockplane SQL serves as 
 ### 5. Test against a shadow database
 Ensure `.env.alembic` points to your staging database (for the shadow URL) and run:
 ```bash
-lockplane apply migration.json --target-environment alembic --skip-shadow
+npx lockplane apply migration.json --target-environment alembic --skip-shadow
 ```
-- Or, run `lockplane apply` without `--skip-shadow` to let it dry-run on the shadow, then perform `alembic upgrade head` once confident.
+- Or, run `npx lockplane apply` without `--skip-shadow` to let it dry-run on the shadow, then perform `alembic upgrade head` once confident.
 
 ### 6. Keep artifacts in sync (Optional)
-- After Alembic upgrade succeeds, you can optionally run `lockplane introspect > current.json` and commit alongside the Alembic revision to document the new state.
+- After Alembic upgrade succeeds, you can optionally run `npx lockplane introspect > current.json` and commit alongside the Alembic revision to document the new state.
 - However, with database connection strings, you can skip this and work directly with your live databases.
 - If Alembic includes custom Python logic (data migrations), add notes alongside `schema.lp.sql` (or in README) to ensure future maintainers rerun those scripts.
 
 ## Automation Tips
 
-- Add a CI step that calls `lockplane plan --validate` and `alembic upgrade --sql head` to ensure both toolchains agree.
+- Add a CI step that calls `npx lockplane plan --validate` and `alembic upgrade --sql head` to ensure both toolchains agree.
 - Use Makefile targets:
   ```makefile
   lockplane-plan:

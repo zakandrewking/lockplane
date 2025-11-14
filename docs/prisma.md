@@ -62,8 +62,8 @@ EOF
 
 ## Tips
 
-- Add `schema-json/schema.json` to VS Code settings so Prisma schema edits surface JSON schema warnings when you sync into Lockplane (after converting to JSON with `lockplane convert`).
-- Run `lockplane validate schema schema.lp.sql` (Lockplane will auto-detect the format) in CI right after `npx prisma format` to catch drift early.
+- Add `schema-json/schema.json` to VS Code settings so Prisma schema edits surface JSON schema warnings when you sync into Lockplane (after converting to JSON with `npx lockplane convert`).
+- Run `npx lockplane validate schema schema.lp.sql` (Lockplane will auto-detect the format) in CI right after `npx prisma format` to catch drift early.
 - If Prisma introduces functions or extensions, ensure they appear in `schema.lp.sql` before running Lockplane validation.
 
 ## CI Example
