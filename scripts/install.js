@@ -30,8 +30,9 @@ function getPlatformInfo() {
   }
 
   // Determine architecture
+  // GoReleaser uses 'amd64' and 'arm64' in asset names
   if (arch === 'x64') {
-    archName = 'x86_64';
+    archName = 'amd64';
   } else if (arch === 'arm64') {
     archName = 'arm64';
   } else {
