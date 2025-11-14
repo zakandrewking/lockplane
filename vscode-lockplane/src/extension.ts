@@ -198,7 +198,7 @@ function displayLockplaneInfo(): void {
     }
 
     // Get version
-    cp.exec(lockplanePath + ' version', (error, stdout, stderr) => {
+    cp.exec(lockplanePath + ' --version', (error, stdout, stderr) => {
       if (error) {
         outputChannel.appendLine(`Warning: Could not get lockplane version: ${error.message}`);
         outputChannel.appendLine('Make sure lockplane is installed and in your PATH');

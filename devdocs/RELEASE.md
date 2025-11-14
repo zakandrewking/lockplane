@@ -70,7 +70,7 @@ Before creating a production release, test the release process:
 
 2. **Test binary:**
    ```bash
-   ./dist/lockplane_linux_amd64_v1/lockplane version
+   ./dist/lockplane_linux_amd64_v1/lockplane --version
    ./dist/lockplane_linux_amd64_v1/lockplane help
    ```
 
@@ -144,7 +144,7 @@ After a successful release:
    # (Download from GitHub releases page)
 
    # Verify version
-   lockplane version
+   lockplane --version
    ```
 
 3. **Update any dependent projects or examples**

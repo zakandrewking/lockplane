@@ -189,8 +189,8 @@ if "expected pattern" not in content:
 ```python
 import subprocess
 
-result = subprocess.run(["lockplane", "version"], capture_output=True, text=True)
-if "lockplane version" not in result.stdout:
+result = subprocess.run(["lockplane", "--version"], capture_output=True, text=True)
+if "lockplane --version" not in result.stdout:
     print("✗ Unexpected lockplane version output", file=sys.stderr)
     failures += 1
 ```

@@ -19,7 +19,7 @@ Schema validation for Lockplane `.lp.sql` files in Visual Studio Code.
 
 To verify installation:
 ```bash
-lockplane version
+lockplane --version
 ```
 
 ## Recommended Extensions
@@ -118,7 +118,7 @@ go install github.com/zakandrewking/lockplane@latest
 # https://github.com/zakandrewking/lockplane/releases
 
 # Verify installation
-lockplane version
+lockplane --version
 ```
 
 If lockplane is installed in a custom location, configure it:

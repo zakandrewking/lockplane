@@ -43,7 +43,7 @@ Get started by following these steps:
    Releases](https://github.com/zakandrewking/lockplane/releases/latest)
 2. Extract the archive: `tar -xzf lockplane_*.tar.gz`
 3. Move to your PATH: `sudo mv lockplane /usr/local/bin/`
-4. Verify: `lockplane version`
+4. Verify: `lockplane --version`
 
 For more options, see the [Installation Guide](docs/installation.md).
 

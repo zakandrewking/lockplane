@@ -118,7 +118,7 @@ code test-workspace
 
 **"Lockplane CLI not found"**
 - Make sure lockplane is installed and in PATH
-- Test: `lockplane version`
+- Test: `lockplane --version`
 - Configure custom path in settings: `lockplane.cliPath`
 
 **Extension not activating**
