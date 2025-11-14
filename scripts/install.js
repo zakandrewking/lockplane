@@ -126,6 +126,21 @@ async function install() {
     // Extract
     extract(archivePath, binDir);
 
+    // Rename the binary from lockplane-{os}-{arch} to lockplane
+    const { os, archName } = getPlatformInfo();
+    const osName = os.toLowerCase();
+    const extractedName = process.platform === 'win32'
+      ? `lockplane-${osName}-${archName}.exe`
+      : `lockplane-${osName}-${archName}`;
+    const finalName = process.platform === 'win32' ? 'lockplane.exe' : 'lockplane';
+
+    const extractedPath = path.join(binDir, extractedName);
+    const finalPath = path.join(binDir, finalName);
+
+    if (fs.existsSync(extractedPath)) {
+      fs.renameSync(extractedPath, finalPath);
+    }
+
     // Make binary executable (Unix-like systems)
     if (process.platform !== 'win32') {
       const binaryPath = path.join(binDir, 'lockplane');
