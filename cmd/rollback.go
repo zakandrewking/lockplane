@@ -7,13 +7,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
+	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/internal/config"
 	"github.com/lockplane/lockplane/internal/executor"
-	"github.com/lockplane/lockplane/internal/introspect"
 	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/lockplane/lockplane/internal/schema"
+	"github.com/lockplane/lockplane/internal/sqliteutil"
 	"github.com/spf13/cobra"
 )
 
@@ -102,113 +104,188 @@ func runRollback(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Load forward plan
-	if rollbackVerbose {
-		fmt.Fprintf(os.Stderr, "📄 Loading forward plan from: %s\n", rollbackPlan)
+	// Resolve target environment
+	resolvedTarget, err := config.ResolveEnvironment(cfg, rollbackTargetEnv)
+	if err != nil {
+		log.Fatalf("Failed to resolve target environment: %v", err)
 	}
-	forwardPlan, err := loadPlan(rollbackPlan)
+
+	// Load the forward plan
+	if rollbackVerbose {
+		_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "📖 Loading forward plan: %s\n", rollbackPlan)
+	}
+	forwardPlan, err := planner.LoadJSONPlan(rollbackPlan)
 	if err != nil {
 		log.Fatalf("Failed to load forward plan: %v", err)
 	}
-	if rollbackVerbose {
-		fmt.Fprintf(os.Stderr, "✓ Loaded forward plan with %d steps\n", len(forwardPlan.Steps))
-	}
 
 	// Resolve target database connection
-	targetConnStr, err := resolveConnection(cfg, rollbackTarget, rollbackTargetEnv, "target")
-	if err != nil {
-		log.Fatalf("Failed to resolve target database: %v", err)
+	targetConnStr := strings.TrimSpace(rollbackTarget)
+	if targetConnStr == "" {
+		targetConnStr = resolvedTarget.DatabaseURL
+	}
+	if targetConnStr == "" {
+		fmt.Fprintf(os.Stderr, "Error: no target database configured.\n\n")
+		fmt.Fprintf(os.Stderr, "Provide --target or configure environment %q via lockplane.toml/.env.%s.\n", resolvedTarget.Name, resolvedTarget.Name)
+		os.Exit(1)
 	}
 
-	// Load before schema (required for rollback generation)
-	fromInput := rollbackFrom
-	if fromInput == "" {
-		if rollbackFromEnv != "" {
-			resolvedFrom, err := config.ResolveEnvironment(cfg, rollbackFromEnv)
-			if err != nil {
-				log.Fatalf("Failed to resolve from environment: %v", err)
-			}
-			fromInput = resolvedFrom.DatabaseURL
-		} else {
-			log.Fatal("--from or --from-environment is required")
+	// Determine source ("before") schema for rollback generation
+	sourceInput := strings.TrimSpace(rollbackFrom)
+	if sourceInput == "" && rollbackFromEnv != "" {
+		resolvedFrom, err := config.ResolveEnvironment(cfg, rollbackFromEnv)
+		if err != nil {
+			log.Fatalf("Failed to resolve from environment: %v", err)
 		}
+		sourceInput = resolvedFrom.DatabaseURL
 	}
 
-	driverType := executor.DetectDriver(targetConnStr)
-	driver, err := executor.NewDriver(driverType)
-	if err != nil {
-		log.Fatalf("Failed to create driver: %v", err)
+	var beforeSchema *database.Schema
+	if sourceInput != "" {
+		// Load schema from file or database
+		if rollbackVerbose {
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Loading 'before' schema from: %s\n", sourceInput)
+		}
+		rollbackFallback := schema.DriverNameToDialect(executor.DetectDriver(sourceInput))
+		beforeSchema, err = executor.LoadSchemaOrIntrospectWithOptions(sourceInput, executor.BuildSchemaLoadOptions(sourceInput, rollbackFallback))
+		if err != nil {
+			log.Fatalf("Failed to load before schema: %v", err)
+		}
+	} else {
+		// No --from provided, show helpful error
+		fmt.Fprintf(os.Stderr, "Error: --from or --from-environment is required for rollback generation.\n\n")
+		fmt.Fprintf(os.Stderr, "The rollback command needs the schema that existed BEFORE the forward migration.\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fmt.Fprintf(os.Stderr, "  1. Provide --from with a schema file/directory saved before the migration\n")
+		fmt.Fprintf(os.Stderr, "  2. Provide --from-environment pointing to a database with the original state\n")
+		fmt.Fprintf(os.Stderr, "  3. Use plan-rollback to generate rollback plan first:\n")
+		fmt.Fprintf(os.Stderr, "     lockplane plan-rollback --plan %s --from <before.json> > rollback.json\n", rollbackPlan)
+		fmt.Fprintf(os.Stderr, "     lockplane apply rollback.json --target-environment %s\n\n", resolvedTarget.Name)
+		os.Exit(1)
 	}
 
-	dialect := schema.DriverNameToDialect(driverType)
-	opts := executor.BuildSchemaLoadOptions(fromInput, dialect)
-	if rollbackVerbose {
-		fmt.Fprintf(os.Stderr, "🔍 Loading before schema from: %s\n", fromInput)
-	}
-	beforeSchema, err := executor.LoadSchemaOrIntrospectWithOptions(fromInput, opts)
+	// Detect database driver from target connection string
+	mainDriverType := executor.DetectDriver(targetConnStr)
+	mainDriver, err := executor.NewDriver(mainDriverType)
 	if err != nil {
-		log.Fatalf("Failed to load before schema: %v", err)
-	}
-	if rollbackVerbose {
-		fmt.Fprintf(os.Stderr, "✓ Before schema has %d tables\n", len(beforeSchema.Tables))
+		log.Fatalf("Failed to create database driver: %v", err)
 	}
 
 	// Generate rollback plan
 	if rollbackVerbose {
-		fmt.Fprintf(os.Stderr, "🔍 Generating rollback plan...\n")
+		_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "⚙️  Generating rollback plan...\n")
 	}
-	rollbackPlan, err := planner.GenerateRollback(forwardPlan, beforeSchema, driver)
+	rollbackPlan, err := planner.GenerateRollback(forwardPlan, beforeSchema, mainDriver)
 	if err != nil {
-		log.Fatalf("Failed to generate rollback plan: %v", err)
+		log.Fatalf("Failed to generate rollback: %v", err)
 	}
 
-	if len(rollbackPlan.Steps) == 0 {
-		fmt.Println("✅ No rollback needed - forward plan has no reversible operations")
-		return
-	}
+	// Display rollback plan with colors
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+	gray := color.New(color.FgHiBlack)
+	red := color.New(color.FgRed, color.Bold)
 
-	if rollbackVerbose {
-		fmt.Fprintf(os.Stderr, "✓ Generated rollback plan with %d steps\n", len(rollbackPlan.Steps))
-	}
+	_, _ = red.Fprintf(os.Stderr, "\n🔄 Rollback plan (%d steps):\n\n", len(rollbackPlan.Steps))
+	fmt.Fprintf(os.Stderr, "This will UNDO the changes from the forward migration.\n\n")
 
-	// Resolve shadow database (if not skipped)
-	var shadowConnStr string
-	if !rollbackSkipShadow {
-		shadowConnStr, err = resolveConnection(cfg, rollbackShadowDB, rollbackShadowEnv, "shadow_db")
-		if err != nil {
-			if rollbackVerbose {
-				fmt.Fprintf(os.Stderr, "⚠️  Shadow DB not available: %v\n", err)
+	for i, step := range rollbackPlan.Steps {
+		_, _ = green.Fprintf(os.Stderr, "  %d. ", i+1)
+		fmt.Fprintf(os.Stderr, "%s\n", step.Description)
+		if len(step.SQL) > 0 {
+			if len(step.SQL) == 1 {
+				sql := step.SQL[0]
+				if len(sql) > 100 {
+					sql = sql[:100] + "..."
+				}
+				_, _ = gray.Fprintf(os.Stderr, "     SQL: ")
+				_, _ = yellow.Fprintf(os.Stderr, "%s\n", sql)
+			} else {
+				_, _ = gray.Fprintf(os.Stderr, "     SQL: ")
+				_, _ = yellow.Fprintf(os.Stderr, "%d statements\n", len(step.SQL))
 			}
-			// Shadow DB is optional, continue without it
 		}
 	}
+	fmt.Fprintf(os.Stderr, "\n")
 
-	// Open target database connection
-	sqlDriverName := executor.GetSQLDriverName(driverType)
-	targetDB, err := sql.Open(sqlDriverName, targetConnStr)
+	// Ask for confirmation unless --auto-approve
+	if !rollbackAutoApprove {
+		bold := color.New(color.Bold)
+		_, _ = bold.Fprintf(os.Stderr, "Do you want to perform this rollback?\n")
+		fmt.Fprintf(os.Stderr, "  Lockplane will UNDO the forward migration described above.\n")
+		_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "  Only 'yes' will be accepted to approve.\n\n")
+		fmt.Fprintf(os.Stderr, "  Enter a value: ")
+
+		var response string
+		_, err := fmt.Scanln(&response)
+		if err != nil {
+			_, _ = red.Fprintf(os.Stderr, "\nRollback cancelled.\n")
+			os.Exit(0)
+		}
+
+		if response != "yes" {
+			_, _ = red.Fprintf(os.Stderr, "\nRollback cancelled.\n")
+			os.Exit(0)
+		}
+		fmt.Fprintf(os.Stderr, "\n")
+	}
+
+	// Connect to main database
+	mainDriverName := executor.GetSQLDriverName(mainDriverType)
+	mainDB, err := sql.Open(mainDriverName, targetConnStr)
 	if err != nil {
 		log.Fatalf("Failed to connect to target database: %v", err)
 	}
-	defer func() { _ = targetDB.Close() }()
+	defer func() { _ = mainDB.Close() }()
 
-	// Ping to verify connection
-	if err := targetDB.PingContext(ctx); err != nil {
+	if err := mainDB.PingContext(ctx); err != nil {
 		log.Fatalf("Failed to ping target database: %v", err)
 	}
 
-	// Introspect current schema
-	if rollbackVerbose {
-		fmt.Fprintf(os.Stderr, "🔍 Introspecting current database schema...\n")
-	}
-	currentSchema, err := executor.LoadSchemaFromConnectionString(targetConnStr)
-	if err != nil {
-		log.Fatalf("Failed to introspect current schema: %v", err)
-	}
-
-	// Open shadow database connection (if available)
+	// Connect to shadow database if not skipped
 	var shadowDB *sql.DB
-	if shadowConnStr != "" {
-		shadowDB, err = sql.Open(sqlDriverName, shadowConnStr)
+	var shadowSchema string
+	if !rollbackSkipShadow {
+		shadowConnStr := strings.TrimSpace(rollbackShadowDB)
+		if shadowConnStr == "" {
+			shadowEnvName := strings.TrimSpace(rollbackShadowEnv)
+			if shadowEnvName == "" {
+				shadowEnvName = resolvedTarget.Name
+			}
+			resolvedShadow, err := config.ResolveEnvironment(cfg, shadowEnvName)
+			if err != nil {
+				log.Fatalf("Failed to resolve shadow environment: %v", err)
+			}
+			shadowConnStr = resolvedShadow.ShadowDatabaseURL
+			shadowSchema = resolvedShadow.ShadowSchema
+
+			// For SQLite/libSQL, default to :memory: if no shadow DB configured
+			if shadowConnStr == "" && (mainDriverType == "sqlite" || mainDriverType == "sqlite3" || mainDriverType == "libsql") {
+				shadowConnStr = ":memory:"
+				_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "ℹ️  Using in-memory shadow database (fast, zero config)\n")
+			} else if shadowConnStr == "" {
+				fmt.Fprintf(os.Stderr, "Error: no shadow database configured for environment %q.\n", resolvedShadow.Name)
+				fmt.Fprintf(os.Stderr, "Options:\n")
+				fmt.Fprintf(os.Stderr, "  - Add SHADOW_DATABASE_URL to .env.%s\n", resolvedShadow.Name)
+				fmt.Fprintf(os.Stderr, "  - Add SHADOW_SCHEMA=lockplane_shadow (PostgreSQL only)\n")
+				fmt.Fprintf(os.Stderr, "  - Provide --shadow-db flag\n")
+				fmt.Fprintf(os.Stderr, "  - Use --skip-shadow to skip shadow DB validation (not recommended)\n")
+				os.Exit(1)
+			}
+		}
+
+		// Detect shadow database driver type
+		shadowDriverType := executor.DetectDriver(shadowConnStr)
+
+		// For SQLite shadow DB (not :memory:), check if the database file exists and create it if needed
+		if (shadowDriverType == "sqlite" || shadowDriverType == "sqlite3") && shadowConnStr != ":memory:" {
+			if err := sqliteutil.EnsureSQLiteDatabase(shadowConnStr, "shadow", false); err != nil {
+				log.Fatalf("Failed to ensure shadow database: %v", err)
+			}
+		}
+
+		shadowDriverName := executor.GetSQLDriverName(shadowDriverType)
+		shadowDB, err = sql.Open(shadowDriverName, shadowConnStr)
 		if err != nil {
 			log.Fatalf("Failed to connect to shadow database: %v", err)
 		}
@@ -217,55 +294,62 @@ func runRollback(cmd *cobra.Command, args []string) {
 		if err := shadowDB.PingContext(ctx); err != nil {
 			log.Fatalf("Failed to ping shadow database: %v", err)
 		}
-	}
 
-	// Show rollback plan summary
-	fmt.Println("\n📋 Rollback Plan Summary:")
-	fmt.Printf("  Steps: %d\n", len(rollbackPlan.Steps))
-	for i, step := range rollbackPlan.Steps {
-		fmt.Printf("  %d. %s\n", i+1, step.Description)
-	}
-	fmt.Println()
+		// If shadow schema is configured and driver supports it, set up the schema
+		if shadowSchema != "" && mainDriver.SupportsSchemas() {
+			// Create shadow schema if it doesn't exist
+			if err := mainDriver.CreateSchema(ctx, shadowDB, shadowSchema); err != nil {
+				log.Fatalf("Failed to create shadow schema: %v", err)
+			}
 
-	// Require approval unless auto-approved
-	if !rollbackAutoApprove {
-		fmt.Print("Proceed with rollback? (yes/no): ")
-		var response string
-		_, err = fmt.Scanln(&response)
-		if err != nil {
-			log.Fatalf("Failed to read input: %v", err)
+			// Set search path to shadow schema
+			if err := mainDriver.SetSchema(ctx, shadowDB, shadowSchema); err != nil {
+				log.Fatalf("Failed to set shadow schema: %v", err)
+			}
+
+			// Show clear message about what we're doing
+			if shadowConnStr == targetConnStr {
+				_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing rollback on shadow schema %q (same database)...\n", shadowSchema)
+			} else {
+				_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing rollback on shadow schema %q in separate database...\n", shadowSchema)
+			}
+		} else if shadowConnStr == ":memory:" {
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing rollback on in-memory shadow database...\n")
+		} else {
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Testing rollback on shadow database...\n")
 		}
-		if response != "yes" && response != "y" {
-			fmt.Println("Cancelled")
-			return
-		}
+	} else {
+		_, _ = color.New(color.FgYellow).Fprintf(os.Stderr, "⚠️  Skipping shadow DB validation (--skip-shadow)\n")
 	}
 
-	// Execute rollback plan
-	fmt.Println("\n🚀 Executing rollback...")
-	result, err := executor.ApplyPlan(ctx, targetDB, rollbackPlan, shadowDB, currentSchema, driver, rollbackVerbose)
+	// Introspect current database state (needed for shadow DB validation)
+	currentSchema, err := mainDriver.IntrospectSchema(ctx, mainDB)
 	if err != nil {
-		fmt.Printf("\n❌ Rollback failed: %v\n", err)
-		if !result.Success {
-			fmt.Println("\nErrors:")
-			for _, errMsg := range result.Errors {
-				fmt.Printf("  • %s\n", errMsg)
+		log.Fatalf("Failed to introspect current database schema: %v", err)
+	}
+
+	// Apply the rollback plan
+	if rollbackVerbose {
+		_, _ = color.New(color.FgCyan, color.Bold).Fprintf(os.Stderr, "\n🚀 Executing rollback...\n\n")
+	}
+	result, err := executor.ApplyPlan(ctx, mainDB, rollbackPlan, shadowDB, (*database.Schema)(currentSchema), mainDriver, rollbackVerbose)
+	if err != nil {
+		_, _ = red.Fprintf(os.Stderr, "\n❌ Rollback failed: %v\n\n", err)
+		if len(result.Errors) > 0 {
+			_, _ = red.Fprintf(os.Stderr, "Errors:\n")
+			for _, e := range result.Errors {
+				fmt.Fprintf(os.Stderr, "  - %s\n", e)
 			}
 		}
 		os.Exit(1)
 	}
 
-	if !result.Success {
-		fmt.Printf("\n❌ Rollback failed:\n")
-		for _, errMsg := range result.Errors {
-			fmt.Printf("  • %s\n", errMsg)
-		}
-		os.Exit(1)
+	// Success!
+	if result.Success {
+		green := color.New(color.FgGreen, color.Bold)
+		_, _ = green.Fprintf(os.Stderr, "\n✓ Rollback completed successfully!\n\n")
+		fmt.Fprintf(os.Stderr, "  Steps completed: %d/%d\n", result.StepsApplied, len(rollbackPlan.Steps))
 	}
-
-	// Success
-	_, _ = color.New(color.FgGreen).Printf("\n✅ Rollback complete!\n")
-	fmt.Printf("Applied %d steps successfully\n", result.StepsApplied)
 }
 
 func runPlanRollback(cmd *cobra.Command, args []string) {
@@ -279,7 +363,7 @@ func runPlanRollback(cmd *cobra.Command, args []string) {
 	if planRollbackVerbose {
 		fmt.Fprintf(os.Stderr, "📄 Loading forward plan from: %s\n", planRollbackPlan)
 	}
-	forwardPlan, err := loadPlan(planRollbackPlan)
+	forwardPlan, err := planner.LoadJSONPlan(planRollbackPlan)
 	if err != nil {
 		log.Fatalf("Failed to load forward plan: %v", err)
 	}
@@ -302,9 +386,9 @@ func runPlanRollback(cmd *cobra.Command, args []string) {
 	}
 
 	// Detect driver from before schema (if it's a connection string)
-	driverType := "postgres" // default
-	if introspect.IsConnectionString(fromInput) {
-		driverType = executor.DetectDriver(fromInput)
+	driverType := executor.DetectDriver(fromInput)
+	if driverType == "" {
+		driverType = "postgres" // default
 	}
 
 	driver, err := executor.NewDriver(driverType)
