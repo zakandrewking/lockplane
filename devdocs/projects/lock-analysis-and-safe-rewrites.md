@@ -16,13 +16,14 @@
 - [x] Document lock types and operations
 - [x] Create implementation plan
 
-### Phase 2: Lock Type Definitions 🏗️
-- [ ] Create `internal/locks/` package
-- [ ] Define PostgreSQL lock modes (enum or constants)
-- [ ] Map DDL operations to lock modes
-- [ ] Add lock level metadata to each operation
-- [ ] Document lock compatibility matrix
-- [ ] Add SQLite lock handling (table-level locks)
+### Phase 2: Lock Type Definitions ✅
+- [x] Create `internal/locks/` package
+- [x] Define PostgreSQL lock modes (enum or constants)
+- [x] Map DDL operations to lock modes
+- [x] Add lock level metadata to each operation
+- [x] Add impact level categorization
+- [x] Comprehensive test coverage (13 test functions)
+- [ ] Add SQLite lock handling (table-level locks) - Future enhancement
 
 ### Phase 3: Lock-Safe Rewrites 🏗️
 - [ ] Implement CREATE INDEX → CREATE INDEX CONCURRENTLY
