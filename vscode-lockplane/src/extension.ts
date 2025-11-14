@@ -1,8 +1,9 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
 import * as cp from 'child_process';
+import * as path from 'path';
+import * as vscode from 'vscode';
+
+import { clearDiagnostics, updateDiagnostics } from './diagnostics';
 import { validateSchema } from './validator';
-import { updateDiagnostics, clearDiagnostics } from './diagnostics';
 
 let validationTimeout: NodeJS.Timeout | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -10,17 +11,20 @@ let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
   // Create output channel for logging
-  outputChannel = vscode.window.createOutputChannel('Lockplane');
+  outputChannel = vscode.window.createOutputChannel("Lockplane");
   context.subscriptions.push(outputChannel);
 
   // Create status bar item
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.text = '$(check) Lockplane';
-  statusBarItem.tooltip = 'Lockplane extension is active';
+  statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100
+  );
+  statusBarItem.text = "$(check) Lockplane";
+  statusBarItem.tooltip = "Lockplane extension is active";
   context.subscriptions.push(statusBarItem);
 
-  outputChannel.appendLine('Lockplane extension activated');
-  console.log('Lockplane extension is now active');
+  outputChannel.appendLine("Lockplane extension activated");
+  console.log("Lockplane extension is now active");
 
   // Display lockplane CLI info
   displayLockplaneInfo();
@@ -32,8 +36,8 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const config = vscode.workspace.getConfiguration('lockplane');
-      if (!config.get<boolean>('validateOnSave', true)) {
+      const config = vscode.workspace.getConfiguration("lockplane");
+      if (!config.get<boolean>("validateOnSave", true)) {
         return;
       }
 
@@ -49,8 +53,8 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const config = vscode.workspace.getConfiguration('lockplane');
-      if (!config.get<boolean>('validateOnType', true)) {
+      const config = vscode.workspace.getConfiguration("lockplane");
+      if (!config.get<boolean>("validateOnType", true)) {
         return;
       }
 
@@ -58,7 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
         clearTimeout(validationTimeout);
       }
 
-      const delay = config.get<number>('validationDelay', 500);
+      const delay = config.get<number>("validationDelay", 500);
       validationTimeout = setTimeout(async () => {
         await runValidation(document);
       }, delay);
@@ -94,7 +98,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function isLockplaneFile(document: vscode.TextDocument): boolean {
-  const isLpSql = document.fileName.endsWith('.lp.sql');
+  const isLpSql = document.fileName.endsWith(".lp.sql");
   if (isLpSql) {
     outputChannel.appendLine(`Detected .lp.sql file: ${document.fileName}`);
     statusBarItem.show();
@@ -103,53 +107,60 @@ function isLockplaneFile(document: vscode.TextDocument): boolean {
 }
 
 async function runValidation(document: vscode.TextDocument): Promise<void> {
-  const config = vscode.workspace.getConfiguration('lockplane');
-  if (!config.get<boolean>('enabled', true)) {
-    outputChannel.appendLine('Validation skipped: extension is disabled');
+  const config = vscode.workspace.getConfiguration("lockplane");
+  if (!config.get<boolean>("enabled", true)) {
+    outputChannel.appendLine("Validation skipped: extension is disabled");
     return;
   }
 
   const schemaPath = getSchemaPath(document);
   if (!schemaPath) {
-    outputChannel.appendLine('Validation skipped: could not determine schema path');
+    outputChannel.appendLine(
+      "Validation skipped: could not determine schema path"
+    );
     return;
   }
 
   outputChannel.appendLine(`Validating schema at: ${schemaPath}`);
-  statusBarItem.text = '$(sync~spin) Lockplane';
-  statusBarItem.tooltip = 'Validating schema...';
+  statusBarItem.text = "$(sync~spin) Lockplane";
+  statusBarItem.tooltip = "Validating schema...";
 
   try {
     const results = await validateSchema(schemaPath);
-    outputChannel.appendLine(`Validation complete: ${results.length} issues found`);
+    outputChannel.appendLine(
+      `Validation complete: ${results.length} issues found`
+    );
 
     updateDiagnostics(document, results);
 
     // Update status bar
     if (results.length === 0) {
-      statusBarItem.text = '$(check) Lockplane';
-      statusBarItem.tooltip = 'Schema is valid';
+      statusBarItem.text = "$(check) Lockplane";
+      statusBarItem.tooltip = "Schema is valid";
     } else {
-      const errors = results.filter(r => r.severity === 'error').length;
-      const warnings = results.filter(r => r.severity === 'warning').length;
+      const errors = results.filter((r) => r.severity === "error").length;
+      const warnings = results.filter((r) => r.severity === "warning").length;
       statusBarItem.text = `$(warning) Lockplane: ${errors} errors, ${warnings} warnings`;
       statusBarItem.tooltip = `Lockplane validation: ${errors} errors, ${warnings} warnings`;
     }
   } catch (error) {
-    statusBarItem.text = '$(error) Lockplane';
-    statusBarItem.tooltip = 'Validation failed';
+    statusBarItem.text = "$(error) Lockplane";
+    statusBarItem.tooltip = "Validation failed";
 
     if (error instanceof Error) {
       outputChannel.appendLine(`Validation error: ${error.message}`);
 
       // Only show error if lockplane CLI is not found or critical error
-      if (error.message.includes('not found') || error.message.includes('ENOENT')) {
+      if (
+        error.message.includes("not found") ||
+        error.message.includes("ENOENT")
+      ) {
         vscode.window.showErrorMessage(
           `Lockplane CLI not found. Install from https://github.com/zakandrewking/lockplane`
         );
       } else {
         outputChannel.appendLine(`Full error: ${error.stack || error}`);
-        console.error('Lockplane validation error:', error);
+        console.error("Lockplane validation error:", error);
       }
     }
   }
@@ -162,11 +173,11 @@ function getSchemaPath(document: vscode.TextDocument): string | undefined {
     return document.fileName;
   }
 
-  const config = vscode.workspace.getConfiguration('lockplane');
-  const configPath = config.get<string>('schemaPath', 'lockplane/schema/');
+  const config = vscode.workspace.getConfiguration("lockplane");
+  const configPath = config.get<string>("schemaPath", "lockplane/schema/");
 
   // Try to find lockplane.toml to determine schema path
-  const lockplaneToml = path.join(workspaceFolder.uri.fsPath, 'lockplane.toml');
+  const lockplaneToml = path.join(workspaceFolder.uri.fsPath, "lockplane.toml");
   // TODO: Parse lockplane.toml for schema_path if it exists
 
   // For now, use configured path or directory containing the file
@@ -182,14 +193,14 @@ function getSchemaPath(document: vscode.TextDocument): string | undefined {
 }
 
 function displayLockplaneInfo(): void {
-  const config = vscode.workspace.getConfiguration('lockplane');
-  const lockplanePath = config.get<string>('cliPath', 'lockplane');
+  const config = vscode.workspace.getConfiguration("lockplane");
+  const lockplanePath = config.get<string>("cliPath", "lockplane");
 
-  outputChannel.appendLine('---');
+  outputChannel.appendLine("---");
   outputChannel.appendLine(`Lockplane CLI path: ${lockplanePath}`);
 
   // Try to get the actual resolved path
-  cp.exec('which ' + lockplanePath, (error, stdout, stderr) => {
+  cp.exec("which " + lockplanePath, (error, stdout, stderr) => {
     if (!error && stdout) {
       const resolvedPath = stdout.trim();
       if (resolvedPath !== lockplanePath) {
@@ -198,16 +209,22 @@ function displayLockplaneInfo(): void {
     }
 
     // Get version
-    cp.exec(lockplanePath + ' --version', (error, stdout, stderr) => {
+    cp.exec(lockplanePath + " --version", (error, stdout, stderr) => {
       if (error) {
-        outputChannel.appendLine(`Warning: Could not get lockplane version: ${error.message}`);
-        outputChannel.appendLine('Make sure lockplane is installed and in your PATH');
-        outputChannel.appendLine('Install from: https://github.com/zakandrewking/lockplane');
+        outputChannel.appendLine(
+          `Warning: Could not get lockplane version: ${error.message}`
+        );
+        outputChannel.appendLine(
+          "Make sure lockplane is installed and in your PATH"
+        );
+        outputChannel.appendLine(
+          "Install from: https://github.com/zakandrewking/lockplane"
+        );
       } else {
         const version = stdout.trim();
         outputChannel.appendLine(`Version: ${version}`);
       }
-      outputChannel.appendLine('---');
+      outputChannel.appendLine("---");
     });
   });
 }

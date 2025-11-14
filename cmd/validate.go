@@ -30,7 +30,7 @@ Subcommands:
   lockplane validate plan migration.json
 
   # Validate with JSON output (for IDE integration)
-  lockplane validate sql --format json schema.lp.sql`,
+  lockplane validate sql --output-format json schema.lp.sql`,
 }
 
 var validateSchemaCmd = &cobra.Command{
@@ -63,7 +63,8 @@ var validatePlanCmd = &cobra.Command{
 }
 
 var (
-	validateSchemaFile string
+	validateSchemaFile      string
+	validateSQLOutputFormat string
 )
 
 func init() {
@@ -73,6 +74,7 @@ func init() {
 	validateCmd.AddCommand(validatePlanCmd)
 
 	validateSchemaCmd.Flags().StringVarP(&validateSchemaFile, "file", "f", "", "Path to schema JSON file")
+	validateSQLCmd.Flags().StringVar(&validateSQLOutputFormat, "output-format", "text", "Output format: text (default) or json")
 }
 
 func runValidateSchema(cmd *cobra.Command, args []string) {
@@ -93,6 +95,8 @@ func runValidateSchema(cmd *cobra.Command, args []string) {
 }
 
 func runValidateSQL(cmd *cobra.Command, args []string) {
+	// Add the output-format flag to args (RunValidateSQL will parse it)
+	args = append([]string{"--output-format", validateSQLOutputFormat}, args...)
 	// Delegate to the existing SQL validation implementation
 	sqlvalidation.RunValidateSQL(args)
 }

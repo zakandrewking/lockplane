@@ -39,7 +39,7 @@ type SQLValidationResult struct {
 
 func RunValidateSQL(args []string) {
 	fs := flag.NewFlagSet("validate sql", flag.ExitOnError)
-	formatFlag := fs.String("format", "text", "Output format: text or json")
+	formatFlag := fs.String("output-format", "text", "Output format: text (default) or json")
 
 	// Custom usage function
 	fs.Usage = func() {
@@ -90,7 +90,7 @@ func RunValidateSQL(args []string) {
 		fmt.Fprintf(os.Stderr, "  # Validate SQL schema file (text output)\n")
 		fmt.Fprintf(os.Stderr, "  lockplane validate sql schema.lp.sql\n\n")
 		fmt.Fprintf(os.Stderr, "  # Validate with JSON output (for IDE integration)\n")
-		fmt.Fprintf(os.Stderr, "  lockplane validate sql --format json schema.lp.sql\n\n")
+		fmt.Fprintf(os.Stderr, "  lockplane validate sql --output-format json schema.lp.sql\n\n")
 		fmt.Fprintf(os.Stderr, "  # Validate directory of SQL files\n")
 		fmt.Fprintf(os.Stderr, "  lockplane validate sql schema/\n\n")
 		fmt.Fprintf(os.Stderr, "  # Example valid .lp.sql file:\n")

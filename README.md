@@ -704,7 +704,7 @@ Lockplane provides comprehensive validation for schema and plan files to catch e
 lockplane validate sql schema.lp.sql
 
 # Validate with JSON output (for IDE integration)
-lockplane validate sql --format json schema.lp.sql
+lockplane validate sql --output-format json schema.lp.sql
 
 # Validate directory of SQL files
 lockplane validate sql lockplane/schema/
@@ -777,7 +777,7 @@ lockplane validate plan --format json migration.json
 
 ### IDE Integration
 
-The `--format json` flag outputs structured validation results for IDE integration. The [VSCode Lockplane extension](vscode-lockplane/) uses this to show real-time validation errors as you type.
+The `--output-format json` flag outputs structured validation results for IDE integration. The [VSCode Lockplane extension](vscode-lockplane/) uses this to show real-time validation errors as you type.
 
 ```json
 {
