@@ -153,6 +153,7 @@ async function install() {
     fs.rmSync(tmpDir, { recursive: true, force: true });
 
     console.log('✓ lockplane installed successfully!');
+    process.exit(0);
   } catch (error) {
     console.error('Error installing lockplane:', error.message);
     console.error('\nPlease install manually from:');
