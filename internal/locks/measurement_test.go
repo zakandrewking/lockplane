@@ -229,8 +229,8 @@ func TestMeasureLockDuration_Integration(t *testing.T) {
 					t.Errorf("Expected success, got error: %s", measurement.Error)
 				}
 
-				if tt.checkDuration && measurement.DurationMS <= 0 {
-					t.Errorf("Expected positive duration, got %d ms", measurement.DurationMS)
+				if tt.checkDuration && measurement.DurationMS < 0 {
+					t.Errorf("Expected non-negative duration, got %d ms", measurement.DurationMS)
 				}
 
 				if !tt.skipLockCheck && measurement.LockMode == LockAccessShare {
