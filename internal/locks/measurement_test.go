@@ -166,20 +166,28 @@ func TestMeasureLockDuration_Integration(t *testing.T) {
 	// Clean up test table if it exists
 	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS test_measurement_table")
 
+	// Create test table for ADD COLUMN test (since measurement rolls back in transaction)
+	_, err = db.ExecContext(ctx, "CREATE TABLE test_measurement_table (id BIGINT PRIMARY KEY, name TEXT)")
+	if err != nil {
+		t.Fatalf("Failed to create test table: %v", err)
+	}
+
 	tests := []struct {
 		name          string
 		step          planner.PlanStep
 		shouldSucceed bool
 		checkDuration bool
+		skipLockCheck bool // Skip lock mode check for operations that don't lock existing tables
 	}{
 		{
-			name: "CREATE TABLE",
+			name: "CREATE TABLE temp",
 			step: planner.PlanStep{
-				Description: "Create test table",
-				SQL:         []string{"CREATE TABLE test_measurement_table (id BIGINT PRIMARY KEY, name TEXT)"},
+				Description: "Create temp table",
+				SQL:         []string{"CREATE TABLE test_temp_table (id BIGINT PRIMARY KEY, name TEXT)"},
 			},
 			shouldSucceed: true,
 			checkDuration: true,
+			skipLockCheck: true, // CREATE TABLE doesn't lock existing tables
 		},
 		{
 			name: "ADD COLUMN",
@@ -189,6 +197,7 @@ func TestMeasureLockDuration_Integration(t *testing.T) {
 			},
 			shouldSucceed: true,
 			checkDuration: true,
+			skipLockCheck: false,
 		},
 		{
 			name: "Invalid SQL",
@@ -198,6 +207,7 @@ func TestMeasureLockDuration_Integration(t *testing.T) {
 			},
 			shouldSucceed: false,
 			checkDuration: false,
+			skipLockCheck: true, // Error case
 		},
 	}
 
@@ -223,7 +233,7 @@ func TestMeasureLockDuration_Integration(t *testing.T) {
 					t.Errorf("Expected positive duration, got %d ms", measurement.DurationMS)
 				}
 
-				if measurement.LockMode == LockAccessShare {
+				if !tt.skipLockCheck && measurement.LockMode == LockAccessShare {
 					t.Error("Expected non-trivial lock mode for DDL operation")
 				}
 			} else {
