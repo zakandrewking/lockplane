@@ -37,24 +37,27 @@
 - [x] Add MultiPhasePlan, Phase, PhaseRollback types - `internal/planner/types.go`
 - [x] Write comprehensive tests - `multiphase_test.go` (98% coverage)
 
-### Phase 3: CLI Integration 🎯
+### Phase 3: CLI Integration ✅
 - [x] Add `plan-multiphase` command - `cmd/plan_multiphase.go`
   - [x] Supports expand_contract pattern
   - [x] Supports deprecation pattern
   - [x] Supports validation pattern (NOT NULL, CHECK, UNIQUE)
   - [x] Supports type_change pattern
-- [ ] Add `--multi-phase` flag to `plan` command (auto-detect from diff)
-- [ ] Add phase execution commands (`apply-phase`, `rollback-phase`)
-- [ ] Add phase status tracking command (`phase-status`)
-- [ ] Update plan validation to understand multi-phase plans
-- [ ] Interactive phase approval workflow
+- [x] Add phase execution commands:
+  - [x] `apply-phase` - Execute specific phase with state tracking - `cmd/apply_phase.go`
+  - [x] `rollback-phase` - Rollback phase with safety checks - `cmd/rollback_phase.go`
+  - [x] `phase-status` - Show current migration status - `cmd/phase_status.go`
+- [x] State tracking in `.lockplane-state.json` (already implemented in Phase 1)
+- [x] Phase ordering and safety checks
+- [x] Interactive approval workflow (--auto-approve flag)
+- [ ] Add `--multi-phase` flag to `plan` command (auto-detect from diff) - Future enhancement
 
-### Phase 4: Phase Execution 🚀
-- [ ] Implement phase execution engine
-- [ ] Add phase state persistence (.lockplane/state.json)
-- [ ] Add safety checks between phases
-- [ ] Implement rollback at any phase
-- [ ] Add phase verification steps
+### Phase 4: Phase Execution ✅
+- [x] Implement phase execution engine - `cmd/apply_phase.go`
+- [x] Add phase state persistence - `.lockplane-state.json` via `internal/state`
+- [x] Add safety checks between phases - `state.CanExecutePhase()`
+- [x] Implement rollback at any phase - `cmd/rollback_phase.go`
+- [x] Add phase verification steps - Shown in apply-phase output
 - [ ] Handle failed phases gracefully
 
 ### Phase 5: Testing 🧪

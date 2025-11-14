@@ -513,6 +513,60 @@ Example structure:
 }
 ```
 
+### Executing Multi-Phase Plans
+
+Once you have a multi-phase plan, execute it phase by phase:
+
+**Phase 1: Execute first database changes**
+```bash
+lockplane apply-phase rename-email.json --phase 1
+```
+
+Lockplane tracks progress in `.lockplane-state.json` (git-ignored) to ensure phases are executed in order.
+
+**Phase 2: Deploy code, then continue**
+After deploying code changes for phase 1:
+```bash
+lockplane apply-phase rename-email.json --next
+# or explicitly: --phase 2
+```
+
+**Phase 3: Complete the migration**
+```bash
+lockplane apply-phase rename-email.json --next
+```
+
+**Check status at any time:**
+```bash
+lockplane phase-status
+```
+
+Output:
+```
+📋 Active Multi-Phase Migration
+
+Operation:   rename_column
+Pattern:     expand_contract
+Progress:    2/3 phases complete
+
+Phase Status:
+  ✅ Phase 1: Complete
+  ✅ Phase 2: Complete
+  ▶️  Phase 3: Ready to execute
+
+Next: Execute phase 3
+  lockplane apply-phase rename-email.json --phase 3
+```
+
+**Rollback if needed:**
+```bash
+# Rollback current phase
+lockplane rollback-phase rename-email.json
+
+# Rollback specific phase
+lockplane rollback-phase rename-email.json --phase 2
+```
+
 See [Multi-Phase Migration Guide](devdocs/projects/multi-phase-migrations.md) for detailed documentation.
 
 ## Configuration
