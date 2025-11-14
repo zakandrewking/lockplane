@@ -21,7 +21,8 @@ zero-downtime deployments when making breaking schema changes.
 
 Supported patterns:
   • expand_contract: Column rename or compatible type change
-  • deprecation: Safe removal of columns/tables with deprecation period
+  • deprecation: Safe removal of columns with deprecation period
+  • drop_table: Safe removal of entire tables with deprecation period
   • validation: Add constraints with backfill and validation phases
   • type_change: Incompatible column type changes with dual-write`,
 	Example: `  # Generate expand/contract plan for column rename
@@ -36,7 +37,14 @@ Supported patterns:
   lockplane plan-multiphase \
     --pattern deprecation \
     --table users \
-    --column last_login > drop-column-plan.json
+    --column last_login \
+    --type TIMESTAMP > drop-column-plan.json
+
+  # Generate drop table plan with archiving
+  lockplane plan-multiphase \
+    --pattern drop_table \
+    --table deprecated_logs \
+    --archive-data > drop-table-plan.json
 
   # Generate validation plan for adding NOT NULL constraint
   lockplane plan-multiphase \
@@ -55,22 +63,23 @@ Supported patterns:
 }
 
 var (
-	mpPattern    string
-	mpTable      string
-	mpColumn     string
-	mpOldColumn  string
-	mpNewColumn  string
-	mpType       string
-	mpOldType    string
-	mpNewType    string
-	mpConstraint string
-	mpSourceHash string
+	mpPattern     string
+	mpTable       string
+	mpColumn      string
+	mpOldColumn   string
+	mpNewColumn   string
+	mpType        string
+	mpOldType     string
+	mpNewType     string
+	mpConstraint  string
+	mpSourceHash  string
+	mpArchiveData bool
 )
 
 func init() {
 	rootCmd.AddCommand(planMultiphaseCmd)
 
-	planMultiphaseCmd.Flags().StringVar(&mpPattern, "pattern", "", "Migration pattern: expand_contract, deprecation, validation, type_change (required)")
+	planMultiphaseCmd.Flags().StringVar(&mpPattern, "pattern", "", "Migration pattern: expand_contract, deprecation, drop_table, validation, type_change (required)")
 	planMultiphaseCmd.Flags().StringVar(&mpTable, "table", "", "Table name (required)")
 	planMultiphaseCmd.Flags().StringVar(&mpColumn, "column", "", "Column name")
 	planMultiphaseCmd.Flags().StringVar(&mpOldColumn, "old-column", "", "Old column name (for expand_contract)")
@@ -80,6 +89,7 @@ func init() {
 	planMultiphaseCmd.Flags().StringVar(&mpNewType, "new-type", "", "New column type (for type_change)")
 	planMultiphaseCmd.Flags().StringVar(&mpConstraint, "constraint", "", "Constraint definition (for validation pattern)")
 	planMultiphaseCmd.Flags().StringVar(&mpSourceHash, "source-hash", "", "Source schema hash (optional)")
+	planMultiphaseCmd.Flags().BoolVar(&mpArchiveData, "archive-data", false, "Archive data before dropping (for deprecation and drop_table patterns)")
 
 	_ = planMultiphaseCmd.MarkFlagRequired("pattern")
 	_ = planMultiphaseCmd.MarkFlagRequired("table")
@@ -123,7 +133,14 @@ func runPlanMultiphase(cmd *cobra.Command, args []string) {
 			mpTable,
 			mpColumn,
 			mpType,
-			false, // archiveData - can be made configurable later
+			mpArchiveData,
+			mpSourceHash,
+		)
+
+	case "drop_table":
+		multiPhasePlan, err = multiphase.GenerateDropTablePlan(
+			mpTable,
+			mpArchiveData,
 			mpSourceHash,
 		)
 
@@ -185,7 +202,7 @@ func runPlanMultiphase(cmd *cobra.Command, args []string) {
 		)
 
 	default:
-		log.Fatalf("Unknown pattern: %s. Supported patterns: expand_contract, deprecation, validation, type_change", mpPattern)
+		log.Fatalf("Unknown pattern: %s. Supported patterns: expand_contract, deprecation, drop_table, validation, type_change", mpPattern)
 	}
 
 	if err != nil {

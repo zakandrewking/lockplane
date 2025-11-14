@@ -228,6 +228,7 @@ func runRollbackPhase(cmd *cobra.Command, args []string) {
 	fmt.Printf("Executing rollback...\n")
 	result, err := executor.ApplyPlan(ctx, targetDB, rollbackPlan, nil, currentSchema, driver, rbVerbose)
 	if err != nil {
+		handleRollbackError(err, phaseNumber, phase)
 		log.Fatalf("Failed to execute rollback: %v", err)
 	}
 
@@ -236,6 +237,8 @@ func runRollbackPhase(cmd *cobra.Command, args []string) {
 		for _, errMsg := range result.Errors {
 			fmt.Printf("  - %s\n", errMsg)
 		}
+		fmt.Printf("\n")
+		handleRollbackError(fmt.Errorf("rollback execution failed"), phaseNumber, phase)
 		log.Fatal("Rollback failed")
 	}
 
@@ -261,4 +264,50 @@ func runRollbackPhase(cmd *cobra.Command, args []string) {
 	if phase.Rollback.RequiresCode {
 		fmt.Println("\n⚠️  Don't forget to redeploy the previous version of your application!")
 	}
+}
+
+func handleRollbackError(err error, phaseNumber int, phase planner.Phase) {
+	fmt.Printf("\n⚠️  Phase %d rollback encountered an error\n\n", phaseNumber)
+
+	fmt.Printf("Error: %v\n\n", err)
+
+	fmt.Printf("Current State:\n")
+	fmt.Printf("  • Rollback of phase %d FAILED\n", phaseNumber)
+	fmt.Printf("  • Database may be in an inconsistent state\n")
+	fmt.Printf("  • Phase %d is still marked as complete in state\n", phaseNumber)
+	fmt.Printf("  • State file: %s\n\n", state.StateFile)
+
+	fmt.Printf("Recovery Actions:\n\n")
+
+	fmt.Printf("1. Investigate the error\n")
+	fmt.Printf("   • Check database connectivity and permissions\n")
+	fmt.Printf("   • Review database logs for details\n")
+	fmt.Printf("   • Verify rollback SQL is valid\n")
+	fmt.Printf("\n")
+
+	if phase.Rollback != nil && len(phase.Rollback.SQL) > 0 {
+		fmt.Printf("2. Manual rollback\n")
+		fmt.Printf("   Execute these SQL statements manually:\n")
+		for i, sql := range phase.Rollback.SQL {
+			fmt.Printf("   %d. %s\n", i+1, sql)
+		}
+		if phase.Rollback.RequiresCode {
+			fmt.Printf("   Then redeploy the previous version of your application\n")
+		}
+		fmt.Printf("\n")
+	}
+
+	fmt.Printf("3. Retry rollback\n")
+	fmt.Printf("   After fixing the issue:\n")
+	fmt.Printf("   lockplane rollback-phase <plan-file> --phase %d\n", phaseNumber)
+	fmt.Printf("\n")
+
+	fmt.Printf("4. Continue forward (if rollback not critical)\n")
+	fmt.Printf("   If the partial rollback is acceptable:\n")
+	fmt.Printf("   lockplane apply-phase <plan-file> --next\n")
+	fmt.Printf("\n")
+
+	fmt.Printf("For more help:\n")
+	fmt.Printf("  • Check phase status: lockplane phase-status\n")
+	fmt.Printf("  • View state: cat %s\n", state.StateFile)
 }

@@ -1,6 +1,7 @@
 package multiphase
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -303,5 +304,148 @@ func TestGenerateTypeChangePlan_Validation(t *testing.T) {
 	_, err = GenerateTypeChangePlan("users", "age", "INTEGER", "", "", "abc123")
 	if err == nil {
 		t.Error("Expected error for missing newType")
+	}
+}
+
+func TestGenerateDropTablePlan(t *testing.T) {
+	// Without archive
+	plan, err := GenerateDropTablePlan("deprecated_logs", false, "abc123")
+	if err != nil {
+		t.Fatalf("Failed to generate drop table plan: %v", err)
+	}
+
+	if !plan.MultiPhase {
+		t.Error("Expected MultiPhase to be true")
+	}
+
+	if plan.Operation != "drop_table" {
+		t.Errorf("Expected operation 'drop_table', got '%s'", plan.Operation)
+	}
+
+	if plan.Pattern != "table_deprecation" {
+		t.Errorf("Expected pattern 'table_deprecation', got '%s'", plan.Pattern)
+	}
+
+	if plan.TotalPhases != 3 {
+		t.Errorf("Expected 3 phases (no archive), got %d", plan.TotalPhases)
+	}
+
+	// Check phase names without archive
+	expectedPhases := []string{"stop_writes", "stop_reads", "drop_table"}
+	for i, expectedName := range expectedPhases {
+		if i >= len(plan.Phases) {
+			t.Errorf("Missing phase %d", i+1)
+			continue
+		}
+		if plan.Phases[i].Name != expectedName {
+			t.Errorf("Phase %d: expected name '%s', got '%s'", i+1, expectedName, plan.Phases[i].Name)
+		}
+	}
+
+	// Verify phase numbers
+	for i, phase := range plan.Phases {
+		if phase.PhaseNumber != i+1 {
+			t.Errorf("Phase %d: expected PhaseNumber %d, got %d", i+1, i+1, phase.PhaseNumber)
+		}
+	}
+
+	// Verify phase dependencies
+	for i := 1; i < len(plan.Phases); i++ {
+		if plan.Phases[i].DependsOnPhase != i {
+			t.Errorf("Phase %d: expected DependsOnPhase %d, got %d", i+1, i, plan.Phases[i].DependsOnPhase)
+		}
+	}
+
+	// Check phase 1 (stop writes) has no SQL
+	if len(plan.Phases[0].Plan.Steps) != 0 {
+		t.Errorf("Phase 1 (stop_writes): expected 0 SQL steps, got %d", len(plan.Phases[0].Plan.Steps))
+	}
+
+	// Check phase 3 (drop table) has SQL
+	if len(plan.Phases[2].Plan.Steps) != 1 {
+		t.Errorf("Phase 3 (drop_table): expected 1 SQL step, got %d", len(plan.Phases[2].Plan.Steps))
+	}
+}
+
+func TestGenerateDropTablePlan_WithArchive(t *testing.T) {
+	// With archive
+	plan, err := GenerateDropTablePlan("deprecated_logs", true, "abc123")
+	if err != nil {
+		t.Fatalf("Failed to generate drop table plan with archive: %v", err)
+	}
+
+	if plan.TotalPhases != 4 {
+		t.Errorf("Expected 4 phases (with archive), got %d", plan.TotalPhases)
+	}
+
+	// Check phase names with archive
+	expectedPhases := []string{"stop_writes", "archive", "stop_reads", "drop_table"}
+	for i, expectedName := range expectedPhases {
+		if i >= len(plan.Phases) {
+			t.Errorf("Missing phase %d", i+1)
+			continue
+		}
+		if plan.Phases[i].Name != expectedName {
+			t.Errorf("Phase %d: expected name '%s', got '%s'", i+1, expectedName, plan.Phases[i].Name)
+		}
+	}
+
+	// Check archive phase has SQL
+	archivePhase := plan.Phases[1]
+	if len(archivePhase.Plan.Steps) != 2 {
+		t.Errorf("Archive phase: expected 2 SQL steps (CREATE TABLE + INDEX), got %d", len(archivePhase.Plan.Steps))
+	}
+
+	// Check archive phase requires no code deploy
+	if archivePhase.RequiresCodeDeploy {
+		t.Error("Archive phase: expected RequiresCodeDeploy to be false")
+	}
+
+	// Check final phase has irreversible rollback warning
+	finalPhase := plan.Phases[len(plan.Phases)-1]
+	if finalPhase.Rollback == nil {
+		t.Fatal("Final phase should have rollback information")
+	}
+	if finalPhase.Rollback.Warning == "" {
+		t.Error("Final phase should have a rollback warning about data loss")
+	}
+}
+
+func TestGenerateDropTablePlan_Validation(t *testing.T) {
+	// Test missing table
+	_, err := GenerateDropTablePlan("", false, "abc123")
+	if err == nil {
+		t.Error("Expected error for missing table name")
+	}
+}
+
+func TestGenerateDropTablePlan_SafetyNotes(t *testing.T) {
+	plan, err := GenerateDropTablePlan("old_table", true, "abc123")
+	if err != nil {
+		t.Fatalf("Failed to generate drop table plan: %v", err)
+	}
+
+	if len(plan.SafetyNotes) == 0 {
+		t.Error("Expected safety notes to be populated")
+	}
+
+	// Check for important safety warnings using strings.Contains
+	hasIrreversibleWarning := false
+	hasForeignKeyWarning := false
+	for _, note := range plan.SafetyNotes {
+		if strings.Contains(note, "IRREVERSIBLE") {
+			hasIrreversibleWarning = true
+		}
+		if strings.Contains(note, "foreign key") {
+			hasForeignKeyWarning = true
+		}
+	}
+
+	if !hasIrreversibleWarning {
+		t.Error("Expected irreversible warning in safety notes")
+	}
+
+	if !hasForeignKeyWarning {
+		t.Error("Expected foreign key warning in safety notes")
 	}
 }

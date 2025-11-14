@@ -421,6 +421,7 @@ Use multi-phase migrations for:
 - **Type changes** - `TEXT` → `INTEGER`
 - **Adding NOT NULL constraints** - Need backfill first
 - **Dropping columns** - Need code deploy before schema change
+- **Dropping tables** - Need deprecation period and optional archiving
 
 ### Example: Renaming a Column
 
@@ -460,10 +461,21 @@ lockplane plan-multiphase --pattern expand_contract \
   --table users --old-column name --new-column full_name --type TEXT
 ```
 
-**Deprecation** - Safe removal with deprecation period
+**Deprecation** - Safe column removal with deprecation period
 ```bash
 lockplane plan-multiphase --pattern deprecation \
   --table users --column last_login --type TIMESTAMP
+```
+
+**Drop Table** - Safe table removal with optional archiving
+```bash
+# With data archiving
+lockplane plan-multiphase --pattern drop_table \
+  --table old_logs --archive-data
+
+# Without archiving
+lockplane plan-multiphase --pattern drop_table \
+  --table temp_table
 ```
 
 **Validation** - Add constraints with backfill

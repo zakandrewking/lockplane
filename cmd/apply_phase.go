@@ -276,6 +276,7 @@ func runApplyPhase(cmd *cobra.Command, args []string) {
 	fmt.Printf("Executing phase %d...\n", phaseNumber)
 	result, err := executor.ApplyPlan(ctx, targetDB, phase.Plan, shadowDB, currentSchema, driver, apVerbose)
 	if err != nil {
+		handlePhaseExecutionError(err, phaseNumber, st, phase)
 		log.Fatalf("Failed to execute phase: %v", err)
 	}
 
@@ -284,6 +285,8 @@ func runApplyPhase(cmd *cobra.Command, args []string) {
 		for _, errMsg := range result.Errors {
 			fmt.Printf("  - %s\n", errMsg)
 		}
+		fmt.Printf("\n")
+		printPhaseRecoveryInstructions(phaseNumber, phase)
 		log.Fatal("Phase execution failed")
 	}
 
@@ -315,7 +318,44 @@ func loadMultiPhasePlan(path string) (*planner.MultiPhasePlan, error) {
 		return nil, fmt.Errorf("not a multi-phase plan (use 'lockplane apply' for single-phase plans)")
 	}
 
+	// Validate plan structure
+	if err := validateMultiPhasePlan(&plan); err != nil {
+		return nil, fmt.Errorf("invalid multi-phase plan: %w", err)
+	}
+
 	return &plan, nil
+}
+
+func validateMultiPhasePlan(plan *planner.MultiPhasePlan) error {
+	if plan.TotalPhases <= 0 {
+		return fmt.Errorf("total_phases must be > 0, got %d", plan.TotalPhases)
+	}
+
+	if len(plan.Phases) != plan.TotalPhases {
+		return fmt.Errorf("plan declares %d total phases but contains %d phase definitions", plan.TotalPhases, len(plan.Phases))
+	}
+
+	// Validate each phase
+	for i, phase := range plan.Phases {
+		if phase.PhaseNumber != i+1 {
+			return fmt.Errorf("phase %d has incorrect phase_number: %d (expected %d)", i+1, phase.PhaseNumber, i+1)
+		}
+
+		if phase.Name == "" {
+			return fmt.Errorf("phase %d is missing a name", i+1)
+		}
+
+		if phase.Plan == nil {
+			return fmt.Errorf("phase %d is missing a plan", i+1)
+		}
+
+		// Validate dependencies
+		if phase.DependsOnPhase > 0 && phase.DependsOnPhase >= phase.PhaseNumber {
+			return fmt.Errorf("phase %d has invalid dependency: depends on phase %d (must be < %d)", phase.PhaseNumber, phase.DependsOnPhase, phase.PhaseNumber)
+		}
+	}
+
+	return nil
 }
 
 func resolveConnection(cfg *config.Config, explicit string, envName string, defaultEnvKey string) (string, error) {
@@ -379,4 +419,52 @@ func showNextSteps(st *state.State, plan *planner.MultiPhasePlan, completedPhase
 		fmt.Printf("     lockplane apply-phase %s --phase %d\n", st.ActiveMigration.PlanPath, nextPhaseNum)
 		fmt.Printf("     or: lockplane apply-phase %s --next\n", st.ActiveMigration.PlanPath)
 	}
+}
+
+func handlePhaseExecutionError(err error, phaseNumber int, st *state.State, phase planner.Phase) {
+	fmt.Printf("\n⚠️  Phase %d execution encountered an error\n\n", phaseNumber)
+
+	fmt.Printf("Error: %v\n\n", err)
+
+	fmt.Printf("Current State:\n")
+	fmt.Printf("  • Phase %d has NOT been marked as complete\n", phaseNumber)
+	fmt.Printf("  • Database may be in a partial state\n")
+	fmt.Printf("  • State file preserved at: %s\n\n", state.StateFile)
+
+	printPhaseRecoveryInstructions(phaseNumber, phase)
+}
+
+func printPhaseRecoveryInstructions(phaseNumber int, phase planner.Phase) {
+	fmt.Printf("Recovery Options:\n\n")
+
+	fmt.Printf("Option 1: Rollback this phase\n")
+	if phase.Rollback != nil {
+		if len(phase.Rollback.SQL) > 0 {
+			fmt.Printf("  lockplane rollback-phase <plan-file> --phase %d\n", phaseNumber)
+		} else {
+			fmt.Printf("  This phase has no SQL changes to rollback\n")
+			if phase.Rollback.RequiresCode {
+				fmt.Printf("  Revert code changes deployed for this phase\n")
+			}
+		}
+	} else {
+		fmt.Printf("  ⚠️  No rollback available for this phase\n")
+	}
+	fmt.Printf("\n")
+
+	fmt.Printf("Option 2: Fix the issue and retry\n")
+	fmt.Printf("  1. Investigate and fix the error (check database logs, connectivity, permissions)\n")
+	fmt.Printf("  2. Ensure database is accessible and healthy\n")
+	fmt.Printf("  3. Re-run: lockplane apply-phase <plan-file> --phase %d\n", phaseNumber)
+	fmt.Printf("\n")
+
+	fmt.Printf("Option 3: Force skip this phase (DANGEROUS)\n")
+	fmt.Printf("  ⚠️  Only use if you've manually applied the changes\n")
+	fmt.Printf("  lockplane apply-phase <plan-file> --phase %d --force\n", phaseNumber+1)
+	fmt.Printf("\n")
+
+	fmt.Printf("For more help:\n")
+	fmt.Printf("  • Check phase status: lockplane phase-status\n")
+	fmt.Printf("  • View state file: cat %s\n", state.StateFile)
+	fmt.Printf("  • Review plan: cat <plan-file>\n")
 }
