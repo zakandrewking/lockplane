@@ -43,7 +43,16 @@ function getPlatformInfo() {
 
 function getDownloadUrl() {
   const { os, archName, ext } = getPlatformInfo();
-  const filename = `lockplane_${VERSION}_${os}_${archName}.${ext}`;
+  // GoReleaser creates assets with this naming:
+  // - Linux/macOS: lockplane-{os}-{arch}.tar.gz
+  // - Windows: lockplane-windows-{arch}.exe.zip
+  const osName = os.toLowerCase();
+  let filename;
+  if (os === 'Windows') {
+    filename = `lockplane-${osName}-${archName}.exe.${ext}`;
+  } else {
+    filename = `lockplane-${osName}-${archName}.${ext}`;
+  }
   return `https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}/${filename}`;
 }
 
