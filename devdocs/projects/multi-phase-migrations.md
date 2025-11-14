@@ -21,25 +21,32 @@
 - [x] Write and pass state management tests
 - [x] Make all design decisions
 
-### Phase 2: Core Plan Generation 🎯
-- [ ] Create `internal/planner/multiphase/` package
-- [ ] Implement phase generators for each pattern:
-  - [ ] Column rename (expand/contract)
-  - [ ] Column type change (dual-write)
-  - [ ] DROP COLUMN (deprecation period)
-  - [ ] ADD NOT NULL (backfill + validation)
-  - [ ] ADD CHECK constraint (validation phase)
-  - [ ] DROP TABLE (deprecation period)
-- [ ] Add phase validation logic
-- [ ] Generate phase-specific rollback plans
-- [ ] Add phase dependency tracking
+### Phase 2: Core Plan Generation ✅
+- [x] Create `internal/planner/multiphase/` package
+- [x] Implement phase generators for each pattern:
+  - [x] Column rename (expand/contract) - `expand_contract.go`
+  - [x] Column type change (dual-write) - `type_change.go`
+  - [x] DROP COLUMN (deprecation period) - `deprecation.go`
+  - [x] ADD NOT NULL (backfill + validation) - `validation.go`
+  - [x] ADD CHECK constraint (validation phase) - `validation.go`
+  - [ ] DROP TABLE (deprecation period) - needs implementation
+- [x] Add phase validation logic - built into generators
+- [x] Generate phase-specific rollback plans - each Phase has Rollback field
+- [x] Add phase dependency tracking - Phase.DependsOnPhase field
+- [x] Create JSON schema for multi-phase plans - `schema-json/plan-multi-phase.json`
+- [x] Add MultiPhasePlan, Phase, PhaseRollback types - `internal/planner/types.go`
+- [x] Write comprehensive tests - `multiphase_test.go` (98% coverage)
 
-### Phase 3: CLI Integration 📟
-- [ ] Add `plan-multi-phase` command
-- [ ] Add `--multi-phase` flag to `plan` command
-- [ ] Add phase status tracking command
-- [ ] Update plan validation to understand phases
-- [ ] Add phase execution commands
+### Phase 3: CLI Integration 🎯
+- [x] Add `plan-multiphase` command - `cmd/plan_multiphase.go`
+  - [x] Supports expand_contract pattern
+  - [x] Supports deprecation pattern
+  - [x] Supports validation pattern (NOT NULL, CHECK, UNIQUE)
+  - [x] Supports type_change pattern
+- [ ] Add `--multi-phase` flag to `plan` command (auto-detect from diff)
+- [ ] Add phase execution commands (`apply-phase`, `rollback-phase`)
+- [ ] Add phase status tracking command (`phase-status`)
+- [ ] Update plan validation to understand multi-phase plans
 - [ ] Interactive phase approval workflow
 
 ### Phase 4: Phase Execution 🚀

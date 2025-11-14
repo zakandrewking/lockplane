@@ -408,6 +408,113 @@ Before handing the project to teammates or automations:
 
 Lockplane always prefers explicit CLI values, so you can temporarily override connections without touching the shared environment files.
 
+## 7. 🔄 Multi-Phase Migrations (Zero-Downtime Changes)
+
+Some schema changes can't be done safely in a single step. Renaming a column, changing data types, or removing columns requires coordination between database changes and code deployments.
+
+Lockplane provides **multi-phase migration plans** that break complex changes into safe, backward-compatible steps using the expand/contract pattern.
+
+### When to Use Multi-Phase Migrations
+
+Use multi-phase migrations for:
+- **Column renames** - `email` → `email_address`
+- **Type changes** - `TEXT` → `INTEGER`
+- **Adding NOT NULL constraints** - Need backfill first
+- **Dropping columns** - Need code deploy before schema change
+
+### Example: Renaming a Column
+
+Let's safely rename `users.email` to `users.email_address`:
+
+```bash
+lockplane plan-multiphase \
+  --pattern expand_contract \
+  --table users \
+  --old-column email \
+  --new-column email_address \
+  --type TEXT > rename-email.json
+```
+
+This generates a **3-phase plan**:
+
+**Phase 1: Expand** - Add new column, enable dual-write
+```sql
+ALTER TABLE users ADD COLUMN email_address TEXT;
+UPDATE users SET email_address = email WHERE email_address IS NULL;
+```
+*Then deploy code that writes to BOTH columns*
+
+**Phase 2: Migrate Reads** - Switch to reading from new column
+*Deploy code that reads from `email_address`, keeps writing to both*
+
+**Phase 3: Contract** - Remove old column
+```sql
+ALTER TABLE users DROP COLUMN email;
+```
+
+### Supported Patterns
+
+**Expand/Contract** - Column rename or compatible type change
+```bash
+lockplane plan-multiphase --pattern expand_contract \
+  --table users --old-column name --new-column full_name --type TEXT
+```
+
+**Deprecation** - Safe removal with deprecation period
+```bash
+lockplane plan-multiphase --pattern deprecation \
+  --table users --column last_login --type TIMESTAMP
+```
+
+**Validation** - Add constraints with backfill
+```bash
+lockplane plan-multiphase --pattern validation \
+  --table posts --column status --type TEXT \
+  --constraint "CHECK (status IN ('draft', 'published'))"
+```
+
+**Type Change** - Incompatible type changes with dual-write
+```bash
+lockplane plan-multiphase --pattern type_change \
+  --table users --column age \
+  --old-type TEXT --new-type INTEGER
+```
+
+### Multi-Phase Plan Structure
+
+Multi-phase plans are JSON files that contain:
+- Multiple coordinated migration phases
+- Code deployment requirements between phases
+- Verification steps for each phase
+- Phase-specific rollback instructions
+
+Example structure:
+```json
+{
+  "multi_phase": true,
+  "operation": "rename_column",
+  "pattern": "expand_contract",
+  "total_phases": 3,
+  "phases": [
+    {
+      "phase_number": 1,
+      "name": "expand",
+      "requires_code_deploy": true,
+      "code_changes_required": [
+        "Update app to write to both columns"
+      ],
+      "plan": {
+        "steps": [...]
+      },
+      "verification": [...],
+      "rollback": {...}
+    }
+  ]
+}
+```
+
+See [Multi-Phase Migration Guide](devdocs/projects/multi-phase-migrations.md) for detailed documentation.
+
 ## Configuration
 
 Lockplane resolves configuration in this order:
