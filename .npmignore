@@ -1,0 +1,57 @@
+# Source code (we only ship the download script and wrapper)
+*.go
+go.mod
+go.sum
+main.go
+cmd/
+database/
+internal/
+tests/
+
+# Development files
+.git/
+.github/
+.vscode/
+.pre-commit-config.yaml
+.golangci.yml
+.goreleaser.yml
+.python-version
+pyproject.toml
+uv.lock
+codecov.yml
+coverage.txt
+
+# Documentation (except README and LICENSE)
+docs/
+devdocs/
+examples/
+AGENTS.md
+CLAUDE.md
+llms.txt
+_config.yml
+_includes/
+_sass/
+assets/
+index.md
+
+# Build artifacts
+lockplane
+tmp/
+bin/lockplane
+bin/lockplane.exe
+*.test
+*.out
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Other
+diagnostic/
+schema-json/
+scripts/*.sh
+.claude-plugin/
+claude-plugin/
+vscode-lockplane/

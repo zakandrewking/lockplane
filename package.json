@@ -1,0 +1,44 @@
+{
+  "name": "lockplane",
+  "version": "0.1.0",
+  "description": "Postgres-first control plane for safe, AI-friendly schema management",
+  "main": "index.js",
+  "bin": {
+    "lockplane": "bin/lockplane.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lockplane/lockplane.git"
+  },
+  "keywords": [
+    "postgres",
+    "postgresql",
+    "sqlite",
+    "schema",
+    "migration",
+    "database",
+    "ddl",
+    "ai",
+    "lockplane"
+  ],
+  "author": "Zak King",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lockplane/lockplane/issues"
+  },
+  "homepage": "https://github.com/lockplane/lockplane#readme",
+  "engines": {
+    "node": ">=14"
+  },
+  "files": [
+    "bin/",
+    "scripts/install.js",
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ]
+}
