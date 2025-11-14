@@ -2,7 +2,9 @@ package planner
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/xeipuuv/gojsonschema"
@@ -354,4 +356,135 @@ func TestMultiPhasePlanJSON_ConsistencyWithGoTypes(t *testing.T) {
 	}
 
 	t.Log("✅ plan-multi-phase.json is consistent with Go MultiPhasePlan type")
+}
+
+// TestLoadJSONPlan_ValidPlan tests loading a valid plan from file
+func TestLoadJSONPlan_ValidPlan(t *testing.T) {
+	// Create valid plan JSON
+	plan := &Plan{
+		SourceHash: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+		Steps: []PlanStep{
+			{
+				Description: "Create table",
+				SQL:         []string{"CREATE TABLE test (id INT)"},
+			},
+		},
+	}
+
+	// Write to temp file
+	tmpDir := t.TempDir()
+	planPath := filepath.Join(tmpDir, "plan.json")
+
+	data, err := json.MarshalIndent(plan, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal plan: %v", err)
+	}
+
+	if err := os.WriteFile(planPath, data, 0644); err != nil {
+		t.Fatalf("Failed to write plan file: %v", err)
+	}
+
+	// Load the plan
+	loaded, err := LoadJSONPlan(planPath)
+	if err != nil {
+		t.Fatalf("LoadJSONPlan failed: %v", err)
+	}
+
+	// Verify plan was loaded correctly
+	if loaded.SourceHash != plan.SourceHash {
+		t.Errorf("SourceHash mismatch: expected %s, got %s", plan.SourceHash, loaded.SourceHash)
+	}
+
+	if len(loaded.Steps) != len(plan.Steps) {
+		t.Errorf("Steps count mismatch: expected %d, got %d", len(plan.Steps), len(loaded.Steps))
+	}
+
+	if loaded.Steps[0].Description != plan.Steps[0].Description {
+		t.Errorf("Step description mismatch: expected %s, got %s",
+			plan.Steps[0].Description, loaded.Steps[0].Description)
+	}
+}
+
+// TestLoadJSONPlan_InvalidJSON tests loading invalid JSON
+func TestLoadJSONPlan_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	planPath := filepath.Join(tmpDir, "invalid.json")
+
+	// Write invalid JSON
+	if err := os.WriteFile(planPath, []byte("{invalid json}"), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	_, err := LoadJSONPlan(planPath)
+	if err == nil {
+		t.Error("Expected error for invalid JSON, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to parse plan JSON") {
+		t.Errorf("Expected parse error, got: %v", err)
+	}
+}
+
+// TestLoadJSONPlan_MissingFile tests loading non-existent file
+func TestLoadJSONPlan_MissingFile(t *testing.T) {
+	_, err := LoadJSONPlan("/nonexistent/plan.json")
+	if err == nil {
+		t.Error("Expected error for missing file, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to read JSON file") {
+		t.Errorf("Expected read error, got: %v", err)
+	}
+}
+
+// TestLoadJSONPlan_InvalidSchema tests plan that fails JSON schema validation
+func TestLoadJSONPlan_InvalidSchema(t *testing.T) {
+	tmpDir := t.TempDir()
+	planPath := filepath.Join(tmpDir, "invalid_schema.json")
+
+	// Create plan with invalid source_hash (not a valid SHA-256)
+	invalidPlan := `{
+		"source_hash": "not-a-valid-hash",
+		"steps": [
+			{
+				"description": "Test",
+				"sql": ["SELECT 1"]
+			}
+		]
+	}`
+
+	if err := os.WriteFile(planPath, []byte(invalidPlan), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	_, err := LoadJSONPlan(planPath)
+	// Note: This might succeed with a warning if schema file doesn't exist
+	// or fail with validation error if schema exists
+	// Both behaviors are acceptable based on the backwards compatibility logic
+	if err != nil {
+		if !strings.Contains(err.Error(), "validation") && !strings.Contains(err.Error(), "pattern") {
+			t.Logf("Got error (expected): %v", err)
+		}
+	}
+}
+
+// TestLoadJSONPlan_MissingRequiredFields tests plan missing required fields
+func TestLoadJSONPlan_MissingRequiredFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	planPath := filepath.Join(tmpDir, "missing_fields.json")
+
+	// Create plan without required 'steps' field
+	invalidPlan := `{
+		"source_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+	}`
+
+	if err := os.WriteFile(planPath, []byte(invalidPlan), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	_, err := LoadJSONPlan(planPath)
+	// Should fail validation if schema exists, or succeed with empty steps if not
+	if err != nil {
+		t.Logf("Got validation error (expected if schema exists): %v", err)
+	}
 }

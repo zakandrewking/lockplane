@@ -96,3 +96,77 @@ func TestTableDiff_IsEmpty(t *testing.T) {
 		t.Error("Expected non-empty table diff to report as not empty")
 	}
 }
+
+func TestEqualDefaults(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        *string
+		b        *string
+		expected bool
+	}{
+		{
+			name:     "both nil",
+			a:        nil,
+			b:        nil,
+			expected: true,
+		},
+		{
+			name:     "first nil, second non-nil",
+			a:        nil,
+			b:        stringPtr("default"),
+			expected: false,
+		},
+		{
+			name:     "first non-nil, second nil",
+			a:        stringPtr("default"),
+			b:        nil,
+			expected: false,
+		},
+		{
+			name:     "both non-nil and equal",
+			a:        stringPtr("CURRENT_TIMESTAMP"),
+			b:        stringPtr("CURRENT_TIMESTAMP"),
+			expected: true,
+		},
+		{
+			name:     "both non-nil but different",
+			a:        stringPtr("0"),
+			b:        stringPtr("1"),
+			expected: false,
+		},
+		{
+			name:     "empty string vs nil",
+			a:        stringPtr(""),
+			b:        nil,
+			expected: false,
+		},
+		{
+			name:     "empty strings are equal",
+			a:        stringPtr(""),
+			b:        stringPtr(""),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := equalDefaults(tt.a, tt.b)
+			if result != tt.expected {
+				t.Errorf("equalDefaults(%v, %v) = %v, expected %v",
+					formatPtr(tt.a), formatPtr(tt.b), result, tt.expected)
+			}
+		})
+	}
+}
+
+// Helper functions
+func stringPtr(s string) *string {
+	return &s
+}
+
+func formatPtr(s *string) string {
+	if s == nil {
+		return "nil"
+	}
+	return "\"" + *s + "\""
+}

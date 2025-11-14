@@ -387,3 +387,112 @@ func TestGenerateRollback_SetDefault(t *testing.T) {
 		t.Errorf("Expected SET DEFAULT 0, got: %v", step.SQL)
 	}
 }
+
+func TestGenerateRollback_AddForeignKey(t *testing.T) {
+	// Before schema: table without foreign key
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
+			{
+				Name: "posts",
+				Columns: []database.Column{
+					{Name: "id", Type: "bigint", IsPrimaryKey: true},
+					{Name: "user_id", Type: "bigint"},
+				},
+				ForeignKeys: []database.ForeignKey{}, // No foreign keys initially
+			},
+			{
+				Name: "users",
+				Columns: []database.Column{
+					{Name: "id", Type: "bigint", IsPrimaryKey: true},
+				},
+			},
+		},
+	}
+
+	// Forward plan: ADD foreign key
+	forwardPlan := &Plan{
+		Steps: []PlanStep{
+			{
+				Description: "Add foreign key fk_posts_user to table posts",
+				SQL:         []string{"ALTER TABLE posts ADD CONSTRAINT fk_posts_user FOREIGN KEY (user_id) REFERENCES users (id)"},
+			},
+		},
+	}
+
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
+	if err != nil {
+		t.Fatalf("Failed to generate rollback: %v", err)
+	}
+
+	if len(rollbackPlan.Steps) != 1 {
+		t.Fatalf("Expected 1 rollback step, got %d", len(rollbackPlan.Steps))
+	}
+
+	step := rollbackPlan.Steps[0]
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "DROP CONSTRAINT fk_posts_user") {
+		t.Errorf("Expected DROP CONSTRAINT fk_posts_user, got: %v", step.SQL)
+	}
+}
+
+func TestGenerateRollback_DropForeignKey(t *testing.T) {
+	onDelete := "CASCADE"
+
+	// Before schema: table with foreign key
+	beforeSchema := &database.Schema{
+		Tables: []database.Table{
+			{
+				Name: "posts",
+				Columns: []database.Column{
+					{Name: "id", Type: "bigint", IsPrimaryKey: true},
+					{Name: "user_id", Type: "bigint"},
+				},
+				ForeignKeys: []database.ForeignKey{
+					{
+						Name:              "fk_posts_user",
+						Columns:           []string{"user_id"},
+						ReferencedTable:   "users",
+						ReferencedColumns: []string{"id"},
+						OnDelete:          &onDelete,
+					},
+				},
+			},
+			{
+				Name: "users",
+				Columns: []database.Column{
+					{Name: "id", Type: "bigint", IsPrimaryKey: true},
+				},
+			},
+		},
+	}
+
+	// Forward plan: DROP foreign key
+	forwardPlan := &Plan{
+		Steps: []PlanStep{
+			{
+				Description: "Drop foreign key fk_posts_user from table posts",
+				SQL:         []string{"ALTER TABLE posts DROP CONSTRAINT fk_posts_user"},
+			},
+		},
+	}
+
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
+	if err != nil {
+		t.Fatalf("Failed to generate rollback: %v", err)
+	}
+
+	if len(rollbackPlan.Steps) != 1 {
+		t.Fatalf("Expected 1 rollback step, got %d", len(rollbackPlan.Steps))
+	}
+
+	step := rollbackPlan.Steps[0]
+	if len(step.SQL) == 0 || !strings.Contains(step.SQL[0], "ADD CONSTRAINT fk_posts_user") {
+		t.Errorf("Expected ADD CONSTRAINT fk_posts_user, got: %v", step.SQL)
+	}
+
+	// Verify ON DELETE CASCADE is preserved
+	if !strings.Contains(step.SQL[0], "ON DELETE CASCADE") {
+		t.Errorf("Expected ON DELETE CASCADE in foreign key, got: %v", step.SQL)
+	}
+}
