@@ -95,6 +95,50 @@ func TestTableDiff_IsEmpty(t *testing.T) {
 	if nonEmptyDiff.IsEmpty() {
 		t.Error("Expected non-empty table diff to report as not empty")
 	}
+
+	rlsDiff := &TableDiff{
+		TableName:  "secure_table",
+		RLSChanged: true,
+	}
+	if rlsDiff.IsEmpty() {
+		t.Error("Expected RLS change to make table diff non-empty")
+	}
+}
+
+func TestDiffSchemas_DetectsRLSChange(t *testing.T) {
+	before := &database.Schema{
+		Tables: []database.Table{
+			{
+				Name:       "accounts",
+				RLSEnabled: false,
+			},
+		},
+	}
+
+	after := &database.Schema{
+		Tables: []database.Table{
+			{
+				Name:       "accounts",
+				RLSEnabled: true,
+			},
+		},
+	}
+
+	diff := DiffSchemas(before, after)
+	if diff.IsEmpty() {
+		t.Fatal("Expected diff to detect RLS change")
+	}
+	if len(diff.ModifiedTables) != 1 {
+		t.Fatalf("Expected exactly one modified table, got %d", len(diff.ModifiedTables))
+	}
+
+	tableDiff := diff.ModifiedTables[0]
+	if tableDiff.TableName != "accounts" {
+		t.Fatalf("Expected accounts table diff, got %s", tableDiff.TableName)
+	}
+	if !tableDiff.RLSChanged || !tableDiff.RLSEnabled {
+		t.Fatalf("Expected RLS change to be recorded, got %#v", tableDiff)
+	}
 }
 
 func TestEqualDefaults(t *testing.T) {

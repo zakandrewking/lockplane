@@ -24,16 +24,21 @@
 - `internal/planner/planner.go:214-230` and `internal/planner/rollback.go:63-95` already know how to emit/undo the SQL when the diff survives.
 - `apply` safety reporting ultimately uses `internal/validation/validation.go` which currently has no validator for `ENABLE/DISABLE ROW LEVEL SECURITY`, so arbitrary statements default to `SafetyLevelDangerous`.
 
-**Tasks**:
-- [ ] Extend `TableDiff.IsEmpty()` to treat `RLSChanged` as a modification so RLS-only diffs reach the planner.
-- [ ] Introduce a validator (e.g. `AlterRLSValidator`) that classifies enable/disable operations as safe and reversible (rolls back to opposite statement).
-- [ ] Ensure `validation.ValidateSchemaDiff{,WithSchema}` surface the new safety info so `plan` output shows ✅/⚠️ for the RLS steps.
-- [ ] Wire the validator into `apply` safety gates so RLS statements stop blocking deployments.
-- [ ] Add regression tests:
-  - Schema diff unit test proving RLS-only tables produce a modified table entry.
-  - Planner/rollback tests ensuring ENABLE/DISABLE steps are generated and reversed.
-  - Validation tests covering new validator + ensuring `SafetyLevelSafe` classification.
-  - End-to-end CLI test (once DB harness exists) that runs `lockplane plan` and `lockplane apply` for an RLS toggle.
+**Implementation Checklist**:
+- 🔁 Schema diff detection
+  - [x] Update `TableDiff.IsEmpty()` to respect `RLSChanged`
+  - [x] Add unit test showing RLS-only diffs are preserved
+- ✅ Validation & safety surfacing
+  - [x] Introduce `AlterRLSValidator` (safe + reversible classification)
+  - [x] Wire validator into `ValidateSchemaDiff{,WithSchema}`
+  - [x] Add validation tests for enable/disable cases
+  - [x] Ensure `cmd/plan` safety report surfaces the new result
+- 📋 Planner / rollback coverage
+  - [ ] Add regression test verifying planner emits RLS steps when schema toggles
+  - [ ] Add rollback test confirming reverse statements
+- 🚦 Apply / CLI experience
+  - [ ] Ensure `lockplane apply` no longer blocks ENABLE/DISABLE statements (safety gates see ✅)
+  - [ ] Add end-to-end CLI test (after DB harness) toggling RLS via plan+apply
 
 **Files to investigate** (with anchors):
 - `internal/schema/diff.go:212-226` – `TableDiff.IsEmpty` update.

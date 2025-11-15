@@ -427,3 +427,74 @@ func TestValidateSchemaDiffWithSchema_ForeignKeys(t *testing.T) {
 		t.Error("Expected all operations to be reversible")
 	}
 }
+
+func TestAlterRLSValidator_Enable(t *testing.T) {
+	validator := &AlterRLSValidator{
+		TableName: "accounts",
+		Enable:    true,
+	}
+
+	result := validator.Validate()
+	if !result.Valid || !result.Reversible {
+		t.Fatalf("expected enable RLS to be valid and reversible: %#v", result)
+	}
+	if result.Safety == nil || result.Safety.Level != SafetyLevelSafe {
+		t.Fatalf("expected safety classification to be safe: %#v", result.Safety)
+	}
+	expectedRollback := "Rollback will disable row level security on table accounts."
+	if result.Safety.RollbackDescription != expectedRollback {
+		t.Fatalf("expected rollback description %q, got %q", expectedRollback, result.Safety.RollbackDescription)
+	}
+	if len(result.Safety.SaferAlternatives) == 0 {
+		t.Fatal("expected safer alternatives when enabling RLS")
+	}
+}
+
+func TestAlterRLSValidator_Disable(t *testing.T) {
+	validator := &AlterRLSValidator{
+		TableName: "accounts",
+		Enable:    false,
+	}
+
+	result := validator.Validate()
+	if !result.Valid || !result.Reversible {
+		t.Fatalf("expected disable RLS to be valid and reversible: %#v", result)
+	}
+	if result.Safety == nil || result.Safety.Level != SafetyLevelSafe {
+		t.Fatalf("expected safety classification to be safe: %#v", result.Safety)
+	}
+	expectedRollback := "Rollback will enable row level security on table accounts."
+	if result.Safety.RollbackDescription != expectedRollback {
+		t.Fatalf("expected rollback description %q, got %q", expectedRollback, result.Safety.RollbackDescription)
+	}
+	if len(result.Safety.SaferAlternatives) != 0 {
+		t.Fatalf("expected no safer alternatives when disabling RLS, got %#v", result.Safety.SaferAlternatives)
+	}
+}
+
+func TestValidateSchemaDiff_RLSChange(t *testing.T) {
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName:  "accounts",
+				RLSChanged: true,
+				RLSEnabled: true,
+			},
+		},
+	}
+
+	results := ValidateSchemaDiff(diff)
+	if len(results) != 1 {
+		t.Fatalf("expected single validation result for RLS change, got %d", len(results))
+	}
+	result := results[0]
+	if !result.Valid || !result.Reversible {
+		t.Fatalf("expected RLS change to be valid and reversible: %#v", result)
+	}
+	if result.Safety == nil || result.Safety.Level != SafetyLevelSafe {
+		t.Fatalf("expected safety level safe, got %#v", result.Safety)
+	}
+	if len(result.Reasons) == 0 || result.Reasons[0] != "Enable row level security on table accounts" {
+		t.Fatalf("unexpected reason: %#v", result.Reasons)
+	}
+}

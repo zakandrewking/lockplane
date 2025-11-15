@@ -317,6 +317,15 @@ func ValidateSchemaDiffWithSchema(diff *schema.SchemaDiff, targetSchema *databas
 			// TODO: Validate other column changes (nullable → NOT NULL, etc.)
 		}
 
+		// Validate RLS changes
+		if tableDiff.RLSChanged {
+			validator := &AlterRLSValidator{
+				TableName: tableDiff.TableName,
+				Enable:    tableDiff.RLSEnabled,
+			}
+			results = append(results, validator.Validate())
+		}
+
 		// Validate added foreign keys if we have the target schema
 		if targetSchema != nil {
 			fkResults := ValidateAddedForeignKeys(tableDiff.TableName, tableDiff.AddedForeignKeys, targetSchema)
@@ -491,6 +500,52 @@ func (v *AlterColumnTypeValidator) Validate() ValidationResult {
 				v.NewType, v.OldType,
 			),
 			SaferAlternatives: alternatives,
+		},
+	}
+}
+
+// AlterRLSValidator validates enabling or disabling row level security
+type AlterRLSValidator struct {
+	TableName string
+	Enable    bool
+}
+
+func (v *AlterRLSValidator) Validate() ValidationResult {
+	action := "Enable"
+	rollbackAction := "disable"
+	var saferAlternatives []string
+
+	if v.Enable {
+		saferAlternatives = []string{
+			"Define row level security policies before enabling RLS.",
+			"Test policies against staging/shadow databases to avoid lockouts.",
+		}
+	} else {
+		action = "Disable"
+		rollbackAction = "enable"
+	}
+
+	reason := fmt.Sprintf("%s row level security on table %s", action, v.TableName)
+	rollback := fmt.Sprintf("Rollback will %s row level security on table %s", rollbackAction, v.TableName)
+
+	return ValidationResult{
+		Valid:      true,
+		Reversible: true,
+		Warnings:   []string{},
+		Reasons: []string{
+			reason,
+		},
+		Safety: &SafetyClassification{
+			Level:              SafetyLevelSafe,
+			BreakingChange:     false,
+			DataLoss:           false,
+			RollbackDataLoss:   false,
+			RequiresMultiPhase: false,
+			LockContention:     false,
+			RollbackDescription: fmt.Sprintf(
+				"%s.", rollback,
+			),
+			SaferAlternatives: saferAlternatives,
 		},
 	}
 }

@@ -217,7 +217,8 @@ func (d *TableDiff) IsEmpty() bool {
 		len(d.AddedIndexes) == 0 &&
 		len(d.RemovedIndexes) == 0 &&
 		len(d.AddedForeignKeys) == 0 &&
-		len(d.RemovedForeignKeys) == 0
+		len(d.RemovedForeignKeys) == 0 &&
+		!d.RLSChanged
 }
 
 // IsEmpty returns true if there are no differences
