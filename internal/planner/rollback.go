@@ -62,6 +62,10 @@ func generateReverseOperation(step PlanStep, beforeSchema *database.Schema, driv
 		return generateReverseAddForeignKey(step)
 	} else if parser.ContainsSQL(sqlStmt, "DROP CONSTRAINT") {
 		return generateReverseDropForeignKey(step, beforeSchema, driver)
+	} else if parser.ContainsSQL(sqlStmt, "ENABLE ROW LEVEL SECURITY") {
+		return generateReverseEnableRLS(step)
+	} else if parser.ContainsSQL(sqlStmt, "DISABLE ROW LEVEL SECURITY") {
+		return generateReverseDisableRLS(step)
 	}
 
 	return nil, fmt.Errorf("unsupported operation for rollback: %v", step.SQL)
@@ -352,4 +356,34 @@ func generateReverseDropForeignKey(step PlanStep, beforeSchema *database.Schema,
 
 	sql, desc := driver.AddForeignKey(tableName, *fk)
 	return []PlanStep{{Description: fmt.Sprintf("Rollback: %s", desc), SQL: []string{sql}}}, nil
+}
+
+// generateReverseEnableRLS creates a DISABLE ROW LEVEL SECURITY statement
+func generateReverseEnableRLS(step PlanStep) ([]PlanStep, error) {
+	// Extract table name from "ALTER TABLE tablename ENABLE ROW LEVEL SECURITY"
+	sqlStmt := step.SQL[0]
+	tableName, err := parser.ExtractTableNameFromAlter(sqlStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	sql := fmt.Sprintf("ALTER TABLE %s DISABLE ROW LEVEL SECURITY", tableName)
+	desc := fmt.Sprintf("Rollback: Disable row level security on table %s", tableName)
+
+	return []PlanStep{{Description: desc, SQL: []string{sql}}}, nil
+}
+
+// generateReverseDisableRLS creates an ENABLE ROW LEVEL SECURITY statement
+func generateReverseDisableRLS(step PlanStep) ([]PlanStep, error) {
+	// Extract table name from "ALTER TABLE tablename DISABLE ROW LEVEL SECURITY"
+	sqlStmt := step.SQL[0]
+	tableName, err := parser.ExtractTableNameFromAlter(sqlStmt)
+	if err != nil {
+		return nil, err
+	}
+
+	sql := fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", tableName)
+	desc := fmt.Sprintf("Rollback: Enable row level security on table %s", tableName)
+
+	return []PlanStep{{Description: desc, SQL: []string{sql}}}, nil
 }

@@ -692,6 +692,12 @@ func applyAlterTableCmd(table *database.Table, cmd *pg_query.AlterTableCmd) erro
 		}
 		return fmt.Errorf("ALTER TABLE %s DROP CONSTRAINT unsupported constraint: %s", table.Name, cmd.Name)
 
+	case pg_query.AlterTableType_AT_EnableRowSecurity:
+		table.RLSEnabled = true
+
+	case pg_query.AlterTableType_AT_DisableRowSecurity:
+		table.RLSEnabled = false
+
 	default:
 		return fmt.Errorf("ALTER TABLE %s unsupported command subtype: %s", table.Name, cmd.Subtype.String())
 	}
@@ -878,4 +884,15 @@ func formatExpr(node *pg_query.Node) string {
 
 	// For anything else, return a placeholder
 	return "DEFAULT"
+}
+
+// ExtractTableNameFromAlter extracts table name from ALTER TABLE statement
+func ExtractTableNameFromAlter(sql string) (string, error) {
+	// Pattern: ALTER TABLE <name> ...
+	re := regexp.MustCompile(`ALTER\s+TABLE\s+(\w+)`)
+	matches := re.FindStringSubmatch(sql)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("could not extract table name from: %s", sql)
+	}
+	return matches[1], nil
 }

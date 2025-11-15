@@ -19,6 +19,8 @@ type TableDiff struct {
 	RemovedIndexes     []database.Index      `json:"removed_indexes,omitempty"`
 	AddedForeignKeys   []database.ForeignKey `json:"added_foreign_keys,omitempty"`
 	RemovedForeignKeys []database.ForeignKey `json:"removed_foreign_keys,omitempty"`
+	RLSChanged         bool                  `json:"rls_changed,omitempty"`
+	RLSEnabled         bool                  `json:"rls_enabled,omitempty"` // New value when RLSChanged is true
 }
 
 // ColumnDiff represents changes to a single column
@@ -156,6 +158,12 @@ func diffTables(current, desired *database.Table) *TableDiff {
 		if _, exists := desiredFKs[name]; !exists {
 			diff.RemovedForeignKeys = append(diff.RemovedForeignKeys, *currentFK)
 		}
+	}
+
+	// Check for RLS changes
+	if current.RLSEnabled != desired.RLSEnabled {
+		diff.RLSChanged = true
+		diff.RLSEnabled = desired.RLSEnabled
 	}
 
 	return diff

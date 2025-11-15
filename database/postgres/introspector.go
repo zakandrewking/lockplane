@@ -49,6 +49,13 @@ func (i *Introspector) IntrospectSchema(ctx context.Context, db *sql.DB) (*datab
 		}
 		table.ForeignKeys = foreignKeys
 
+		// Get RLS status
+		rlsEnabled, err := i.GetRLSEnabled(ctx, db, tableName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get RLS status for table %s: %w", tableName, err)
+		}
+		table.RLSEnabled = rlsEnabled
+
 		schema.Tables = append(schema.Tables, table)
 	}
 
@@ -263,4 +270,25 @@ func (i *Introspector) GetForeignKeys(ctx context.Context, db *sql.DB, tableName
 	}
 
 	return foreignKeys, nil
+}
+
+// GetRLSEnabled checks if Row Level Security is enabled for a table
+func (i *Introspector) GetRLSEnabled(ctx context.Context, db *sql.DB, tableName string) (bool, error) {
+	query := `
+		SELECT relrowsecurity
+		FROM pg_catalog.pg_class c
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relname = $1
+		  AND n.nspname = 'public'
+		  AND c.relkind = 'r'
+	`
+
+	var rlsEnabled bool
+	err := db.QueryRowContext(ctx, query, tableName).Scan(&rlsEnabled)
+	if err != nil {
+		// Table might not exist or query failed
+		return false, err
+	}
+
+	return rlsEnabled, nil
 }

@@ -215,6 +215,22 @@ func GeneratePlanWithHash(diff *schema.SchemaDiff, sourceSchema *database.Schema
 			}
 		}
 
+		// Handle RLS changes
+		if tableDiff.RLSChanged {
+			var sql, desc string
+			if tableDiff.RLSEnabled {
+				sql = fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", tableDiff.TableName)
+				desc = fmt.Sprintf("Enable row level security on table %s", tableDiff.TableName)
+			} else {
+				sql = fmt.Sprintf("ALTER TABLE %s DISABLE ROW LEVEL SECURITY", tableDiff.TableName)
+				desc = fmt.Sprintf("Disable row level security on table %s", tableDiff.TableName)
+			}
+			plan.Steps = append(plan.Steps, PlanStep{
+				Description: desc,
+				SQL:         []string{sql},
+			})
+		}
+
 		// Remove old columns
 		for _, col := range tableDiff.RemovedColumns {
 			sql, desc := driver.DropColumn(tableDiff.TableName, col)

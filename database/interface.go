@@ -18,6 +18,7 @@ type Table struct {
 	Columns     []Column     `json:"columns"`
 	Indexes     []Index      `json:"indexes"`
 	ForeignKeys []ForeignKey `json:"foreign_keys,omitempty"`
+	RLSEnabled  bool         `json:"rls_enabled,omitempty"`
 }
 
 // Column represents a table column
