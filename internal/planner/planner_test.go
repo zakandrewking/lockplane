@@ -201,6 +201,70 @@ func TestGeneratePlan_ModifyColumn_Type(t *testing.T) {
 	}
 }
 
+func TestGeneratePlan_RLSEnable(t *testing.T) {
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName:  "accounts",
+				RLSChanged: true,
+				RLSEnabled: true,
+			},
+		},
+	}
+
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
+	if err != nil {
+		t.Fatalf("Failed to generate plan: %v", err)
+	}
+
+	if len(plan.Steps) != 1 {
+		t.Fatalf("Expected 1 step for RLS change, got %d", len(plan.Steps))
+	}
+
+	step := plan.Steps[0]
+	expectedSQL := "ALTER TABLE accounts ENABLE ROW LEVEL SECURITY"
+	if len(step.SQL) == 0 || step.SQL[0] != expectedSQL {
+		t.Fatalf("Expected %q, got %v", expectedSQL, step.SQL)
+	}
+	expectedDesc := "Enable row level security on table accounts"
+	if step.Description != expectedDesc {
+		t.Fatalf("Expected description %q, got %q", expectedDesc, step.Description)
+	}
+}
+
+func TestGeneratePlan_RLSDisable(t *testing.T) {
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName:  "accounts",
+				RLSChanged: true,
+				RLSEnabled: false,
+			},
+		},
+	}
+
+	driver := postgres.NewDriver()
+	plan, err := GeneratePlan(diff, driver)
+	if err != nil {
+		t.Fatalf("Failed to generate plan: %v", err)
+	}
+
+	if len(plan.Steps) != 1 {
+		t.Fatalf("Expected 1 step for RLS change, got %d", len(plan.Steps))
+	}
+
+	step := plan.Steps[0]
+	expectedSQL := "ALTER TABLE accounts DISABLE ROW LEVEL SECURITY"
+	if len(step.SQL) == 0 || step.SQL[0] != expectedSQL {
+		t.Fatalf("Expected %q, got %v", expectedSQL, step.SQL)
+	}
+	expectedDesc := "Disable row level security on table accounts"
+	if step.Description != expectedDesc {
+		t.Fatalf("Expected description %q, got %q", expectedDesc, step.Description)
+	}
+}
+
 func TestGeneratePlan_ModifyColumn_Nullable(t *testing.T) {
 	// Test setting NOT NULL
 	diff := &schema.SchemaDiff{

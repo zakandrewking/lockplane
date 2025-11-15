@@ -187,6 +187,62 @@ func TestGenerateRollback_AlterColumnType(t *testing.T) {
 	}
 }
 
+func TestGenerateRollback_EnableRLS(t *testing.T) {
+	beforeSchema := &database.Schema{}
+	forwardPlan := &Plan{
+		Steps: []PlanStep{
+			{
+				Description: "Enable row level security on table accounts",
+				SQL:         []string{"ALTER TABLE accounts ENABLE ROW LEVEL SECURITY"},
+			},
+		},
+	}
+
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
+	if err != nil {
+		t.Fatalf("Failed to generate rollback: %v", err)
+	}
+
+	if len(rollbackPlan.Steps) != 1 {
+		t.Fatalf("Expected 1 rollback step, got %d", len(rollbackPlan.Steps))
+	}
+
+	step := rollbackPlan.Steps[0]
+	expectedSQL := "ALTER TABLE accounts DISABLE ROW LEVEL SECURITY"
+	if len(step.SQL) == 0 || step.SQL[0] != expectedSQL {
+		t.Fatalf("Expected %q, got %v", expectedSQL, step.SQL)
+	}
+}
+
+func TestGenerateRollback_DisableRLS(t *testing.T) {
+	beforeSchema := &database.Schema{}
+	forwardPlan := &Plan{
+		Steps: []PlanStep{
+			{
+				Description: "Disable row level security on table accounts",
+				SQL:         []string{"ALTER TABLE accounts DISABLE ROW LEVEL SECURITY"},
+			},
+		},
+	}
+
+	driver := postgres.NewDriver()
+	rollbackPlan, err := GenerateRollback(forwardPlan, beforeSchema, driver)
+	if err != nil {
+		t.Fatalf("Failed to generate rollback: %v", err)
+	}
+
+	if len(rollbackPlan.Steps) != 1 {
+		t.Fatalf("Expected 1 rollback step, got %d", len(rollbackPlan.Steps))
+	}
+
+	step := rollbackPlan.Steps[0]
+	expectedSQL := "ALTER TABLE accounts ENABLE ROW LEVEL SECURITY"
+	if len(step.SQL) == 0 || step.SQL[0] != expectedSQL {
+		t.Fatalf("Expected %q, got %v", expectedSQL, step.SQL)
+	}
+}
+
 func TestGenerateRollback_SetNotNull(t *testing.T) {
 	beforeSchema := &database.Schema{
 		Tables: []database.Table{

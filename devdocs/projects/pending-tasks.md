@@ -34,8 +34,8 @@
   - [x] Add validation tests for enable/disable cases
   - [x] Ensure `cmd/plan` safety report surfaces the new result
 - 📋 Planner / rollback coverage
-  - [ ] Add regression test verifying planner emits RLS steps when schema toggles
-  - [ ] Add rollback test confirming reverse statements
+  - [x] Add regression test verifying planner emits RLS steps when schema toggles
+  - [x] Add rollback test confirming reverse statements
 - 🚦 Apply / CLI experience
   - [ ] Ensure `lockplane apply` no longer blocks ENABLE/DISABLE statements (safety gates see ✅)
   - [ ] Add end-to-end CLI test (after DB harness) toggling RLS via plan+apply
