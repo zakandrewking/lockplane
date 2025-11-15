@@ -60,6 +60,9 @@ type WizardModel struct {
 	result *InitResult
 	err    error
 
+	// Cancellation
+	cancelled bool
+
 	// Terminal dimensions
 	width  int
 	height int

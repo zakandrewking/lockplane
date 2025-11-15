@@ -39,6 +39,11 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "esc":
+			// On welcome screen, exit immediately
+			if m.state == StateWelcome || m.state == StateCheckExisting {
+				m.cancelled = true
+				return m, tea.Quit
+			}
 			// Go back to previous state
 			return m.handleBack()
 
@@ -106,6 +111,11 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the wizard UI (Bubble Tea View)
 func (m WizardModel) View() string {
+	// Show clean exit message if cancelled
+	if m.cancelled {
+		return labelStyle.Render("lockplane init cancelled")
+	}
+
 	switch m.state {
 	case StateWelcome:
 		return m.renderWelcome()
