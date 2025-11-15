@@ -3,6 +3,7 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -251,7 +252,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 }
 
-func reportBootstrapResult(out *os.File, result *bootstrapResult) {
+func reportBootstrapResult(out io.Writer, result *bootstrapResult) {
 	if result == nil {
 		return
 	}
