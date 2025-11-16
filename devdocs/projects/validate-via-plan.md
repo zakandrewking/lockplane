@@ -347,10 +347,10 @@ For now, stick with convention-based ordering (same as current `plan` behavior).
 
 ## Open Questions
 
-1. **Shadow DB connection**: How do users specify shadow DB URL?
-   - Use existing `--shadow-db` flag from `apply`
-   - Default to `lockplane.toml` shadow DB config
-   - Auto-create temp DB if not specified?
+1. **Shadow DB connection**:
+   - Already solved via existing `--shadow-db` flag and `lockplane.toml` config
+   - Same approach as `apply` command uses today
+   - No additional work needed
 
 2. **Caching strategy**: Where to store cached shadow DBs?
    - `/tmp/lockplane-cache-{project-hash}/`
