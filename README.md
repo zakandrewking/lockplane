@@ -170,7 +170,8 @@ The wizard will guide you through:
 - **Connection details**: Enter your database credentials with smart defaults
 - **Connection testing**: Verify your database is reachable before proceeding
 - **Environment setup**: Configure multiple environments (local, staging, production)
-- **Shadow DB configuration**: Automatically set up shadow databases for safe migrations (PostgreSQL only)
+- **Shadow DB preview**: Understand exactly how your shadow database will be provisioned before entering credentials
+- **Shadow DB configuration**: Automatically set up shadow databases for safe migrations (PostgreSQL, SQLite, and libSQL)
 - **File generation**: Creates `lockplane.toml` and `.env.*` files with secure permissions
 
 **Features:**
@@ -244,7 +245,7 @@ Lockplane makes it easy to manage multiple environments (local, staging, product
 1. **Detect your existing configuration** and show you what environments are already defined
 2. **Guide you through adding new environments** - just like the initial setup
 3. **Preserve all existing environments** - your old configurations stay intact
-4. **Show a summary** of all configured environments (both new and existing) before saving
+4. **Show a summary** of all configured environments—primary + shadow connections—before writing any files
 
 **Example workflow:**
 
@@ -316,11 +317,11 @@ Next, provide the actual credentials in `.env.local` (ignored by Git by default)
 
 ```bash
 cat <<'EOF' > .env.local
-DATABASE_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
-# Option 1: Use a schema in the same database (recommended for local development)
-SHADOW_SCHEMA=lockplane_shadow
-# Option 2: Use a separate database (traditional approach)
-# SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+# PostgreSQL connection (auto-detected sslmode=disable for localhost)
+POSTGRES_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
+# Shadow database (always configured for PostgreSQL - safe migrations)
+# Auto-configured on port 5433 with <database>_shadow naming
+POSTGRES_SHADOW_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
 EOF
 ```
 
@@ -328,10 +329,11 @@ EOF
 
 ```bash
 cat <<'EOF' > .env.local
-# Use a file-based SQLite database
-DATABASE_URL=sqlite://./myapp.db
-# Shadow DB automatically uses :memory: (no configuration needed!)
-# Override only if you need to debug: SHADOW_SQLITE_DB_PATH=./myapp_shadow.db
+# SQLite connection (file-based)
+SQLITE_DB_PATH=./schema/myapp.db
+# Shadow database (configured for SQLite - safe migrations)
+# Auto-configured as <filename>_shadow.db
+SQLITE_SHADOW_DB_PATH=./schema/myapp_shadow.db
 EOF
 ```
 
@@ -339,46 +341,56 @@ EOF
 
 ```bash
 cat <<'EOF' > .env.local
-# Use Turso remote SQLite database
-DATABASE_URL=libsql://mydb-user.turso.io?authToken=eyJhbGc...
-# Shadow DB automatically uses local :memory: (saves 50% cost!)
-# No second Turso database needed!
+# libSQL/Turso connection (remote edge database)
+LIBSQL_URL=libsql://mydb-user.turso.io
+LIBSQL_AUTH_TOKEN=eyJhbGc...
+# Shadow database (local SQLite for validation - safe migrations)
+# Auto-configured as ./schema/turso_shadow.db (no second Turso database needed!)
+LIBSQL_SHADOW_DB_PATH=./schema/turso_shadow.db
 EOF
 ```
 
-### Shadow Database Strategies
+### Shadow Database Configuration
 
-Lockplane validates migrations on a shadow database before applying to production. You have several options:
+**What is a Shadow Database?**
 
-**PostgreSQL - Schema-based (Recommended for Local Dev):**
+A shadow database is a temporary, isolated database where Lockplane tests migrations before applying them to your production database. This catches errors early and prevents bad migrations from corrupting your data.
+
+**Auto-Configuration by Database Type:**
+
+Lockplane automatically configures shadow databases during `lockplane init`:
+
+**PostgreSQL:**
+- Creates a separate database on port 5433 (default)
+- Uses `<database>_shadow` naming convention
+- Example: `myapp` → `myapp_shadow`
+- Configured via `POSTGRES_SHADOW_URL`
+
+**SQLite:**
+- Creates a shadow file alongside your main database
+- Uses `<filename>_shadow.db` naming convention
+- Example: `myapp.db` → `myapp_shadow.db`
+- Configured via `SQLITE_SHADOW_DB_PATH`
+
+**libSQL/Turso:**
+- Uses local SQLite file for validation (no second Turso database needed)
+- Auto-configured as `./schema/turso_shadow.db`
+- Saves cost by validating locally before deploying to edge
+- Configured via `LIBSQL_SHADOW_DB_PATH`
+
+**Customization:**
+
+You can override shadow DB settings in your `.env.<environment>` files:
 ```bash
-SHADOW_SCHEMA=lockplane_shadow
-```
-- Uses a separate schema in the same database
-- Simple setup, no extra database needed
-- Cost-effective and fast
+# PostgreSQL - Use different port or host
+POSTGRES_SHADOW_URL=postgresql://user:pass@localhost:5434/myapp_shadow?sslmode=disable
 
-**PostgreSQL - Separate Database (Maximum Isolation):**
-```bash
-SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
-```
-- Traditional approach with separate database instance
-- Maximum isolation, recommended for production workflows
+# SQLite - Use different path
+SQLITE_SHADOW_DB_PATH=./test/shadow.db
 
-**PostgreSQL - Flexible (Both):**
-```bash
-DATABASE_URL=postgresql://prod-db:5432/myapp
-SHADOW_DATABASE_URL=postgresql://localhost:5432/test
-SHADOW_SCHEMA=lockplane_shadow
+# libSQL - Use different local shadow DB
+LIBSQL_SHADOW_DB_PATH=./test/turso_shadow.db
 ```
-- Test production migrations locally with schema isolation
-- Different database + schema = flexible and safe
-
-**SQLite/libSQL - Automatic (Zero Config):**
-- Shadow automatically uses `:memory:`
-- Fastest option, no configuration needed
-- For libSQL/Turso: tests locally, saves 50% cost
-- Override only for debugging: `SHADOW_SQLITE_DB_PATH=./debug.db`
 
 Lockplane automatically loads `.env.<name>` for the selected environment (for the
 default environment, `.env.local`). You can still override any value with CLI flags

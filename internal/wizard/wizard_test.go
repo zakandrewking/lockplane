@@ -51,12 +51,19 @@ func TestHandleEnterDatabaseType(t *testing.T) {
 		t.Errorf("expected database type to be 'postgres', got %s", m.currentEnv.DatabaseType)
 	}
 
-	// Now select input method and proceed
+	// Now select input method and proceed through shadow info
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowInfo {
+		t.Errorf("expected state to be StateShadowInfo after selecting input method, got %v", m.state)
+	}
+
 	newModel, _ = m.handleEnter()
 	m = *newModel.(*WizardModel)
 
 	if m.state != StateConnectionDetails {
-		t.Errorf("expected state to be StateConnectionDetails after selecting input method, got %v", m.state)
+		t.Errorf("expected state to be StateConnectionDetails after shadow info, got %v", m.state)
 	}
 
 	if len(m.inputs) == 0 {
@@ -72,9 +79,16 @@ func TestHandleEnterDatabaseTypeSQLite(t *testing.T) {
 	newModel, _ := m.handleEnter()
 	m = *newModel.(*WizardModel)
 
-	// For SQLite, should go directly to connection details
+	if m.state != StateShadowInfo {
+		t.Errorf("expected state to be StateShadowInfo after selecting SQLite, got %v", m.state)
+	}
+
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	// After shadow info, go to connection details
 	if m.state != StateConnectionDetails {
-		t.Errorf("expected state to be StateConnectionDetails after selecting SQLite, got %v", m.state)
+		t.Errorf("expected state to be StateConnectionDetails after shadow info, got %v", m.state)
 	}
 
 	if m.currentEnv.DatabaseType != "sqlite" {
@@ -213,6 +227,40 @@ func TestHandleEnterTestConnectionFailedQuit(t *testing.T) {
 	msg := cmd()
 	if _, ok := msg.(tea.QuitMsg); !ok {
 		t.Error("expected QuitMsg from quit command")
+	}
+}
+
+func TestShadowInfoBackNavigation(t *testing.T) {
+	m := New()
+	m.state = StateShadowInfo
+	m.currentEnv.DatabaseType = "sqlite"
+
+	newModel, _ := m.handleBack()
+	m = *newModel.(*WizardModel)
+	if m.state != StateDatabaseType {
+		t.Errorf("expected to return to StateDatabaseType, got %v", m.state)
+	}
+
+	m.state = StateShadowInfo
+	m.currentEnv.DatabaseType = "postgres"
+
+	newModel, _ = m.handleBack()
+	m = *newModel.(*WizardModel)
+	if m.state != StatePostgresInputMethod {
+		t.Errorf("expected to return to StatePostgresInputMethod for postgres, got %v", m.state)
+	}
+}
+
+func TestAddAnotherFinishShowsSummary(t *testing.T) {
+	m := New()
+	m.state = StateAddAnother
+	m.addAnotherChoice = 1
+	m.environments = []EnvironmentInput{{Name: "local", DatabaseType: "postgres"}}
+
+	newModel, _ := m.handleEnter()
+	m = *newModel.(*WizardModel)
+	if m.state != StateSummary {
+		t.Errorf("expected StateSummary before saving, got %v", m.state)
 	}
 }
 

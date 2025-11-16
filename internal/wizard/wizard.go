@@ -125,6 +125,8 @@ func (m WizardModel) View() string {
 		return m.renderDatabaseType()
 	case StatePostgresInputMethod:
 		return m.renderPostgresInputMethod()
+	case StateShadowInfo:
+		return m.renderShadowInfo()
 	case StateConnectionDetails:
 		return m.renderConnectionDetails()
 	case StateTestConnection:
@@ -160,21 +162,25 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 	case StateDatabaseType:
 		// Set the selected database type
 		dbType := DatabaseTypes[m.dbTypeIndex]
+		m.currentEnv = EnvironmentInput{}
 		m.currentEnv.DatabaseType = dbType.ID
 		// For Postgres, show input method selection
 		if dbType.ID == "postgres" {
 			m.state = StatePostgresInputMethod
 			m.postgresInputMethod = 0 // Reset to default (individual fields)
 		} else {
-			m.state = StateConnectionDetails
-			m.initializeInputs()
+			m.state = StateShadowInfo
 		}
 		return m, nil
 
 	case StatePostgresInputMethod:
 		// User chose input method for Postgres
-		m.state = StateConnectionDetails
+		m.state = StateShadowInfo
+		return m, nil
+
+	case StateShadowInfo:
 		m.initializeInputs()
+		m.state = StateConnectionDetails
 		return m, nil
 
 	case StateConnectionDetails:
@@ -226,8 +232,8 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.addAnotherChoice = 0 // Reset for next time
 			return m, nil
 		case 1: // Save and finish
-			m.state = StateCreating
-			return m, m.createFiles()
+			m.state = StateSummary
+			return m, nil
 		}
 		return m, nil
 
@@ -324,6 +330,14 @@ func (m *WizardModel) handleBack() (tea.Model, tea.Cmd) {
 		m.currentEnv = EnvironmentInput{}
 		return m, nil
 
+	case StateShadowInfo:
+		if m.currentEnv.DatabaseType == "postgres" {
+			m.state = StatePostgresInputMethod
+		} else {
+			m.state = StateDatabaseType
+		}
+		return m, nil
+
 	case StateConnectionDetails:
 		// Go back to appropriate previous state
 		if m.currentEnv.DatabaseType == "postgres" {
@@ -352,11 +366,16 @@ func (m *WizardModel) handleBack() (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case StateAddAnother:
-		// Save and finish when pressing escape here
+		// Review summary when pressing escape here
 		if len(m.environments) > 0 {
-			m.state = StateCreating
-			return m, m.createFiles()
+			m.state = StateSummary
+			return m, nil
 		}
+		return m, nil
+
+	case StateSummary:
+		// Return to add another screen to make changes
+		m.state = StateAddAnother
 		return m, nil
 
 	case StateDone, StateError:
@@ -714,6 +733,52 @@ func (m WizardModel) renderPostgresInputMethod() string {
 	return borderStyle.Render(b.String())
 }
 
+func (m WizardModel) renderShadowInfo() string {
+	var b strings.Builder
+
+	dbType := DatabaseTypes[m.dbTypeIndex]
+
+	b.WriteString(renderHeader("Lockplane Init Wizard"))
+	b.WriteString("\n\n")
+	b.WriteString(renderSectionHeader("Shadow Database Preview"))
+	b.WriteString("\n\n")
+	b.WriteString(renderInfo("Lockplane always tests migrations on a dedicated\nshadow database before touching your real data."))
+	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("Selected database: %s %s\n\n", dbType.Icon, dbType.DisplayName))
+
+	switch m.currentEnv.DatabaseType {
+	case "postgres":
+		b.WriteString(renderInfo("PostgreSQL shadow configuration:"))
+		b.WriteString("\n")
+		b.WriteString("  • Default name: <database>_shadow (myapp → myapp_shadow)\n")
+		b.WriteString("  • Default port: 5433 (customizable via .env or --shadow-db-port)\n")
+		b.WriteString("  • Uses the same host, user, and password as your primary DB\n")
+		b.WriteString("  • Works with SHADOW_SCHEMA if you prefer schema-based isolation\n")
+	case "sqlite":
+		b.WriteString(renderInfo("SQLite shadow configuration:"))
+		b.WriteString("\n")
+		b.WriteString("  • Creates a real file next to your main database\n")
+		b.WriteString("  • Naming convention: <filename>_shadow.db\n")
+		b.WriteString("  • Example: schema/lockplane.db → schema/lockplane_shadow.db\n")
+		b.WriteString("  • Keeps migrations reproducible between runs\n")
+	case "libsql":
+		b.WriteString(renderInfo("libSQL/Turso shadow configuration:"))
+		b.WriteString("\n")
+		b.WriteString("  • Uses a local SQLite file (./schema/turso_shadow.db)\n")
+		b.WriteString("  • No second Turso database required\n")
+		b.WriteString("  • Keeps edge traffic low while fully validating migrations\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString(renderInfo("You can override these settings later via\n`--shadow-db`, `.env.<env>`, or `SHADOW_SCHEMA`."))
+	b.WriteString("\n\n")
+	b.WriteString(renderCallToAction("Press Enter to configure connection details"))
+	b.WriteString("\n\n")
+	b.WriteString(renderStatusBar("Enter: continue  Esc: back  Ctrl-C: quit"))
+
+	return borderStyle.Render(b.String())
+}
+
 func (m WizardModel) renderConnectionDetails() string {
 	var b strings.Builder
 
@@ -834,7 +899,7 @@ func (m WizardModel) renderAddAnother() string {
 	b.WriteString(renderOption(1, m.addAnotherChoice == 1, "Save and finish"))
 	b.WriteString("\n\n")
 
-	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  Esc: finish and save  Ctrl-C: quit"))
+	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  Esc: review summary  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -847,82 +912,120 @@ func (m WizardModel) renderSummary() string {
 	b.WriteString(renderSectionHeader("Configuration Summary"))
 	b.WriteString("\n\n")
 
-	// Show all configured environments
 	if len(m.allEnvironments) > 0 {
 		b.WriteString(fmt.Sprintf("Total configured environments: %d\n\n", len(m.allEnvironments)))
+	}
 
-		// Show existing environments that will be preserved
-		if len(m.existingEnvNames) > 0 {
-			b.WriteString(renderInfo("Existing environments (will be preserved):"))
-			b.WriteString("\n")
-			for _, envName := range m.existingEnvNames {
-				// Check if this environment is being updated
-				updated := false
-				for _, newEnv := range m.environments {
-					if newEnv.Name == envName {
-						updated = true
-						break
-					}
-				}
-				if updated {
-					b.WriteString(fmt.Sprintf("  • %s (will be updated)\n", envName))
-				} else {
-					b.WriteString(fmt.Sprintf("  • %s\n", envName))
-				}
-			}
-			b.WriteString("\n")
-		}
-
-		// Show new environments being added
-		newEnvCount := 0
-		for _, newEnv := range m.environments {
-			isNew := true
-			for _, existingName := range m.existingEnvNames {
-				if newEnv.Name == existingName {
-					isNew = false
+	if len(m.existingEnvNames) > 0 {
+		b.WriteString(renderInfo("Existing environments (will be preserved unless noted):"))
+		b.WriteString("\n")
+		for _, envName := range m.existingEnvNames {
+			status := ""
+			for _, newEnv := range m.environments {
+				if newEnv.Name == envName {
+					status = " (will be updated)"
 					break
 				}
 			}
-			if isNew {
-				newEnvCount++
-			}
+			b.WriteString(fmt.Sprintf("  • %s%s\n", envName, status))
 		}
+		b.WriteString("\n")
+	}
 
-		if newEnvCount > 0 {
-			b.WriteString(renderSuccess("New environments to be added:"))
+	if len(m.environments) > 0 {
+		b.WriteString(renderSectionHeader("New / Updated environments"))
+		b.WriteString("\n")
+		for _, env := range m.environments {
+			b.WriteString(renderSuccess(fmt.Sprintf("%s (%s)", env.Name, strings.ToUpper(env.DatabaseType))))
 			b.WriteString("\n")
-			for _, env := range m.environments {
-				isNew := true
-				for _, existingName := range m.existingEnvNames {
-					if env.Name == existingName {
-						isNew = false
-						break
-					}
-				}
-				if isNew {
-					b.WriteString(fmt.Sprintf("  • %s (%s)\n", env.Name, env.DatabaseType))
-				}
+			b.WriteString(fmt.Sprintf("  • Primary: %s\n", formatPrimaryConnection(env)))
+			b.WriteString(fmt.Sprintf("  • Shadow:  %s\n", formatShadowConfiguration(env)))
+			if env.DatabaseType == "postgres" {
+				b.WriteString("    Tip: Set SHADOW_SCHEMA in .env if you prefer schema-based isolation.\n")
 			}
 			b.WriteString("\n")
 		}
 	}
 
+	b.WriteString(renderSectionHeader("Files to create/update"))
 	b.WriteString("\n")
-	b.WriteString("Files to be created/updated:\n")
 	if len(m.existingEnvNames) > 0 {
-		b.WriteString("  • lockplane.toml (will be updated)\n")
+		b.WriteString("  • lockplane.toml (update existing configuration)\n")
 	} else {
 		b.WriteString("  • lockplane.toml (new)\n")
 	}
 	for _, env := range m.environments {
-		b.WriteString(fmt.Sprintf("  • .env.%s (new)\n", env.Name))
+		b.WriteString(fmt.Sprintf("  • .env.%s (new credentials & shadow DB settings)\n", env.Name))
 	}
-	b.WriteString("  • .gitignore (update if needed)\n")
+	b.WriteString("  • .gitignore (ensure secrets stay untracked)\n")
 
+	b.WriteString("\n")
+	b.WriteString(renderInfo("Need to make changes? Press Esc to go back before files are generated."))
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Press Enter to save configuration, Ctrl-C to quit"))
+	b.WriteString(renderCallToAction("Press Enter to create configuration files"))
+	b.WriteString("\n\n")
+	b.WriteString(renderStatusBar("Enter: save  Esc: back  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
+}
+
+func formatPrimaryConnection(env EnvironmentInput) string {
+	switch env.DatabaseType {
+	case "postgres":
+		host := fallback(env.Host, "localhost")
+		port := fallback(env.Port, "5432")
+		db := fallback(env.Database, "lockplane")
+		user := fallback(env.User, "lockplane")
+		ssl := fallback(env.SSLMode, defaultSSLMode(host))
+		return fmt.Sprintf("%s@%s:%s/%s (sslmode=%s)", user, host, port, db, ssl)
+	case "sqlite":
+		path := fallback(env.FilePath, "schema/lockplane.db")
+		return path
+	case "libsql":
+		url := fallback(env.URL, "libsql://<org>-<db>.turso.io")
+		return url
+	default:
+		return "n/a"
+	}
+}
+
+func formatShadowConfiguration(env EnvironmentInput) string {
+	switch env.DatabaseType {
+	case "postgres":
+		host := fallback(env.Host, "localhost")
+		port := fallback(env.ShadowDBPort, "5433")
+		db := fallback(env.Database, "lockplane") + "_shadow"
+		user := fallback(env.User, "lockplane")
+		return fmt.Sprintf("%s@%s:%s/%s", user, host, port, db)
+	case "sqlite":
+		path := BuildSQLiteShadowConnectionString(env)
+		if strings.TrimSpace(path) == "" {
+			path = fallback(env.FilePath, "schema/lockplane.db") + "_shadow"
+		}
+		return path
+	case "libsql":
+		path := BuildLibSQLShadowConnectionString(env)
+		if strings.TrimSpace(path) == "" {
+			path = "./schema/turso_shadow.db"
+		}
+		return path
+	default:
+		return "n/a"
+	}
+}
+
+func fallback(value, alt string) string {
+	if strings.TrimSpace(value) == "" {
+		return alt
+	}
+	return value
+}
+
+func defaultSSLMode(host string) string {
+	if host == "localhost" || host == "127.0.0.1" {
+		return "disable"
+	}
+	return "require"
 }
 
 func (m WizardModel) renderCreating() string {

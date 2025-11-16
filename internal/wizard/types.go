@@ -12,6 +12,7 @@ const (
 	StateCheckExisting
 	StateDatabaseType
 	StatePostgresInputMethod // New state: choose between individual fields or connection string
+	StateShadowInfo          // Explain how shadow DBs will be configured
 	StateConnectionDetails
 	StateTestConnection
 	StateAddAnother
