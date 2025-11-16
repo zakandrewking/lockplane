@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -50,6 +52,10 @@ var (
 	planToEnvironment   string
 	planValidate        bool
 	planVerbose         bool
+	planOutput          string
+	planShadowDB        string
+	planShadowEnv       string
+	planCacheDir        string
 )
 
 func init() {
@@ -59,8 +65,12 @@ func init() {
 	planCmd.Flags().StringVar(&planTo, "to", "", "Target schema path (file or directory)")
 	planCmd.Flags().StringVar(&planFromEnvironment, "from-environment", "", "Environment providing the source database connection")
 	planCmd.Flags().StringVar(&planToEnvironment, "to-environment", "", "Environment providing the target database connection")
-	planCmd.Flags().BoolVar(&planValidate, "validate", false, "Validate migration safety and reversibility")
+	planCmd.Flags().BoolVar(&planValidate, "validate", false, "Validate schema files against shadow DB (when used alone) or migration safety (when used with --from/--to)")
 	planCmd.Flags().BoolVarP(&planVerbose, "verbose", "v", false, "Enable verbose logging")
+	planCmd.Flags().StringVar(&planOutput, "output", "", "Output format: json (for IDE integration)")
+	planCmd.Flags().StringVar(&planShadowDB, "shadow-db", "", "Shadow database URL for validation")
+	planCmd.Flags().StringVar(&planShadowEnv, "shadow-environment", "", "Shadow database environment for validation")
+	planCmd.Flags().StringVar(&planCacheDir, "cache-dir", "", "Directory for caching shadow DB state (for incremental validation)")
 }
 
 func runPlan(cmd *cobra.Command, args []string) {
@@ -69,8 +79,16 @@ func runPlan(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to load config file: %v", err)
 	}
 
+	// NEW MODE: plan --validate <schema-dir>
+	// If --validate is set and neither --from nor --to are provided, run shadow DB validation
 	fromInput := strings.TrimSpace(planFrom)
 	toInput := strings.TrimSpace(planTo)
+
+	if planValidate && fromInput == "" && toInput == "" && planFromEnvironment == "" && planToEnvironment == "" {
+		// This is the new shadow DB validation mode
+		runShadowDBValidation(cfg, args)
+		return
+	}
 
 	if fromInput == "" {
 		resolvedFrom, err := config.ResolveEnvironment(cfg, planFromEnvironment)
@@ -312,4 +330,158 @@ func runPlan(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println(string(jsonBytes))
+}
+
+// runShadowDBValidation validates schema files by applying them to a shadow database.
+// This is the new validation mode: plan --validate <schema-dir>
+func runShadowDBValidation(cfg *config.Config, args []string) {
+	ctx := context.Background()
+
+	// Step 1: Determine schema directory
+	schemaDir := ""
+	if len(args) > 0 {
+		schemaDir = strings.TrimSpace(args[0])
+	}
+
+	// Auto-detect if not provided
+	if schemaDir == "" {
+		if info, err := os.Stat("schema"); err == nil && info.IsDir() {
+			schemaDir = "schema"
+			if planVerbose {
+				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
+			}
+		}
+	}
+
+	if schemaDir == "" {
+		fmt.Fprintf(os.Stderr, "Error: No schema directory specified.\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: lockplane plan --validate <schema-dir>\n")
+		fmt.Fprintf(os.Stderr, "   Or: lockplane plan --validate (will auto-detect schema/ directory)\n\n")
+		os.Exit(1)
+	}
+
+	// Step 2: Resolve shadow DB connection
+	shadowConnStr := strings.TrimSpace(planShadowDB)
+	if shadowConnStr == "" {
+		// Try to resolve from environment
+		shadowEnv, err := config.ResolveEnvironment(cfg, planShadowEnv)
+		if err == nil && shadowEnv.ShadowDatabaseURL != "" {
+			shadowConnStr = shadowEnv.ShadowDatabaseURL
+		}
+	}
+
+	if shadowConnStr == "" {
+		fmt.Fprintf(os.Stderr, "Error: No shadow database configured.\n\n")
+		fmt.Fprintf(os.Stderr, "Provide shadow DB via:\n")
+		fmt.Fprintf(os.Stderr, "  - --shadow-db flag\n")
+		fmt.Fprintf(os.Stderr, "  - --shadow-environment flag\n")
+		fmt.Fprintf(os.Stderr, "  - shadow_database_url in lockplane.toml\n\n")
+		os.Exit(1)
+	}
+
+	// Step 3: Connect to shadow DB
+	if planVerbose {
+		fmt.Fprintf(os.Stderr, "🔗 Connecting to shadow database...\n")
+	}
+
+	driverType := executor.DetectDriver(shadowConnStr)
+	driver, err := executor.NewDriver(driverType)
+	if err != nil {
+		log.Fatalf("Failed to create database driver: %v", err)
+	}
+
+	shadowDB, err := sql.Open(driverType, shadowConnStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to shadow database: %v", err)
+	}
+	defer func() {
+		_ = shadowDB.Close()
+	}()
+
+	// Step 4: Clean shadow DB
+	if planVerbose {
+		fmt.Fprintf(os.Stderr, "🧹 Cleaning shadow database...\n")
+	}
+
+	if err := executor.CleanupShadowDB(ctx, shadowDB, driver, planVerbose); err != nil {
+		log.Fatalf("Failed to clean shadow database: %v", err)
+	}
+
+	// Step 5: Load schema files
+	if planVerbose {
+		fmt.Fprintf(os.Stderr, "📖 Loading schema from %s...\n", schemaDir)
+	}
+
+	dialect := schema.DriverNameToDialect(driverType)
+	opts := executor.BuildSchemaLoadOptions(schemaDir, dialect)
+	desiredSchema, err := executor.LoadSchemaOrIntrospectWithOptions(schemaDir, opts)
+	if err != nil {
+		log.Fatalf("Failed to load schema: %v", err)
+	}
+
+	// Step 6: Generate a plan from empty schema to desired schema
+	emptySchema := &database.Schema{Tables: []database.Table{}, Dialect: dialect}
+	diff := schema.DiffSchemas(emptySchema, desiredSchema)
+
+	plan, err := planner.GeneratePlanWithHash(diff, emptySchema, driver)
+	if err != nil {
+		log.Fatalf("Failed to generate plan: %v", err)
+	}
+
+	if planVerbose {
+		fmt.Fprintf(os.Stderr, "✓ Generated plan with %d steps\n", len(plan.Steps))
+	}
+
+	// Step 7: Execute plan on shadow DB (this validates the schema)
+	if planVerbose {
+		fmt.Fprintf(os.Stderr, "🧪 Validating schema by applying to shadow database...\n")
+	}
+
+	result, err := executor.ApplyPlan(ctx, shadowDB, plan, nil, emptySchema, driver, planVerbose)
+
+	// Step 8: Output results
+	if err != nil {
+		if planOutput == "json" {
+			// Output as JSON for IDE integration
+			diagnostics := map[string]interface{}{
+				"diagnostics": []map[string]interface{}{
+					{
+						"severity": "error",
+						"message":  fmt.Sprintf("Schema validation failed: %v", err),
+						"code":     "validation_error",
+					},
+				},
+				"summary": map[string]interface{}{
+					"errors": 1,
+					"valid":  false,
+				},
+			}
+			jsonBytes, _ := json.MarshalIndent(diagnostics, "", "  ")
+			fmt.Println(string(jsonBytes))
+		} else {
+			fmt.Fprintf(os.Stderr, "❌ Schema validation FAILED\n\n")
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			for _, errMsg := range result.Errors {
+				fmt.Fprintf(os.Stderr, "  - %s\n", errMsg)
+			}
+		}
+		os.Exit(1)
+	}
+
+	// Success!
+	if planOutput == "json" {
+		diagnostics := map[string]interface{}{
+			"diagnostics": []map[string]interface{}{},
+			"summary": map[string]interface{}{
+				"errors":        0,
+				"valid":         true,
+				"steps_applied": result.StepsApplied,
+			},
+		}
+		jsonBytes, _ := json.MarshalIndent(diagnostics, "", "  ")
+		fmt.Println(string(jsonBytes))
+	} else {
+		fmt.Fprintf(os.Stderr, "✅ Schema validation PASSED\n")
+		fmt.Fprintf(os.Stderr, "   Applied %d steps successfully\n", result.StepsApplied)
+	}
 }

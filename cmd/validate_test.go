@@ -34,7 +34,6 @@ func TestValidateSubcommands(t *testing.T) {
 
 	expectedSubcommands := map[string]bool{
 		"schema": false,
-		"sql":    false,
 		"plan":   false,
 	}
 
@@ -62,20 +61,6 @@ func TestValidateSchemaCommand(t *testing.T) {
 
 	if validateSchemaCmd.Run == nil {
 		t.Error("validateSchemaCmd.Run should not be nil")
-	}
-}
-
-func TestValidateSQLCommand(t *testing.T) {
-	if validateSQLCmd == nil {
-		t.Fatal("validateSQLCmd should not be nil")
-	}
-
-	if validateSQLCmd.Use != "sql [file]" {
-		t.Errorf("expected Use to be 'sql [file]', got %q", validateSQLCmd.Use)
-	}
-
-	if validateSQLCmd.Run == nil {
-		t.Error("validateSQLCmd.Run should not be nil")
 	}
 }
 
@@ -107,14 +92,5 @@ func TestValidateSchemaFlags(t *testing.T) {
 		if shorthand == nil {
 			t.Error("expected -f shorthand for file flag")
 		}
-	}
-}
-
-func TestValidateSQLFlags(t *testing.T) {
-	flags := validateSQLCmd.Flags()
-
-	outputFormatFlag := flags.Lookup("output-format")
-	if outputFormatFlag == nil {
-		t.Error("expected --output-format flag to exist on validate sql command")
 	}
 }
