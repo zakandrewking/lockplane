@@ -524,7 +524,11 @@ func splitSQLStatements(sql string) []sqlStatement {
 			}
 		}
 
-		currentStmt.WriteRune(ch)
+		// Only add to statement after we've seen the first non-whitespace character
+		// This ensures stmt.sql doesn't have leading blank lines that throw off line counting
+		if hasSeenNonWhitespace {
+			currentStmt.WriteRune(ch)
+		}
 	}
 
 	// Add final statement if there's content

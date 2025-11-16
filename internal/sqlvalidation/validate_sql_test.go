@@ -23,7 +23,7 @@ CREATE TABLE projects (
 CREATE ha TABLE todos (
   id TEXT PRIMARY KEY
 );`,
-			expectedLine: 10, // CREATE ha TABLE (adjusted due to statement splitting)
+			expectedLine: 7, // CREATE ha TABLE (line 7 in the SQL string)
 			expectedMsg:  "syntax error at or near \"ha\"",
 		},
 		{
@@ -45,7 +45,7 @@ CREATE ha TABLE todos (
 CREATE INVALID syntax here (
   id TEXT PRIMARY KEY
 );`,
-			expectedLine: 11, // CREATE INVALID (adjusted due to statement splitting)
+			expectedLine: 7, // CREATE INVALID (line 7 in the SQL string)
 			expectedMsg:  "syntax error at or near \"INVALID\"",
 		},
 	}
@@ -178,5 +178,32 @@ DROP TABLE todos;`
 
 	if !found {
 		t.Error("expected to find DROP TABLE error")
+	}
+}
+
+// TestvalidateSQLSyntax_BlankLinesBeforeError ensures that line numbers
+// are correctly reported when there are blank lines before a syntax error.
+// Regression test for issue where line numbers were offset by the number
+// of leading blank lines in a statement.
+func TestValidateSQLSyntax_BlankLinesBeforeError(t *testing.T) {
+	sql := `CREATE INDEX idx_genomes_species ON genomes(species);
+
+CRETE INDEX idx_genomes_name ON genomes(name);
+
+ALTER TABLE genomes ENABLE ROW LEVEL SECURITY;`
+
+	issues := validateSQLSyntax("test.sql", sql)
+
+	if len(issues) == 0 {
+		t.Fatal("expected validation issues, got none")
+	}
+
+	// The error "CRETE" is on line 3, not line 5
+	if issues[0].Line != 3 {
+		t.Errorf("expected error on line 3, got line %d", issues[0].Line)
+	}
+
+	if !strings.Contains(issues[0].Message, "CRETE") {
+		t.Errorf("expected error message to mention 'CRETE', got: %s", issues[0].Message)
 	}
 }
