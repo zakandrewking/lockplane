@@ -62,15 +62,32 @@ CREATE INDEX idx_posts_user_id ON posts(user_id);
 ```sql
 -- File 1: schema.sql
 CREATE TABLE users (
-  id TEXT PRIMARY KEY  -- TEXT, not BIGINT
+  id TEXT PRIMARY KEY
 );
 
--- File 2: foreign-keys.sql
-ALTER TABLE posts ADD CONSTRAINT fk_user
-  FOREIGN KEY (user_id) REFERENCES users(id);
--- ⚠️  Type mismatch if posts.user_id is BIGINT
+-- File 2: policies.sql
+CREATE POLICY user_isolation ON posts
+  USING (user_id = current_user_id());
+-- ❌ Error: function "current_user_id()" doesn't exist
+-- ✅ validate sql: passes (syntax is valid)
+-- ❌ apply: fails (function not defined)
+```
+
+```sql
+-- File 1: schema.sql
+CREATE TABLE users (
+  id BIGINT PRIMARY KEY,
+  email TEXT UNIQUE
+);
+
+-- File 2: views.sql
+CREATE VIEW active_users AS
+  SELECT id, username, email FROM users
+  WHERE deleted_at IS NULL;
+-- ❌ Error: column "username" doesn't exist
+-- ❌ Error: column "deleted_at" doesn't exist
 -- ✅ validate sql: passes
--- ❌ apply: might fail or cause issues
+-- ❌ apply: fails
 ```
 
 ## Proposed Solution
