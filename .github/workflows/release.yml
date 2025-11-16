@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   # Run tests once before building
@@ -144,6 +145,10 @@ jobs:
   npm-publish:
     needs: release
     runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -164,7 +169,5 @@ jobs:
           fi
           echo "✓ Versions match: $TAG_VERSION"
 
-      - name: Publish to npm
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm (Trusted Publisher)
+        run: npm publish --provenance --access public
