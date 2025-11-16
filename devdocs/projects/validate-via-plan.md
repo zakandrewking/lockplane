@@ -245,23 +245,11 @@ async function validateDocument(doc: TextDocument) {
 **Goal**: Remove old validation code
 
 **Tasks**:
-1. Deprecate `validate sql` command
+1. Remove `validate sql` command entirely
 2. Update `validate` to only do JSON schema validation
-3. Remove SQL parsing/enhancement code from `validate sql`
+3. Remove SQL parsing/enhancement code
 4. Update documentation
 5. Update all examples and tutorials
-
-**Migration guide for users**:
-```bash
-# Old (REMOVED)
-lockplane validate sql schema.sql
-
-# New
-lockplane plan --validate schema/
-
-# validate command now ONLY does JSON schema validation
-lockplane validate schema schema.json
-```
 
 ## Technical Design
 
@@ -356,29 +344,6 @@ For now, stick with convention-based ordering (same as current `plan` behavior).
 2. **Less code**: Remove duplicate validation logic
 3. **Fewer bugs**: One source of truth for what's valid
 4. **Better test coverage**: Test validation through actual DB execution
-
-## Migration Path
-
-### For Users
-
-**Immediate (backward compatible)**:
-- Add new `plan --validate` mode
-- Keep `validate sql` working (deprecated)
-- Update docs to recommend new approach
-
-**After 1-2 releases**:
-- Remove `validate sql` command
-- Update all examples
-
-### For VSCode Extension
-
-**Version 1**: Use new validation API
-- Feature flag to enable new validation
-- Fallback to old `validate sql` if flag disabled
-
-**Version 2**: Remove old validation
-- Only use `plan --validate`
-- Require newer Lockplane version
 
 ## Open Questions
 
