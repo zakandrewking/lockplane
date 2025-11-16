@@ -357,10 +357,9 @@ For now, stick with convention-based ordering (same as current `plan` behavior).
    - `~/.cache/lockplane/`
    - User-specified via `--cache-dir`?
 
-3. **Multiple dialects**: How to handle SQLite vs Postgres?
-   - Detect from file extension (`.sqlite.sql` vs `.pg.sql`)?
-   - Explicit `--dialect` flag?
-   - Auto-detect from first statement?
+3. **Multiple dialects**: SQLite vs Postgres
+   - Already handled via dialect comment in `.lp.sql` files (existing approach)
+   - No additional work needed
 
 4. **Performance**: Can we hit < 100ms for incremental validation?
    - Need benchmarks with real schemas
