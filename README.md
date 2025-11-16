@@ -130,7 +130,7 @@ column.
 Now, let's validate our schema:
 
 ```bash
-npx lockplane validate sql schema/users.lp.sql
+npx lockplane plan --validate schema/
 ```
 
 This will output a report of any issues with your schema. If there are no issues,
@@ -149,7 +149,7 @@ interacting with a live database, but for schema definition we want to focus on
 creating a structure. Later, we'll see how lockplane can drop tables and columns
 when needed.
 
-For more information on `.lp.sql` files, run `npx lockplane validate sql --help`.
+For more information on `.lp.sql` files, run `npx lockplane plan --help`.
 
 ## 4. 📜 Run your first migration
 
@@ -719,22 +719,24 @@ Lockplane provides comprehensive validation for schema and plan files to catch e
 ### Validating SQL Schemas (`.lp.sql`)
 
 ```bash
-# Validate SQL schema file
-npx lockplane validate sql schema.lp.sql
+# Validate SQL schema directory
+npx lockplane plan --validate schema/
 
 # Validate with JSON output (for IDE integration)
-npx lockplane validate sql --output-format json schema.lp.sql
+npx lockplane plan --validate schema/ --output json
 
-# Validate directory of SQL files
-npx lockplane validate sql lockplane/schema/
+# Specify shadow DB
+npx lockplane plan --validate schema/ --shadow-db "postgresql://..."
 ```
 
 **What's validated:**
 
-1. **SQL Syntax** (statement-by-statement)
-   - Uses the same PostgreSQL parser as the database itself (via libpg_query)
-   - Detects multiple syntax errors in a single pass
-   - Reports exact line numbers for each error
+1. **SQL Syntax & Semantics**
+   - Executes schema against shadow database to catch both syntax and semantic errors
+   - Detects missing tables (e.g., index on non-existent table)
+   - Detects missing columns (e.g., view referencing non-existent column)
+   - Detects type mismatches, constraint violations, etc.
+   - Reports exact error messages from the database
 
 2. **Schema Structure**
    - Duplicate column names

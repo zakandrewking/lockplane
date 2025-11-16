@@ -38,8 +38,8 @@ export async function validateSchema(
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const cwd = workspaceFolders ? workspaceFolders[0].uri.fsPath : undefined;
 
-    // Use the new lockplane validate sql --output-format json command
-    const cmd = `${lockplanePath} validate sql --output-format json "${schemaPath}"`;
+    // Use the lockplane plan --validate --output json command
+    const cmd = `${lockplanePath} plan --validate --output json "${schemaPath}"`;
 
     console.log(`[Lockplane] Running command: ${cmd}`);
     console.log(`[Lockplane] Working directory: ${cwd}`);
@@ -66,7 +66,7 @@ export async function validateSchema(
           return;
         }
 
-        // Parse JSON output from validate sql command
+        // Parse JSON output from plan --validate command
         try {
           const result: SQLValidationResult = JSON.parse(stdout);
           console.log(`[Lockplane] Validation result:`, result);

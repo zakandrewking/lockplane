@@ -16,8 +16,8 @@
 
 **Problem**:
 - `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` is blocked during `apply` (classified as dangerous)
-- `validate sql` allows it (no error), so CLI behaviour is inconsistent
-- Need to sync validation between `validate sql`, `plan`, and `apply` pipelines
+- `plan --validate` allows it (no error), so CLI behaviour is inconsistent
+- Need to sync validation between `plan --validate`, `plan`, and `apply` pipelines
 
 **Recent Findings**:
 - `internal/schema/diff.go` detects RLS changes, but `TableDiff.IsEmpty()` ignores `RLSChanged`, so pure RLS diffs are dropped before planning.

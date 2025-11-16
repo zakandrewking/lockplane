@@ -14,15 +14,15 @@ Lockplane tests migrations on a shadow database before applying to production, v
 ## Core Workflow
 
 1. **Create schema** - Write `.lp.sql` files with CREATE TABLE statements
-2. **Validate** - `lockplane validate sql schema/`
+2. **Validate** - `lockplane plan --validate schema/`
 3. **Apply** - `lockplane apply --auto-approve --target-environment local --schema schema/`
 
 ## Commands
 
 ### Validate schema
 ```bash
-lockplane validate sql schema/users.lp.sql
-lockplane validate sql schema/  # validate entire directory
+lockplane plan --validate schema/users.lp.sql
+lockplane plan --validate schema/  # validate entire directory
 ```
 
 ### Apply changes
@@ -110,7 +110,7 @@ CREATE TABLE users (
 
 Then validate and apply:
 ```bash
-lockplane validate sql schema/users.lp.sql
+lockplane plan --validate schema/users.lp.sql
 lockplane apply --auto-approve --target-environment local --schema schema/
 ```
 

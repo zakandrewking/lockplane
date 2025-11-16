@@ -83,21 +83,21 @@ echo ""
 echo "📋 Checking validate subcommands..."
 
 # README has all validate subcommands
-README_VALIDATE_CMDS="schema sql plan"
+README_VALIDATE_CMDS="schema plan"
 for subcmd in $README_VALIDATE_CMDS; do
     if ! grep -q "validate $subcmd" "$PROJECT_ROOT/README.md"; then
         report_issue "Subcommand 'validate $subcmd' not mentioned in README.md"
     fi
 done
 
-# llms.txt and SKILL.md only need validate sql
-if ! grep -q "validate sql" "$PROJECT_ROOT/llms.txt"; then
-    report_issue "Subcommand 'validate sql' not mentioned in llms.txt"
+# llms.txt and SKILL.md should use plan --validate for schema validation
+if ! grep -q "plan --validate" "$PROJECT_ROOT/llms.txt"; then
+    report_issue "Command 'plan --validate' not mentioned in llms.txt"
 fi
 
 if [ -f "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md" ]; then
-    if ! grep -q "validate sql" "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md"; then
-        report_issue "Subcommand 'validate sql' not mentioned in SKILL.md"
+    if ! grep -q "plan --validate" "$PROJECT_ROOT/claude-plugin/skills/lockplane/SKILL.md"; then
+        report_issue "Command 'plan --validate' not mentioned in SKILL.md"
     fi
 fi
 
