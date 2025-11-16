@@ -98,6 +98,19 @@ Lockplane is a Postgres-first control plane for safe, AI-friendly schema managem
   - `postgres/` - PostgreSQL driver
   - `sqlite/` - SQLite/libSQL driver
 
+### Shadow Database Configuration
+- **Purpose**: Shadow databases are used to test migrations before applying to production
+- **Auto-configuration**: `lockplane init` automatically configures shadow DBs for all database types and now shows a dedicated preview screen so contributors see the exact host/port/path before entering credentials.
+- **Location**: `internal/wizard/validation.go` and `internal/wizard/generation.go`
+- **Naming conventions**:
+  - PostgreSQL: Port 5433, `<database>_shadow` (e.g., `myapp_shadow`)
+  - SQLite: `<filename>_shadow.db` (e.g., `lockplane_shadow.db`)
+  - libSQL/Turso: Local SQLite file `./schema/turso_shadow.db`
+- **Environment variables**:
+  - PostgreSQL: `POSTGRES_SHADOW_URL`
+  - SQLite: `SQLITE_SHADOW_DB_PATH`
+  - libSQL: `LIBSQL_SHADOW_DB_PATH`
+
 ### Documentation & Examples
 - `docs/` - Documentation files
 - `devdocs/` - Development and design documents

@@ -44,17 +44,24 @@ description = "Local development"
 
 ```bash
 # .env.local - PostgreSQL
-DATABASE_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
-SHADOW_DATABASE_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+POSTGRES_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
+POSTGRES_SHADOW_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
 
-# Or for Turso:
-# DATABASE_URL=libsql://mydb-user.turso.io?authToken=eyJhbGc...
-# SHADOW_DATABASE_URL=libsql://mydb-shadow-user.turso.io?authToken=eyJhbGc...
+# Or for SQLite:
+# SQLITE_DB_PATH=./schema/myapp.db
+# SQLITE_SHADOW_DB_PATH=./schema/myapp_shadow.db
+
+# Or for Turso/libSQL:
+# LIBSQL_URL=libsql://mydb-user.turso.io
+# LIBSQL_AUTH_TOKEN=eyJhbGc...
+# LIBSQL_SHADOW_DB_PATH=./schema/turso_shadow.db
 ```
 
 **Supported databases:** PostgreSQL, SQLite, Turso/libSQL
 
 Override with CLI flags (`--target`, `--shadow-db`) when needed.
+
+Tip: `npx lockplane init` is the easiest way to set this up—it now pauses on a shadow DB preview screen (per database type) and shows a summary of primary + shadow connections before writing any files.
 
 ## Schema Format
 
