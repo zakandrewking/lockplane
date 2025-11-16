@@ -1,6 +1,6 @@
 {
   "name": "lockplane",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Postgres-first control plane for safe, AI-friendly schema management",
   "main": "index.js",
   "bin": {
