@@ -346,6 +346,58 @@ When making changes to CLI commands or workflows:
 4. Document any breaking changes
 5. **Follow the complete checklist above**
 
+### Creating a Release
+
+**CRITICAL: Follow this checklist exactly when creating a release:**
+
+1. **Determine version number** (follow semver: MAJOR.MINOR.PATCH)
+   - MAJOR: Breaking changes
+   - MINOR: New features (backward compatible)
+   - PATCH: Bug fixes (backward compatible)
+
+2. **Update version in both files:**
+   - [ ] Update `cmd/root.go` - Change `var version = "X.Y.Z"`
+   - [ ] Update `package.json` - Change `"version": "X.Y.Z"`
+   - [ ] **CRITICAL**: Both files MUST have the same version or npm publish will fail
+
+3. **Run all quality checks:**
+   - [ ] `go fmt ./...`
+   - [ ] `go vet ./...`
+   - [ ] `errcheck ./...`
+   - [ ] `staticcheck ./...`
+   - [ ] `go test -v ./...`
+   - [ ] `go build .`
+
+4. **Commit and tag:**
+   - [ ] Commit version bump: `git commit -m "chore: bump version to X.Y.Z"`
+   - [ ] Push commit: `git push`
+   - [ ] Create tag: `git tag vX.Y.Z`
+   - [ ] Push tag: `git push origin vX.Y.Z`
+
+5. **Create GitHub release:**
+   - [ ] Use `gh release create vX.Y.Z --title "vX.Y.Z - Title" --notes "..."`
+   - [ ] Include what's new, breaking changes, and upgrade instructions
+   - [ ] GitHub Actions will automatically build binaries and publish to npm
+
+6. **Verify release:**
+   - [ ] Check GitHub Actions workflows pass: `gh run list --limit 3`
+   - [ ] Verify GitHub release has binaries attached
+   - [ ] **Verify npm package published:** Check https://www.npmjs.com/package/lockplane
+   - [ ] Test installation: `npx lockplane@X.Y.Z --version`
+
+**GitHub Actions Automation:**
+The release workflow (`.github/workflows/release.yml`) automatically:
+- ✅ Runs tests
+- ✅ Builds binaries for all platforms
+- ✅ Uploads binaries to GitHub release
+- ✅ Publishes to npm (requires `NPM_TOKEN` secret)
+- ✅ Verifies package.json version matches git tag
+
+**If npm publish fails:**
+- Check that `NPM_TOKEN` secret is set in GitHub repository settings
+- Verify package.json version matches the git tag (workflow enforces this)
+- Check npm publish logs in GitHub Actions: `gh run view --log-failed`
+
 ## Schema Format
 
 **Current format: JSON + JSON Schema**
