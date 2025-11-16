@@ -120,14 +120,14 @@ CREATE VIEW active_users AS
 # New flag for plan command
 lockplane plan --validate schema/ --output json
 
-# Or as a shorthand
-lockplane validate schema/ --use-shadow-db
-
-# For IDE integration
+# For IDE integration (with caching and incremental mode)
 lockplane plan --validate schema/ \
   --output json \
-  --cache-shadow-db /tmp/lockplane-cache \
+  --cache-dir /tmp/lockplane-cache \
   --incremental
+
+# validate command ONLY does JSON schema validation
+lockplane validate schema schema.json
 ```
 
 **Output format (JSON for LSP):**
@@ -253,13 +253,13 @@ async function validateDocument(doc: TextDocument) {
 
 **Migration guide for users**:
 ```bash
-# Old way
+# Old (REMOVED)
 lockplane validate sql schema.sql
 
-# New way
+# New
 lockplane plan --validate schema/
 
-# Or for JSON schema validation
+# validate command now ONLY does JSON schema validation
 lockplane validate schema schema.json
 ```
 
