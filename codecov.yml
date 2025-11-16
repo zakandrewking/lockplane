@@ -56,12 +56,24 @@ ignore:
 flags:
   postgres:
     paths:
-      - "database/postgres/"
+      - "cmd/"
+      - "internal/"
+      - "database/"
+      - "planner.go"
+      - "rollback.go"
+      - "diff.go"
+      - "main.go"
     carryforward: true
 
   sqlite:
     paths:
-      - "database/sqlite/"
+      - "cmd/"
+      - "internal/"
+      - "database/"
+      - "planner.go"
+      - "rollback.go"
+      - "diff.go"
+      - "main.go"
     carryforward: true
 
   unit:
