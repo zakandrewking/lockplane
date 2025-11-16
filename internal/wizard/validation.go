@@ -167,6 +167,10 @@ func BuildSQLiteConnectionString(env EnvironmentInput) string {
 
 // BuildSQLiteShadowConnectionString constructs a shadow DB connection string for SQLite
 func BuildSQLiteShadowConnectionString(env EnvironmentInput) string {
+	if env.ShadowDBPath != "" {
+		return normalizeSQLitePath(env.ShadowDBPath)
+	}
+
 	filePath := env.FilePath
 	if filePath == "" {
 		filePath = "./schema/lockplane.db"
@@ -196,9 +200,22 @@ func BuildLibSQLConnectionString(env EnvironmentInput) string {
 // BuildLibSQLShadowConnectionString constructs a shadow DB connection string for libSQL/Turso
 // Since Turso is a remote service, we use a local SQLite database for shadow testing
 func BuildLibSQLShadowConnectionString(env EnvironmentInput) string {
+	if env.ShadowDBPath != "" {
+		return normalizeSQLitePath(env.ShadowDBPath)
+	}
 	// Use a local SQLite database for shadow testing
 	// This allows schema validation without needing a second Turso database
 	return "./schema/turso_shadow.db"
+}
+
+func normalizeSQLitePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	if !strings.HasPrefix(path, "./") && !strings.HasPrefix(path, "/") {
+		return "./" + path
+	}
+	return path
 }
 
 // ParsePostgresConnectionString parses a PostgreSQL connection string and extracts components

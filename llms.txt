@@ -9,7 +9,7 @@ Define your database schema in `.lp.sql` files, validate them, and apply changes
 1. **Create schema** in `.lp.sql` files (standard PostgreSQL DDL)
 2. **Validate**: `lockplane plan --validate schema/`
 3. **Apply**: `lockplane apply --auto-approve --target-environment local --schema schema/`
-4. **Configure environments**: `npx lockplane init` walks through DB selection, shows a shadow DB preview (host/port/path) for each engine, then summarizes primary + shadow connections before writing `lockplane.toml` and `.env.<name>`.
+4. **Configure environments**: `npx lockplane init` walks through DB selection, shows a shadow DB preview (host/port/path) for each engine, lets you customize those defaults, and then summarizes primary + shadow connections before writing `lockplane.toml` and `.env.<name>`.
 
 ## Commands
 

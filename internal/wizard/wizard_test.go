@@ -100,6 +100,77 @@ func TestHandleEnterDatabaseTypeSQLite(t *testing.T) {
 	}
 }
 
+func TestShadowAdvancedPostgres(t *testing.T) {
+	m := New()
+	m.state = StateDatabaseType
+	m.dbTypeIndex = 0 // PostgreSQL
+
+	// Select Postgres
+	newModel, _ := m.handleEnter()
+	m = *newModel.(*WizardModel)
+	// Enter shadow info
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	m.shadowConfigChoice = 1
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowAdvanced {
+		t.Fatalf("expected StateShadowAdvanced, got %v", m.state)
+	}
+
+	if len(m.shadowInputs) != 1 {
+		t.Fatalf("expected 1 shadow input, got %d", len(m.shadowInputs))
+	}
+
+	m.shadowInputs[0].SetValue("5440")
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.currentEnv.ShadowDBPort != "5440" {
+		t.Fatalf("expected shadow port to be updated, got %s", m.currentEnv.ShadowDBPort)
+	}
+
+	if m.state != StateConnectionDetails {
+		t.Fatalf("expected StateConnectionDetails after configuring shadow DB, got %v", m.state)
+	}
+}
+
+func TestShadowAdvancedSQLite(t *testing.T) {
+	m := New()
+	m.state = StateDatabaseType
+	m.dbTypeIndex = 1 // SQLite
+
+	newModel, _ := m.handleEnter()
+	m = *newModel.(*WizardModel)
+	// preview
+	m.shadowConfigChoice = 1
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowAdvanced {
+		t.Fatalf("expected StateShadowAdvanced, got %v", m.state)
+	}
+
+	if len(m.shadowInputs) != 1 {
+		t.Fatalf("expected 1 shadow input for sqlite, got %d", len(m.shadowInputs))
+	}
+
+	customPath := "./tmp/custom_shadow.db"
+	m.shadowInputs[0].SetValue(customPath)
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.currentEnv.ShadowDBPath != customPath {
+		t.Fatalf("expected shadow path to update, got %s", m.currentEnv.ShadowDBPath)
+	}
+
+	if m.state != StateConnectionDetails {
+		t.Fatalf("expected to proceed to connection details, got %v", m.state)
+	}
+}
+
 func TestHandleUpDown(t *testing.T) {
 	m := New()
 	m.state = StateDatabaseType

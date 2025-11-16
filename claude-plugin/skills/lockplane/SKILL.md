@@ -61,7 +61,7 @@ POSTGRES_SHADOW_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmo
 
 Override with CLI flags (`--target`, `--shadow-db`) when needed.
 
-Tip: `npx lockplane init` is the easiest way to set this up—it now pauses on a shadow DB preview screen (per database type) and shows a summary of primary + shadow connections before writing any files.
+Tip: `npx lockplane init` is the easiest way to set this up—it now pauses on a shadow DB preview screen (per database type), lets you customize the shadow port/path if needed, and shows a summary of primary + shadow connections before writing any files.
 
 ## Schema Format
 

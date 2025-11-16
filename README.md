@@ -170,7 +170,7 @@ The wizard will guide you through:
 - **Connection details**: Enter your database credentials with smart defaults
 - **Connection testing**: Verify your database is reachable before proceeding
 - **Environment setup**: Configure multiple environments (local, staging, production)
-- **Shadow DB preview**: Understand exactly how your shadow database will be provisioned before entering credentials
+- **Shadow DB preview/customization**: See the exact shadow host/port/path per database type and optionally customize it before entering credentials
 - **Shadow DB configuration**: Automatically set up shadow databases for safe migrations (PostgreSQL, SQLite, and libSQL)
 - **File generation**: Creates `lockplane.toml` and `.env.*` files with secure permissions
 
@@ -377,6 +377,8 @@ Lockplane automatically configures shadow databases during `lockplane init`:
 - Auto-configured as `./schema/turso_shadow.db`
 - Saves cost by validating locally before deploying to edge
 - Configured via `LIBSQL_SHADOW_DB_PATH`
+
+> 💡 During `lockplane init`, choose “Customize shadow settings” if you want to change the default PostgreSQL port or provide explicit SQLite/Turso shadow file paths.
 
 **Customization:**
 

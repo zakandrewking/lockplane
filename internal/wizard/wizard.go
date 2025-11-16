@@ -19,7 +19,9 @@ func New() WizardModel {
 		state:        StateWelcome,
 		environments: []EnvironmentInput{},
 		errors:       make(map[string]string),
+		shadowErrors: make(map[string]string),
 		inputs:       []textinput.Model{},
+		shadowInputs: []textinput.Model{},
 		dbTypeIndex:  0,
 	}
 }
@@ -127,6 +129,8 @@ func (m WizardModel) View() string {
 		return m.renderPostgresInputMethod()
 	case StateShadowInfo:
 		return m.renderShadowInfo()
+	case StateShadowAdvanced:
+		return m.renderShadowAdvanced()
 	case StateConnectionDetails:
 		return m.renderConnectionDetails()
 	case StateTestConnection:
@@ -164,6 +168,7 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		dbType := DatabaseTypes[m.dbTypeIndex]
 		m.currentEnv = EnvironmentInput{}
 		m.currentEnv.DatabaseType = dbType.ID
+		m.shadowConfigChoice = 0
 		// For Postgres, show input method selection
 		if dbType.ID == "postgres" {
 			m.state = StatePostgresInputMethod
@@ -179,6 +184,19 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case StateShadowInfo:
+		if m.shadowConfigChoice == 1 {
+			m.initializeShadowInputs()
+			m.state = StateShadowAdvanced
+			return m, nil
+		}
+		m.initializeInputs()
+		m.state = StateConnectionDetails
+		return m, nil
+
+	case StateShadowAdvanced:
+		if err := m.collectShadowInputValues(); err != nil {
+			return m, nil
+		}
 		m.initializeInputs()
 		m.state = StateConnectionDetails
 		return m, nil
@@ -261,10 +279,19 @@ func (m *WizardModel) handleUp() (tea.Model, tea.Cmd) {
 		if m.postgresInputMethod > 0 {
 			m.postgresInputMethod--
 		}
+	case StateShadowInfo:
+		if m.shadowConfigChoice > 0 {
+			m.shadowConfigChoice--
+		}
 	case StateConnectionDetails:
 		if m.focusIndex > 0 {
 			m.focusIndex--
 			m.updateInputFocus()
+		}
+	case StateShadowAdvanced:
+		if m.shadowInputIndex > 0 {
+			m.shadowInputIndex--
+			m.updateShadowInputFocus()
 		}
 	case StateTestConnection:
 		if m.connectionTestResult == "failed" && m.retryChoice > 0 {
@@ -288,10 +315,19 @@ func (m *WizardModel) handleDown() (tea.Model, tea.Cmd) {
 		if m.postgresInputMethod < 1 {
 			m.postgresInputMethod++
 		}
+	case StateShadowInfo:
+		if m.shadowConfigChoice < 1 {
+			m.shadowConfigChoice++
+		}
 	case StateConnectionDetails:
 		if m.focusIndex < len(m.inputs)-1 {
 			m.focusIndex++
 			m.updateInputFocus()
+		}
+	case StateShadowAdvanced:
+		if m.shadowInputIndex < len(m.shadowInputs)-1 {
+			m.shadowInputIndex++
+			m.updateShadowInputFocus()
 		}
 	case StateTestConnection:
 		if m.connectionTestResult == "failed" && m.retryChoice < 2 {
@@ -306,9 +342,17 @@ func (m *WizardModel) handleDown() (tea.Model, tea.Cmd) {
 }
 
 func (m *WizardModel) handleTab() (tea.Model, tea.Cmd) {
-	if m.state == StateConnectionDetails {
-		m.focusIndex = (m.focusIndex + 1) % len(m.inputs)
-		m.updateInputFocus()
+	switch m.state {
+	case StateConnectionDetails:
+		if len(m.inputs) > 0 {
+			m.focusIndex = (m.focusIndex + 1) % len(m.inputs)
+			m.updateInputFocus()
+		}
+	case StateShadowAdvanced:
+		if len(m.shadowInputs) > 0 {
+			m.shadowInputIndex = (m.shadowInputIndex + 1) % len(m.shadowInputs)
+			m.updateShadowInputFocus()
+		}
 	}
 	return m, nil
 }
@@ -338,15 +382,14 @@ func (m *WizardModel) handleBack() (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case StateShadowAdvanced:
+		m.state = StateShadowInfo
+		m.shadowErrors = make(map[string]string)
+		return m, nil
+
 	case StateConnectionDetails:
-		// Go back to appropriate previous state
-		if m.currentEnv.DatabaseType == "postgres" {
-			// For Postgres, go back to input method selection
-			m.state = StatePostgresInputMethod
-		} else {
-			// For other databases, go back to database type selection
-			m.state = StateDatabaseType
-		}
+		// Go back to shadow preview to adjust defaults or advanced settings
+		m.state = StateShadowInfo
 		// Clear input data
 		m.inputs = []textinput.Model{}
 		m.focusIndex = 0
@@ -468,6 +511,50 @@ func (m *WizardModel) updateInputFocus() {
 	}
 }
 
+func (m *WizardModel) initializeShadowInputs() {
+	m.shadowInputs = []textinput.Model{}
+	m.shadowInputIndex = 0
+	m.shadowErrors = make(map[string]string)
+
+	switch m.currentEnv.DatabaseType {
+	case "postgres":
+		defaultPort := m.currentEnv.ShadowDBPort
+		if defaultPort == "" {
+			defaultPort = "5433"
+		}
+		m.shadowInputs = append(m.shadowInputs, m.makeInput("Shadow DB port", defaultPort, false))
+	case "sqlite":
+		defaultPath := m.currentEnv.ShadowDBPath
+		if defaultPath == "" {
+			defaultPath = BuildSQLiteShadowConnectionString(m.currentEnv)
+		}
+		m.shadowInputs = append(m.shadowInputs, m.makeInput("Shadow DB path", defaultPath, false))
+	case "libsql":
+		defaultPath := m.currentEnv.ShadowDBPath
+		if defaultPath == "" {
+			defaultPath = BuildLibSQLShadowConnectionString(m.currentEnv)
+		}
+		m.shadowInputs = append(m.shadowInputs, m.makeInput("Shadow DB path", defaultPath, false))
+	}
+
+	if len(m.shadowInputs) > 0 {
+		m.shadowInputs[0].Focus()
+		m.shadowInputs[0].PromptStyle = focusedPromptStyle
+	}
+}
+
+func (m *WizardModel) updateShadowInputFocus() {
+	for i := range m.shadowInputs {
+		if i == m.shadowInputIndex {
+			m.shadowInputs[i].Focus()
+			m.shadowInputs[i].PromptStyle = focusedPromptStyle
+		} else {
+			m.shadowInputs[i].Blur()
+			m.shadowInputs[i].PromptStyle = blurredPromptStyle
+		}
+	}
+}
+
 func (m *WizardModel) collectInputValues() error {
 	switch m.currentEnv.DatabaseType {
 	case "postgres":
@@ -547,6 +634,41 @@ func (m *WizardModel) collectInputValues() error {
 			m.errors["name"] = err.Error()
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (m *WizardModel) collectShadowInputValues() error {
+	m.shadowErrors = make(map[string]string)
+
+	switch m.currentEnv.DatabaseType {
+	case "postgres":
+		if len(m.shadowInputs) < 1 {
+			return fmt.Errorf("not enough inputs")
+		}
+		port := strings.TrimSpace(m.shadowInputs[0].Value())
+		if port == "" {
+			err := fmt.Errorf("shadow DB port is required")
+			m.shadowErrors["shadow_port"] = err.Error()
+			return err
+		}
+		if err := ValidatePort(port); err != nil {
+			m.shadowErrors["shadow_port"] = err.Error()
+			return err
+		}
+		m.currentEnv.ShadowDBPort = port
+	case "sqlite", "libsql":
+		if len(m.shadowInputs) < 1 {
+			return fmt.Errorf("not enough inputs")
+		}
+		path := strings.TrimSpace(m.shadowInputs[0].Value())
+		if path == "" {
+			err := fmt.Errorf("shadow DB path is required")
+			m.shadowErrors["shadow_path"] = err.Error()
+			return err
+		}
+		m.currentEnv.ShadowDBPath = path
 	}
 
 	return nil
@@ -772,9 +894,55 @@ func (m WizardModel) renderShadowInfo() string {
 	b.WriteString("\n")
 	b.WriteString(renderInfo("You can override these settings later via\n`--shadow-db`, `.env.<env>`, or `SHADOW_SCHEMA`."))
 	b.WriteString("\n\n")
-	b.WriteString(renderCallToAction("Press Enter to configure connection details"))
+	b.WriteString("Shadow DB options:\n\n")
+	b.WriteString(renderOption(0, m.shadowConfigChoice == 0, "Use recommended defaults"))
+	b.WriteString("\n")
+	b.WriteString(renderOption(1, m.shadowConfigChoice == 1, "Customize shadow settings now"))
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Enter: continue  Esc: back  Ctrl-C: quit"))
+	b.WriteString(renderStatusBar("↑/↓: choose option  Enter: select  Esc: back  Ctrl-C: quit"))
+
+	return borderStyle.Render(b.String())
+}
+
+func (m WizardModel) renderShadowAdvanced() string {
+	var b strings.Builder
+
+	b.WriteString(renderHeader("Lockplane Init Wizard"))
+	b.WriteString("\n\n")
+	b.WriteString(renderSectionHeader("Shadow Database Configuration"))
+	b.WriteString("\n\n")
+
+	switch m.currentEnv.DatabaseType {
+	case "postgres":
+		b.WriteString(renderInfo("Customize the port used for the <database>_shadow database.\nDefaults to 5433."))
+	case "sqlite":
+		b.WriteString(renderInfo("Customize the file path for the shadow SQLite database.\nDefaults to the recommended `<filename>_shadow.db`."))
+	case "libsql":
+		b.WriteString(renderInfo("Customize the local SQLite file used as the Turso shadow database."))
+	}
+
+	b.WriteString("\n\n")
+	for i, input := range m.shadowInputs {
+		label := input.Placeholder
+		if i == m.shadowInputIndex {
+			b.WriteString(selectedStyle.Render("► " + label + ":"))
+		} else {
+			b.WriteString(labelStyle.Render("  " + label + ":"))
+		}
+		b.WriteString("\n  ")
+		b.WriteString(input.View())
+		b.WriteString("\n\n")
+	}
+
+	if len(m.shadowErrors) > 0 {
+		for _, errMsg := range m.shadowErrors {
+			b.WriteString(renderError(errMsg))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString(renderStatusBar("Enter: save  ↑/↓ or Tab: navigate  Esc: back  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
 }
@@ -998,17 +1166,9 @@ func formatShadowConfiguration(env EnvironmentInput) string {
 		user := fallback(env.User, "lockplane")
 		return fmt.Sprintf("%s@%s:%s/%s", user, host, port, db)
 	case "sqlite":
-		path := BuildSQLiteShadowConnectionString(env)
-		if strings.TrimSpace(path) == "" {
-			path = fallback(env.FilePath, "schema/lockplane.db") + "_shadow"
-		}
-		return path
+		return BuildSQLiteShadowConnectionString(env)
 	case "libsql":
-		path := BuildLibSQLShadowConnectionString(env)
-		if strings.TrimSpace(path) == "" {
-			path = "./schema/turso_shadow.db"
-		}
-		return path
+		return BuildLibSQLShadowConnectionString(env)
 	default:
 		return "n/a"
 	}
