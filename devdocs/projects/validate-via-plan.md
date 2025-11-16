@@ -130,6 +130,8 @@ lockplane plan --validate schema/ \
 lockplane validate schema schema.json
 ```
 
+**Important**: `plan --validate` does NOT accept `--to` or `--to-environment` flags. It validates the schema directory itself (by applying to shadow DB), not comparing two schemas. Use regular `plan --from --to` for schema comparison.
+
 **Output format (JSON for LSP):**
 
 ```json
