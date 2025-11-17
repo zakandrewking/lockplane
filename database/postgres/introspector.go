@@ -163,7 +163,9 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 		FROM pg_indexes i
 		JOIN pg_class c ON c.relname = i.tablename
 		JOIN pg_index ix ON ix.indexrelid = (
-			SELECT oid FROM pg_class WHERE relname = i.indexname
+			SELECT oid FROM pg_class WHERE relname = i.indexname AND relnamespace = (
+				SELECT oid FROM pg_namespace WHERE nspname = current_schema()
+			)
 		)
 		WHERE i.schemaname = current_schema()
 		  AND i.tablename = $1
@@ -172,7 +174,8 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 
 	rows, err := db.QueryContext(ctx, query, tableName)
 	if err != nil {
-		return nil, err
+		// Add context about which table failed and the query being run
+		return nil, fmt.Errorf("query failed for table %q (schema: current_schema()): %w\nQuery: %s", tableName, err, query)
 	}
 	defer func() { _ = rows.Close() }()
 
