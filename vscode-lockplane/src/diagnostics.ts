@@ -13,12 +13,23 @@ export function updateDiagnostics(
   const diagnostics: vscode.Diagnostic[] = [];
 
   for (const result of results) {
-    // Only show diagnostics for the current file
-    // (cross-file validation results will appear when editing those files)
+    // Check if this diagnostic applies to the current document
     const resultPath = normalizeFilePath(result.file);
     const docPath = normalizeFilePath(document.fileName);
 
-    if (!resultPath.endsWith(docPath) && !docPath.endsWith(resultPath)) {
+    // If result file is a directory (not a .sql file), it's a global schema error
+    // Show it for any file in that directory
+    const isGlobalError = !resultPath.endsWith('.sql');
+
+    // Check if paths match
+    const pathsMatch =
+      resultPath === docPath || // Exact match
+      docPath.startsWith(resultPath + '/') || // Result is parent directory
+      docPath.endsWith('/' + resultPath) || // Result is just filename
+      resultPath.includes(docPath); // Result contains full document path
+
+    // Show diagnostic if it's a global error OR paths match
+    if (!isGlobalError && !pathsMatch) {
       continue;
     }
 
