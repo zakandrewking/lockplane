@@ -17,12 +17,13 @@ const logoArt = `
 
 // Color palette - using hex colors for richer, more modern look
 var (
-	// Primary colors
-	colorPrimary = lipgloss.Color("#7D56F4") // Purple - main brand color
-	colorSuccess = lipgloss.Color("#04B575") // Green - success states
-	colorError   = lipgloss.Color("#FF4672") // Red - errors
-	colorInfo    = lipgloss.Color("#00D9FF") // Cyan - information
-	colorSubtle  = lipgloss.Color("#777777") // Gray - muted text
+	// Primary colors (muted palette that works on light backgrounds)
+	colorPrimary   = lipgloss.Color("#374151") // Slate
+	colorSuccess   = lipgloss.Color("#2F855A") // Muted green
+	colorError     = lipgloss.Color("#C53030") // Muted red
+	colorInfo      = lipgloss.Color("#2563EB") // Mid blue
+	colorSubtle    = lipgloss.Color("#4B5563") // Gray
+	colorHighlight = lipgloss.Color("#1D4ED8") // Accent blue
 )
 
 // Style definitions
@@ -62,7 +63,7 @@ var (
 
 	// Selection styles
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF6AD5")). // Pink - highlights
+			Foreground(colorHighlight).
 			Bold(true)
 
 	unselectedStyle = lipgloss.NewStyle().
@@ -70,7 +71,7 @@ var (
 
 	// Input styles
 	focusedPromptStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FF6AD5")). // Pink - focus
+				Foreground(colorHighlight).
 				Bold(true)
 
 	blurredPromptStyle = lipgloss.NewStyle().
@@ -79,14 +80,14 @@ var (
 	// Border styles
 	borderStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorPrimary).
+			BorderForeground(colorSubtle).
 			Padding(1, 2)
 
 	// Tip box style
 	tipBoxStyle = lipgloss.NewStyle().
 			Foreground(colorInfo).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorInfo).
+			BorderForeground(colorSubtle).
 			Padding(0, 1).
 			MarginTop(1)
 

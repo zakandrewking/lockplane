@@ -10,6 +10,7 @@ type WizardState int
 const (
 	StateWelcome WizardState = iota
 	StateCheckExisting
+	StateSelectExisting
 	StateDatabaseType
 	StatePostgresInputMethod // Choose between individual fields or connection string
 	StateConnectionDetails
@@ -30,11 +31,16 @@ type WizardModel struct {
 	// Existing config detection
 	existingConfigPath string
 	existingEnvNames   []string
+	existingChoice     int
+	selectExistingIdx  int
 
 	// Current environment being configured
 	currentEnv      EnvironmentInput
 	environments    []EnvironmentInput // New environments being added
 	allEnvironments []string           // All environment names (existing + new)
+	editingExisting bool
+	editingEnvName  string
+	noticeMessage   string
 
 	// Connection testing
 	testingConnection    bool

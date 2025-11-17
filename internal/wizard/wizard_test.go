@@ -1,6 +1,7 @@
 package wizard
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -415,7 +416,7 @@ func TestShadowOptionsBackNavigation(t *testing.T) {
 	}
 }
 
-func TestAddAnotherFinishShowsSummary(t *testing.T) {
+func TestAddAnotherSaveAndFinishSkipsSummary(t *testing.T) {
 	m := New()
 	m.state = StateAddAnother
 	m.addAnotherChoice = 1
@@ -423,8 +424,8 @@ func TestAddAnotherFinishShowsSummary(t *testing.T) {
 
 	newModel, _ := m.handleEnter()
 	m = *newModel.(*WizardModel)
-	if m.state != StateSummary {
-		t.Errorf("expected StateSummary before saving, got %v", m.state)
+	if m.state != StateCreating {
+		t.Errorf("expected StateCreating when finishing, got %v", m.state)
 	}
 }
 
@@ -450,6 +451,49 @@ func TestExistingConfigDetection(t *testing.T) {
 
 	if len(m.existingEnvNames) != 2 {
 		t.Errorf("expected 2 existing environments, got %d", len(m.existingEnvNames))
+	}
+}
+
+func TestDuplicateEnvironmentNameReturnsToCheckExisting(t *testing.T) {
+	m := New()
+	m.state = StateConnectionDetails
+	m.currentEnv.DatabaseType = "sqlite"
+	m.existingEnvNames = []string{"local"}
+	m.initializeInputs()
+	m.inputs[0].SetValue("local")
+	m.inputs[1].SetValue("./schema/lockplane.db")
+
+	err := m.collectInputValues()
+	if err == nil {
+		t.Fatalf("expected error for duplicate environment name")
+	}
+	if m.state != StateCheckExisting {
+		t.Fatalf("expected to return to StateCheckExisting, got %v", m.state)
+	}
+	if !strings.Contains(m.noticeMessage, "already exists") {
+		t.Fatalf("expected notice message about duplicate, got %q", m.noticeMessage)
+	}
+}
+
+func TestSelectExistingEnvironmentFlow(t *testing.T) {
+	m := New()
+	m.state = StateCheckExisting
+	m.existingEnvNames = []string{"local", "staging"}
+	m.existingChoice = 1
+
+	newModel, _ := m.handleEnter()
+	m = *newModel.(*WizardModel)
+	if m.state != StateSelectExisting {
+		t.Fatalf("expected StateSelectExisting, got %v", m.state)
+	}
+
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+	if m.state != StateDatabaseType {
+		t.Fatalf("expected StateDatabaseType after selecting existing env, got %v", m.state)
+	}
+	if !m.editingExisting || m.editingEnvName == "" {
+		t.Fatalf("expected editingExisting flag to be set")
 	}
 }
 

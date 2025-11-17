@@ -100,6 +100,8 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.existingEnvNames = msg.envNames
 			m.allEnvironments = make([]string, len(msg.envNames))
 			copy(m.allEnvironments, msg.envNames)
+			m.existingChoice = 0
+			m.selectExistingIdx = 0
 			m.state = StateCheckExisting
 		} else {
 			// No existing config, go to welcome
@@ -123,6 +125,8 @@ func (m WizardModel) View() string {
 		return m.renderWelcome()
 	case StateCheckExisting:
 		return m.renderCheckExisting()
+	case StateSelectExisting:
+		return m.renderSelectExisting()
 	case StateDatabaseType:
 		return m.renderDatabaseType()
 	case StatePostgresInputMethod:
@@ -159,7 +163,31 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case StateCheckExisting:
-		// Continue with guided environment setup
+		if len(m.existingEnvNames) == 0 {
+			m.noticeMessage = ""
+			m.resetEditingState()
+			m.state = StateDatabaseType
+			return m, nil
+		}
+		if m.existingChoice == 0 {
+			m.noticeMessage = ""
+			m.resetEditingState()
+			m.state = StateDatabaseType
+			return m, nil
+		}
+		m.selectExistingIdx = 0
+		m.state = StateSelectExisting
+		return m, nil
+
+	case StateSelectExisting:
+		if len(m.existingEnvNames) == 0 {
+			m.state = StateCheckExisting
+			return m, nil
+		}
+		selected := m.existingEnvNames[m.selectExistingIdx]
+		m.editingExisting = true
+		m.editingEnvName = selected
+		m.noticeMessage = ""
 		m.state = StateDatabaseType
 		return m, nil
 
@@ -167,6 +195,9 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		// Set the selected database type
 		dbType := DatabaseTypes[m.dbTypeIndex]
 		m.currentEnv = EnvironmentInput{}
+		if m.editingExisting && m.editingEnvName != "" {
+			m.currentEnv.Name = m.editingEnvName
+		}
 		m.currentEnv.DatabaseType = dbType.ID
 		if dbType.ID == "postgres" {
 			m.state = StatePostgresInputMethod
@@ -211,9 +242,24 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			// Save the current environment
 			m.environments = append(m.environments, m.currentEnv)
 			// Add to all environments list
-			m.allEnvironments = append(m.allEnvironments, m.currentEnv.Name)
+			if m.editingExisting {
+				replaced := false
+				for i, name := range m.allEnvironments {
+					if strings.EqualFold(name, m.editingEnvName) {
+						m.allEnvironments[i] = m.currentEnv.Name
+						replaced = true
+						break
+					}
+				}
+				if !replaced {
+					m.allEnvironments = append(m.allEnvironments, m.currentEnv.Name)
+				}
+			} else {
+				m.allEnvironments = append(m.allEnvironments, m.currentEnv.Name)
+			}
 			// Reset current environment
 			m.currentEnv = EnvironmentInput{}
+			m.resetEditingState()
 			// Reset add another choice
 			m.addAnotherChoice = 0
 			return m, nil
@@ -244,8 +290,8 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.addAnotherChoice = 0 // Reset for next time
 			return m, nil
 		case 1: // Save and finish
-			m.state = StateSummary
-			return m, nil
+			m.state = StateCreating
+			return m, m.createFiles()
 		}
 		return m, nil
 
@@ -265,6 +311,14 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 
 func (m *WizardModel) handleUp() (tea.Model, tea.Cmd) {
 	switch m.state {
+	case StateCheckExisting:
+		if m.existingChoice > 0 {
+			m.existingChoice--
+		}
+	case StateSelectExisting:
+		if m.selectExistingIdx > 0 {
+			m.selectExistingIdx--
+		}
 	case StateDatabaseType:
 		if m.dbTypeIndex > 0 {
 			m.dbTypeIndex--
@@ -301,6 +355,18 @@ func (m *WizardModel) handleUp() (tea.Model, tea.Cmd) {
 
 func (m *WizardModel) handleDown() (tea.Model, tea.Cmd) {
 	switch m.state {
+	case StateCheckExisting:
+		maxChoice := 0
+		if len(m.existingEnvNames) > 0 {
+			maxChoice = 1
+		}
+		if m.existingChoice < maxChoice {
+			m.existingChoice++
+		}
+	case StateSelectExisting:
+		if len(m.existingEnvNames) > 0 && m.selectExistingIdx < len(m.existingEnvNames)-1 {
+			m.selectExistingIdx++
+		}
 	case StateDatabaseType:
 		if m.dbTypeIndex < len(DatabaseTypes)-1 {
 			m.dbTypeIndex++
@@ -356,6 +422,7 @@ func (m *WizardModel) handleBack() (tea.Model, tea.Cmd) {
 	case StateDatabaseType:
 		// Go back to welcome or existing config check
 		if m.existingConfigPath != "" {
+			m.resetEditingState()
 			m.state = StateCheckExisting
 		} else {
 			m.state = StateWelcome
@@ -387,6 +454,10 @@ func (m *WizardModel) handleBack() (tea.Model, tea.Cmd) {
 
 	case StateShadowDetails:
 		m.state = StateShadowOptions
+		return m, nil
+
+	case StateSelectExisting:
+		m.state = StateCheckExisting
 		return m, nil
 
 	case StateTestConnection:
@@ -481,6 +552,9 @@ func (m *WizardModel) initializeInputs() {
 	}
 
 	if len(m.inputs) > 0 {
+		if m.editingExisting && m.editingEnvName != "" {
+			m.inputs[0].SetValue(m.editingEnvName)
+		}
 		m.inputs[0].Focus()
 		m.inputs[0].PromptStyle = focusedPromptStyle
 	}
@@ -709,6 +783,25 @@ func (m *WizardModel) collectInputValues() error {
 		}
 	}
 
+	normalizedName := strings.TrimSpace(m.currentEnv.Name)
+	if normalizedName == "" {
+		return fmt.Errorf("environment name is required")
+	}
+
+	if m.editingExisting {
+		if !strings.EqualFold(normalizedName, m.editingEnvName) && m.environmentNameExists(normalizedName, m.editingEnvName) {
+			m.errors["name"] = fmt.Sprintf("Environment %q already exists. Choose another name.", normalizedName)
+			return fmt.Errorf("environment name already exists")
+		}
+	} else if m.environmentNameExists(normalizedName, "") {
+		m.noticeMessage = fmt.Sprintf("Environment %q already exists. Choose \"Update existing environment\" to modify it.", normalizedName)
+		m.currentEnv = EnvironmentInput{}
+		m.inputs = []textinput.Model{}
+		m.focusIndex = 0
+		m.state = StateCheckExisting
+		return fmt.Errorf("environment name already exists")
+	}
+
 	return nil
 }
 
@@ -752,6 +845,35 @@ func (m *WizardModel) collectShadowDetailValues() error {
 	}
 
 	return nil
+}
+
+func (m *WizardModel) resetEditingState() {
+	m.editingExisting = false
+	m.editingEnvName = ""
+}
+
+func (m *WizardModel) environmentNameExists(name, ignore string) bool {
+	target := strings.ToLower(strings.TrimSpace(name))
+	ignoreNormalized := strings.ToLower(strings.TrimSpace(ignore))
+	if target == "" {
+		return false
+	}
+	for _, existing := range m.existingEnvNames {
+		if strings.ToLower(existing) == target && target != ignoreNormalized {
+			return true
+		}
+	}
+	for _, env := range m.environments {
+		if strings.ToLower(env.Name) == target && target != ignoreNormalized {
+			return true
+		}
+	}
+	for _, envName := range m.allEnvironments {
+		if strings.ToLower(envName) == target && target != ignoreNormalized {
+			return true
+		}
+	}
+	return false
 }
 
 // Message types for async operations
@@ -858,6 +980,11 @@ func (m WizardModel) renderCheckExisting() string {
 	b.WriteString("\n\n")
 	b.WriteString(fmt.Sprintf("Config: %s\n\n", m.existingConfigPath))
 
+	if strings.TrimSpace(m.noticeMessage) != "" {
+		b.WriteString(renderError(m.noticeMessage))
+		b.WriteString("\n\n")
+	}
+
 	if len(m.existingEnvNames) > 0 {
 		b.WriteString(renderSectionHeader("Existing Environments:"))
 		b.WriteString("\n")
@@ -867,13 +994,44 @@ func (m WizardModel) renderCheckExisting() string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(renderInfo("You can add new environments or update existing ones.\n" +
-		"If you add an environment with the same name as an\n" +
-		"existing one, it will be updated."))
+	if len(m.existingEnvNames) == 0 {
+		b.WriteString(renderInfo("No environments defined yet. Let's create your first environment."))
+		b.WriteString("\n\n")
+		b.WriteString(renderCallToAction("Press Enter to continue"))
+	} else {
+		b.WriteString(renderInfo("Choose whether you want to add a new environment or update an existing one."))
+		b.WriteString("\n\n")
+		b.WriteString(renderOption(0, m.existingChoice == 0, "Add new environment"))
+		b.WriteString("\n")
+		b.WriteString(renderOption(1, m.existingChoice == 1, "Update existing environment"))
+	}
 	b.WriteString("\n\n")
-	b.WriteString(renderCallToAction("Press Enter to add environment"))
+	b.WriteString(renderStatusBar("↑/↓: navigate  Enter: select  Esc: back  Ctrl-C: quit"))
+
+	return borderStyle.Render(b.String())
+}
+
+func (m WizardModel) renderSelectExisting() string {
+	var b strings.Builder
+
+	b.WriteString(renderHeader("Lockplane Init Wizard"))
 	b.WriteString("\n\n")
-	b.WriteString(renderStatusBar("Esc: back  •  Ctrl-C: quit"))
+	b.WriteString(renderSectionHeader("Select environment to update"))
+	b.WriteString("\n\n")
+
+	for i, envName := range m.existingEnvNames {
+		label := fmt.Sprintf("%d. %s", i+1, envName)
+		b.WriteString(renderOption(i, i == m.selectExistingIdx, label))
+		b.WriteString("\n")
+	}
+
+	if len(m.existingEnvNames) == 0 {
+		b.WriteString(renderInfo("No environments available to update."))
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString(renderStatusBar("↑/↓: choose environment  Enter: continue  Esc: back  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
 }
