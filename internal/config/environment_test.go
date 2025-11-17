@@ -213,3 +213,39 @@ func TestResolveEnvironmentShadowSQLiteDBPathVariant(t *testing.T) {
 		t.Fatalf("Expected SHADOW_SQLITE_DB_PATH value, got %q", env.ShadowDatabaseURL)
 	}
 }
+
+func TestResolveEnvironmentShadowSchemaFallsBackToDatabase(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dotenvPath := filepath.Join(tempDir, ".env.local")
+	data := `POSTGRES_URL=postgresql://user:pass@localhost:5432/db
+SHADOW_SCHEMA=lockplane_shadow
+`
+	if err := os.WriteFile(dotenvPath, []byte(data), 0o600); err != nil {
+		t.Fatalf("Failed to write dotenv file: %v", err)
+	}
+
+	config := &Config{
+		DefaultEnvironment: "local",
+		configDir:          tempDir,
+		Environments: map[string]EnvironmentConfig{
+			"local": {},
+		},
+	}
+
+	env, err := ResolveEnvironment(config, "local")
+	if err != nil {
+		t.Fatalf("ResolveEnvironment returned error: %v", err)
+	}
+
+	if env.DatabaseURL != "postgresql://user:pass@localhost:5432/db" {
+		t.Fatalf("expected POSTGRES_URL value, got %q", env.DatabaseURL)
+	}
+	if env.ShadowSchema != "lockplane_shadow" {
+		t.Fatalf("expected SHADOW_SCHEMA to be set, got %q", env.ShadowSchema)
+	}
+	if env.ShadowDatabaseURL != env.DatabaseURL {
+		t.Fatalf("expected shadow DB to reuse POSTGRES_URL, got %q", env.ShadowDatabaseURL)
+	}
+}

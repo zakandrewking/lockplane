@@ -34,13 +34,17 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 	}
 
 	var (
-		envConfig EnvironmentConfig
-		envExists bool
+		envConfig      EnvironmentConfig
+		envExists      bool
+		shadowExplicit bool
 	)
 	if config != nil && config.Environments != nil {
 		if cfg, ok := config.Environments[envName]; ok {
 			envConfig = cfg
 			envExists = true
+			if cfg.ShadowDatabaseURL != "" {
+				shadowExplicit = true
+			}
 		}
 	}
 
@@ -60,6 +64,9 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		}
 		if config.ShadowDatabaseURL != "" && envConfig.ShadowDatabaseURL == "" {
 			envConfig.ShadowDatabaseURL = config.ShadowDatabaseURL
+			if config.ShadowDatabaseURL != "" {
+				shadowExplicit = true
+			}
 		}
 	}
 
@@ -116,6 +123,7 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		}
 		if value := values["SHADOW_DATABASE_URL"]; value != "" {
 			resolved.ShadowDatabaseURL = value
+			shadowExplicit = true
 		}
 
 		// Then check for database-specific variables (these take precedence if DATABASE_URL wasn't set)
@@ -128,6 +136,7 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		if resolved.ShadowDatabaseURL == "" {
 			if value := values["POSTGRES_SHADOW_URL"]; value != "" {
 				resolved.ShadowDatabaseURL = value
+				shadowExplicit = true
 			}
 		}
 
@@ -140,11 +149,13 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		if resolved.ShadowDatabaseURL == "" {
 			if value := values["SQLITE_SHADOW_DB_PATH"]; value != "" {
 				resolved.ShadowDatabaseURL = value
+				shadowExplicit = true
 			}
 			// Also check the variant with different naming
 			if resolved.ShadowDatabaseURL == "" {
 				if value := values["SHADOW_SQLITE_DB_PATH"]; value != "" {
 					resolved.ShadowDatabaseURL = value
+					shadowExplicit = true
 				}
 			}
 		}
@@ -163,6 +174,7 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		if resolved.ShadowDatabaseURL == "" {
 			if value := values["LIBSQL_SHADOW_DB_PATH"]; value != "" {
 				resolved.ShadowDatabaseURL = value
+				shadowExplicit = true
 			}
 		}
 
@@ -185,8 +197,8 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		resolved.ShadowDatabaseURL = defaultShadowDatabaseURL
 	}
 
-	// If shadow schema is set but no separate shadow URL, use main DB with schema
-	if resolved.ShadowSchema != "" && resolved.ShadowDatabaseURL == "" {
+	// If shadow schema is set but no explicit shadow URL, use main DB with schema
+	if resolved.ShadowSchema != "" && !shadowExplicit {
 		resolved.ShadowDatabaseURL = resolved.DatabaseURL
 	}
 	// Note: If both ShadowSchema and ShadowDatabaseURL are set, that's valid too
