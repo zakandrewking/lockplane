@@ -102,7 +102,9 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 				 FROM information_schema.table_constraints tc
 				 JOIN information_schema.key_column_usage kcu
 				   ON tc.constraint_name = kcu.constraint_name
+				   AND tc.table_schema = kcu.table_schema
 				 WHERE tc.table_name = c.table_name
+				   AND tc.table_schema = c.table_schema
 				   AND tc.constraint_type = 'PRIMARY KEY'
 				   AND kcu.column_name = c.column_name),
 				false
