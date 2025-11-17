@@ -68,7 +68,7 @@ func (i *Introspector) GetTables(ctx context.Context, db *sql.DB) ([]string, err
 	rows, err := db.QueryContext(ctx, `
 		SELECT table_name
 		FROM information_schema.tables
-		WHERE table_schema = 'public'
+		WHERE table_schema = current_schema()
 		AND table_type = 'BASE TABLE'
 		ORDER BY table_name
 	`)
@@ -108,7 +108,7 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 				false
 			) as is_primary_key
 		FROM information_schema.columns c
-		WHERE c.table_schema = 'public'
+		WHERE c.table_schema = current_schema()
 		  AND c.table_name = $1
 		ORDER BY c.ordinal_position
 	`
@@ -165,7 +165,7 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 		JOIN pg_index ix ON ix.indexrelid = (
 			SELECT oid FROM pg_class WHERE relname = i.indexname
 		)
-		WHERE i.schemaname = 'public'
+		WHERE i.schemaname = current_schema()
 		  AND i.tablename = $1
 		ORDER BY i.indexname
 	`
@@ -216,7 +216,7 @@ func (i *Introspector) GetForeignKeys(ctx context.Context, db *sql.DB, tableName
 			ON rc.constraint_name = tc.constraint_name
 			AND rc.constraint_schema = tc.table_schema
 		WHERE tc.constraint_type = 'FOREIGN KEY'
-			AND tc.table_schema = 'public'
+			AND tc.table_schema = current_schema()
 			AND tc.table_name = $1
 		ORDER BY tc.constraint_name, kcu.ordinal_position
 	`
@@ -279,7 +279,7 @@ func (i *Introspector) GetRLSEnabled(ctx context.Context, db *sql.DB, tableName 
 		FROM pg_catalog.pg_class c
 		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 		WHERE c.relname = $1
-		  AND n.nspname = 'public'
+		  AND n.nspname = current_schema()
 		  AND c.relkind = 'r'
 	`
 
