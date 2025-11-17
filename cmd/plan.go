@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/lockplane/lockplane/database"
 	"github.com/lockplane/lockplane/internal/config"
@@ -343,6 +344,87 @@ type SyntaxError struct {
 	Message string
 }
 
+type SQLStatement struct {
+	Text      string
+	StartLine int
+}
+
+// splitSQLStatements splits SQL text into individual statements.
+// It does a simple split on semicolons, tracking line numbers for each statement.
+func splitSQLStatements(sqlText string) []SQLStatement {
+	var statements []SQLStatement
+	var currentStmt strings.Builder
+	currentLine := 1
+	stmtStartLine := 1
+	inString := false
+	inComment := false
+	var stringDelim rune
+	seenNonWhitespace := false
+
+	for i, ch := range sqlText {
+		// Track newlines
+		if ch == '\n' {
+			currentLine++
+		}
+
+		// Track first non-whitespace character for accurate line numbers
+		if !seenNonWhitespace && !unicode.IsSpace(ch) {
+			stmtStartLine = currentLine
+			seenNonWhitespace = true
+		}
+
+		// Handle string literals
+		if !inComment && (ch == '\'' || ch == '"') {
+			if !inString {
+				inString = true
+				stringDelim = ch
+			} else if ch == stringDelim {
+				// Check for escaped quote
+				if i > 0 && sqlText[i-1] != '\\' {
+					inString = false
+				}
+			}
+		}
+
+		// Handle line comments
+		if !inString && ch == '-' && i+1 < len(sqlText) && sqlText[i+1] == '-' {
+			inComment = true
+		}
+		if inComment && ch == '\n' {
+			inComment = false
+		}
+
+		// Add character to current statement
+		currentStmt.WriteRune(ch)
+
+		// Check for statement terminator (semicolon outside strings/comments)
+		if !inString && !inComment && ch == ';' {
+			stmt := currentStmt.String()
+			if strings.TrimSpace(stmt) != "" {
+				statements = append(statements, SQLStatement{
+					Text:      stmt,
+					StartLine: stmtStartLine,
+				})
+			}
+			currentStmt.Reset()
+			seenNonWhitespace = false
+		}
+	}
+
+	// Add any remaining statement
+	if currentStmt.Len() > 0 {
+		stmt := currentStmt.String()
+		if strings.TrimSpace(stmt) != "" {
+			statements = append(statements, SQLStatement{
+				Text:      stmt,
+				StartLine: stmtStartLine,
+			})
+		}
+	}
+
+	return statements
+}
+
 // preValidateSQLSyntax checks all SQL files for syntax errors before hitting the database.
 // Returns all syntax errors found across all files.
 func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxError {
@@ -372,45 +454,55 @@ func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxEr
 		}
 
 		// Parse the SQL based on dialect
-		var parseErr error
 		if dialect == database.DialectPostgres || dialect == database.DialectUnknown {
-			_, parseErr = pg_query.Parse(string(content))
+			// Split SQL into individual statements to catch multiple errors
+			// We do a simple split on semicolon + newline to separate statements
+			sqlText := string(content)
+			statements := splitSQLStatements(sqlText)
+
+			for _, stmt := range statements {
+				stmt.Text = strings.TrimSpace(stmt.Text)
+				if stmt.Text == "" {
+					continue
+				}
+
+				_, parseErr := pg_query.Parse(stmt.Text)
+				if parseErr != nil {
+					// Extract line number from pg_query error
+					errMsg := parseErr.Error()
+					line := stmt.StartLine
+					column := 1
+
+					// pg_query returns *parser.Error with Cursorpos field
+					// Calculate line number by counting newlines up to cursor position
+					if pgErr, ok := parseErr.(*parser.Error); ok && pgErr.Cursorpos > 0 {
+						cursorPos := pgErr.Cursorpos
+						if cursorPos <= len(stmt.Text) {
+							// Add the offset from the start of the statement
+							line = stmt.StartLine + strings.Count(stmt.Text[:cursorPos], "\n")
+
+							// Calculate column as position in the current line
+							lastNewline := strings.LastIndex(stmt.Text[:cursorPos], "\n")
+							if lastNewline >= 0 {
+								column = cursorPos - lastNewline
+							} else {
+								column = cursorPos + 1
+							}
+						}
+					}
+
+					errors = append(errors, SyntaxError{
+						File:    path,
+						Line:    line,
+						Column:  column,
+						Message: errMsg,
+					})
+				}
+			}
 		} else {
 			// For SQLite and other dialects, we currently only support PostgreSQL parsing
 			// TODO: Add SQLite-specific syntax validation
 			return nil
-		}
-
-		if parseErr != nil {
-			// Extract line number from pg_query error
-			errMsg := parseErr.Error()
-			line := 1
-			column := 1
-
-			// pg_query returns *parser.Error with Cursorpos field
-			// Calculate line number by counting newlines up to cursor position
-			if pgErr, ok := parseErr.(*parser.Error); ok && pgErr.Cursorpos > 0 {
-				cursorPos := pgErr.Cursorpos
-				if cursorPos <= len(content) {
-					// Count newlines before the error position
-					line = 1 + strings.Count(string(content[:cursorPos]), "\n")
-
-					// Calculate column as position in the current line
-					lastNewline := strings.LastIndex(string(content[:cursorPos]), "\n")
-					if lastNewline >= 0 {
-						column = cursorPos - lastNewline
-					} else {
-						column = cursorPos + 1
-					}
-				}
-			}
-
-			errors = append(errors, SyntaxError{
-				File:    path,
-				Line:    line,
-				Column:  column,
-				Message: errMsg,
-			})
 		}
 
 		return nil
