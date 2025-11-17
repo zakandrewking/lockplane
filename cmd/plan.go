@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/lockplane/lockplane/database"
@@ -16,6 +17,7 @@ import (
 	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/lockplane/lockplane/internal/schema"
 	"github.com/lockplane/lockplane/internal/validation"
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +52,7 @@ var (
 	planTo              string
 	planFromEnvironment string
 	planToEnvironment   string
-	planValidate        bool
+	planCheckSchema     bool
 	planVerbose         bool
 	planOutput          string
 	planShadowDB        string
@@ -65,7 +67,7 @@ func init() {
 	planCmd.Flags().StringVar(&planTo, "to", "", "Target schema path (file or directory)")
 	planCmd.Flags().StringVar(&planFromEnvironment, "from-environment", "", "Environment providing the source database connection")
 	planCmd.Flags().StringVar(&planToEnvironment, "to-environment", "", "Environment providing the target database connection")
-	planCmd.Flags().BoolVar(&planValidate, "validate", false, "Validate schema files against shadow DB (when used alone) or migration safety (when used with --from/--to)")
+	planCmd.Flags().BoolVar(&planCheckSchema, "check-schema", false, "Check schema files for SQL validity by applying them to a clean shadow database")
 	planCmd.Flags().BoolVarP(&planVerbose, "verbose", "v", false, "Enable verbose logging")
 	planCmd.Flags().StringVar(&planOutput, "output", "", "Output format (default: text, set to 'json' for IDE integration)")
 	planCmd.Flags().StringVar(&planShadowDB, "shadow-db", "", "Shadow database URL for validation")
@@ -84,7 +86,7 @@ func runPlan(cmd *cobra.Command, args []string) {
 	fromInput := strings.TrimSpace(planFrom)
 	toInput := strings.TrimSpace(planTo)
 
-	if planValidate && fromInput == "" && toInput == "" && planFromEnvironment == "" && planToEnvironment == "" {
+	if planCheckSchema && fromInput == "" && toInput == "" && planFromEnvironment == "" && planToEnvironment == "" {
 		// This is the new shadow DB validation mode
 		runShadowDBValidation(cfg, args)
 		return
@@ -184,7 +186,7 @@ func runPlan(cmd *cobra.Command, args []string) {
 	diff = schema.DiffSchemas(before, after)
 
 	// Validate the diff if requested
-	if planValidate {
+	if planCheckSchema {
 		validationResults := validation.ValidateSchemaDiffWithSchema(diff, after)
 
 		if len(validationResults) > 0 {
@@ -332,8 +334,85 @@ func runPlan(cmd *cobra.Command, args []string) {
 	fmt.Println(string(jsonBytes))
 }
 
+// SyntaxError represents a SQL syntax error in a specific file
+type SyntaxError struct {
+	File    string
+	Line    int
+	Column  int
+	Message string
+}
+
+// preValidateSQLSyntax checks all SQL files for syntax errors before hitting the database.
+// Returns all syntax errors found across all files.
+func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxError {
+	var errors []SyntaxError
+
+	// Find all .sql files in the schema directory
+	err := filepath.Walk(schemaDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories and non-.sql files
+		if info.IsDir() || !strings.HasSuffix(path, ".sql") {
+			return nil
+		}
+
+		// Read the file
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			errors = append(errors, SyntaxError{
+				File:    path,
+				Line:    1,
+				Column:  1,
+				Message: fmt.Sprintf("Failed to read file: %v", readErr),
+			})
+			return nil // Continue processing other files
+		}
+
+		// Parse the SQL based on dialect
+		var parseErr error
+		if dialect == database.DialectPostgres || dialect == database.DialectUnknown {
+			_, parseErr = pg_query.Parse(string(content))
+		} else {
+			// For SQLite and other dialects, we currently only support PostgreSQL parsing
+			// TODO: Add SQLite-specific syntax validation
+			return nil
+		}
+
+		if parseErr != nil {
+			// Extract line number from error if possible
+			errMsg := parseErr.Error()
+			line := 1
+			column := 1
+
+			// pg_query error messages often contain line numbers like "syntax error at or near ... at character 42"
+			// We'll just use line 1 for now and show the full error message
+			errors = append(errors, SyntaxError{
+				File:    path,
+				Line:    line,
+				Column:  column,
+				Message: errMsg,
+			})
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		errors = append(errors, SyntaxError{
+			File:    schemaDir,
+			Line:    1,
+			Column:  1,
+			Message: fmt.Sprintf("Failed to walk directory: %v", err),
+		})
+	}
+
+	return errors
+}
+
 // runShadowDBValidation validates schema files by applying them to a shadow database.
-// This is the new validation mode: plan --validate <schema-dir>
+// This is the new validation mode: plan --check-schema <schema-dir>
 func runShadowDBValidation(cfg *config.Config, args []string) {
 	ctx := context.Background()
 
@@ -355,9 +434,36 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 	if schemaDir == "" {
 		fmt.Fprintf(os.Stderr, "Error: No schema directory specified.\n\n")
-		fmt.Fprintf(os.Stderr, "Usage: lockplane plan --validate <schema-dir>\n")
-		fmt.Fprintf(os.Stderr, "   Or: lockplane plan --validate (will auto-detect schema/ directory)\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: lockplane plan --check-schema <schema-dir>\n")
+		fmt.Fprintf(os.Stderr, "   Or: lockplane plan --check-schema (will auto-detect schema/ directory)\n\n")
 		os.Exit(1)
+	}
+
+	// Step 1.5: Pre-validate SQL syntax (fast fail before connecting to DB)
+	if planVerbose {
+		fmt.Fprintf(os.Stderr, "📋 Pre-validating SQL syntax...\n")
+	}
+
+	// Detect dialect based on connection string (we'll infer it)
+	// For now, use Postgres as the default since that's our primary dialect
+	dialect := database.DialectPostgres
+
+	syntaxErrors := preValidateSQLSyntax(schemaDir, dialect)
+	if len(syntaxErrors) > 0 {
+		// Convert syntax errors to diagnostic format
+		var diagnosticMsgs []string
+		for _, syntaxErr := range syntaxErrors {
+			msg := fmt.Sprintf("%s:%d:%d: %s", syntaxErr.File, syntaxErr.Line, syntaxErr.Column, syntaxErr.Message)
+			diagnosticMsgs = append(diagnosticMsgs, msg)
+		}
+
+		// Report all syntax errors
+		mainMsg := fmt.Sprintf("Found %d syntax error(s) in schema files", len(syntaxErrors))
+		validationFailure(mainMsg, diagnosticMsgs)
+	}
+
+	if planVerbose {
+		fmt.Fprintf(os.Stderr, "✓ SQL syntax validation passed\n")
 	}
 
 	// Step 2: Resolve shadow DB connection
@@ -438,7 +544,7 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 		fmt.Fprintf(os.Stderr, "📖 Loading schema from %s...\n", schemaDir)
 	}
 
-	dialect := schema.DriverNameToDialect(driverType)
+	dialect = schema.DriverNameToDialect(driverType)
 	opts := executor.BuildSchemaLoadOptions(schemaDir, dialect)
 	desiredSchema, err := executor.LoadSchemaOrIntrospectWithOptions(schemaDir, opts)
 	if err != nil {

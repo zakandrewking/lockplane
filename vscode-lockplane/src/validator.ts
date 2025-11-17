@@ -11,7 +11,7 @@ export interface ValidationResult {
 }
 
 /**
- * Lockplane CLI diagnostic output structure (from plan --validate --output json)
+ * Lockplane CLI diagnostic output structure (from plan --check-schema --output json)
  */
 export interface LockplaneDiagnostic {
   code?: string;
@@ -62,8 +62,8 @@ export async function validateSchema(
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const cwd = workspaceFolders ? workspaceFolders[0].uri.fsPath : undefined;
 
-    // Use the lockplane plan --validate --output json command
-    const cmd = `${lockplanePath} plan --validate --output json "${schemaPath}"`;
+    // Use the lockplane plan --check-schema --output json command
+    const cmd = `${lockplanePath} plan --check-schema --output json "${schemaPath}"`;
 
     console.log(`[Lockplane] Running command: ${cmd}`);
     console.log(`[Lockplane] Working directory: ${cwd}`);
@@ -90,7 +90,7 @@ export async function validateSchema(
           return;
         }
 
-        // Parse JSON output from plan --validate command
+        // Parse JSON output from plan --check-schema command
         try {
           const output = JSON.parse(stdout);
           console.log(`[Lockplane] Validation output:`, output);

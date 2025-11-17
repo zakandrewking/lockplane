@@ -34,7 +34,7 @@ func TestPlanCommandFlags(t *testing.T) {
 	flags := planCmd.Flags()
 
 	// Test that required flags exist
-	requiredFlags := []string{"from", "to", "from-environment", "to-environment", "validate", "verbose"}
+	requiredFlags := []string{"from", "to", "from-environment", "to-environment", "check-schema", "verbose"}
 
 	for _, flagName := range requiredFlags {
 		flag := flags.Lookup(flagName)
@@ -57,7 +57,7 @@ func TestPlanCommandFlagTypes(t *testing.T) {
 	}
 
 	// Test boolean flags
-	boolFlags := []string{"validate", "verbose"}
+	boolFlags := []string{"check-schema", "verbose"}
 	for _, flagName := range boolFlags {
 		flag := flags.Lookup(flagName)
 		if flag != nil && flag.Value.Type() != "bool" {
