@@ -18,6 +18,7 @@ import (
 	"github.com/lockplane/lockplane/internal/schema"
 	"github.com/lockplane/lockplane/internal/validation"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
+	"github.com/pganalyze/pg_query_go/v6/parser"
 	"github.com/spf13/cobra"
 )
 
@@ -381,13 +382,29 @@ func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxEr
 		}
 
 		if parseErr != nil {
-			// Extract line number from error if possible
+			// Extract line number from pg_query error
 			errMsg := parseErr.Error()
 			line := 1
 			column := 1
 
-			// pg_query error messages often contain line numbers like "syntax error at or near ... at character 42"
-			// We'll just use line 1 for now and show the full error message
+			// pg_query returns *parser.Error with Cursorpos field
+			// Calculate line number by counting newlines up to cursor position
+			if pgErr, ok := parseErr.(*parser.Error); ok && pgErr.Cursorpos > 0 {
+				cursorPos := pgErr.Cursorpos
+				if cursorPos <= len(content) {
+					// Count newlines before the error position
+					line = 1 + strings.Count(string(content[:cursorPos]), "\n")
+
+					// Calculate column as position in the current line
+					lastNewline := strings.LastIndex(string(content[:cursorPos]), "\n")
+					if lastNewline >= 0 {
+						column = cursorPos - lastNewline
+					} else {
+						column = cursorPos + 1
+					}
+				}
+			}
+
 			errors = append(errors, SyntaxError{
 				File:    path,
 				Line:    line,
