@@ -14,9 +14,8 @@ const (
 	StateDatabaseType
 	StatePostgresInputMethod // Choose between individual fields or connection string
 	StateConnectionDetails
-	StateShadowOptions // Choose between default/schema/custom shadow strategies
-	StateShadowDetails // Collect shadow DB inputs
 	StateTestConnection
+	StateShadowPreview // Show shadow DB configuration preview
 	StateAddAnother
 	StateSummary
 	StateCreating
@@ -60,14 +59,9 @@ type WizardModel struct {
 
 	// Postgres input method selection (0=individual fields, 1=connection string)
 	postgresInputMethod int
-	// Shadow DB configuration choices
-	shadowModeChoice   int
-	shadowDetailInputs []textinput.Model
-	shadowDetailIndex  int
 
 	// Validation
-	errors             map[string]string
-	shadowDetailErrors map[string]string
+	errors map[string]string
 
 	// Final output
 	result *InitResult

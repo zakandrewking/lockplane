@@ -16,13 +16,11 @@ import (
 // New creates a new wizard model
 func New() WizardModel {
 	return WizardModel{
-		state:              StateWelcome,
-		environments:       []EnvironmentInput{},
-		errors:             make(map[string]string),
-		shadowDetailErrors: make(map[string]string),
-		inputs:             []textinput.Model{},
-		shadowDetailInputs: []textinput.Model{},
-		dbTypeIndex:        0,
+		state:        StateWelcome,
+		environments: []EnvironmentInput{},
+		errors:       make(map[string]string),
+		inputs:       []textinput.Model{},
+		dbTypeIndex:  0,
 	}
 }
 
@@ -133,12 +131,10 @@ func (m WizardModel) View() string {
 		return m.renderPostgresInputMethod()
 	case StateConnectionDetails:
 		return m.renderConnectionDetails()
-	case StateShadowOptions:
-		return m.renderShadowOptions()
-	case StateShadowDetails:
-		return m.renderShadowDetails()
 	case StateTestConnection:
 		return m.renderTestConnection()
+	case StateShadowPreview:
+		return m.renderShadowPreview()
 	case StateAddAnother:
 		return m.renderAddAnother()
 	case StateSummary:
@@ -219,18 +215,7 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		if err := m.collectInputValues(); err != nil {
 			return m, nil
 		}
-		m.prepareShadowOptions()
-		return m, nil
-
-	case StateShadowOptions:
-		m.initializeShadowDetailInputs()
-		m.state = StateShadowDetails
-		return m, nil
-
-	case StateShadowDetails:
-		if err := m.collectShadowDetailValues(); err != nil {
-			return m, nil
-		}
+		// Move directly to connection testing
 		m.state = StateTestConnection
 		m.testingConnection = true
 		return m, m.testConnection()
@@ -238,30 +223,7 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 	case StateTestConnection:
 		switch m.connectionTestResult {
 		case "success":
-			m.state = StateAddAnother
-			// Save the current environment
-			m.environments = append(m.environments, m.currentEnv)
-			// Add to all environments list
-			if m.editingExisting {
-				replaced := false
-				for i, name := range m.allEnvironments {
-					if strings.EqualFold(name, m.editingEnvName) {
-						m.allEnvironments[i] = m.currentEnv.Name
-						replaced = true
-						break
-					}
-				}
-				if !replaced {
-					m.allEnvironments = append(m.allEnvironments, m.currentEnv.Name)
-				}
-			} else {
-				m.allEnvironments = append(m.allEnvironments, m.currentEnv.Name)
-			}
-			// Reset current environment
-			m.currentEnv = EnvironmentInput{}
-			m.resetEditingState()
-			// Reset add another choice
-			m.addAnotherChoice = 0
+			m.state = StateShadowPreview
 			return m, nil
 		case "failed":
 			// Handle retry choice
@@ -281,6 +243,34 @@ func (m *WizardModel) handleEnter() (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		}
+		return m, nil
+
+	case StateShadowPreview:
+		// User reviewed shadow DB preview, save environment and proceed
+		m.state = StateAddAnother
+		// Save the current environment
+		m.environments = append(m.environments, m.currentEnv)
+		// Add to all environments list
+		if m.editingExisting {
+			replaced := false
+			for i, name := range m.allEnvironments {
+				if strings.EqualFold(name, m.editingEnvName) {
+					m.allEnvironments[i] = m.currentEnv.Name
+					replaced = true
+					break
+				}
+			}
+			if !replaced {
+				m.allEnvironments = append(m.allEnvironments, m.currentEnv.Name)
+			}
+		} else {
+			m.allEnvironments = append(m.allEnvironments, m.currentEnv.Name)
+		}
+		// Reset current environment
+		m.currentEnv = EnvironmentInput{}
+		m.resetEditingState()
+		// Reset add another choice
+		m.addAnotherChoice = 0
 		return m, nil
 
 	case StateAddAnother:
@@ -332,15 +322,6 @@ func (m *WizardModel) handleUp() (tea.Model, tea.Cmd) {
 			m.focusIndex--
 			m.updateInputFocus()
 		}
-	case StateShadowOptions:
-		if m.shadowModeChoice > 0 {
-			m.shadowModeChoice--
-		}
-	case StateShadowDetails:
-		if m.shadowDetailIndex > 0 {
-			m.shadowDetailIndex--
-			m.updateShadowDetailFocus()
-		}
 	case StateTestConnection:
 		if m.connectionTestResult == "failed" && m.retryChoice > 0 {
 			m.retryChoice--
@@ -380,15 +361,6 @@ func (m *WizardModel) handleDown() (tea.Model, tea.Cmd) {
 			m.focusIndex++
 			m.updateInputFocus()
 		}
-	case StateShadowOptions:
-		if m.shadowModeChoice < m.shadowOptionCount()-1 {
-			m.shadowModeChoice++
-		}
-	case StateShadowDetails:
-		if m.shadowDetailIndex < len(m.shadowDetailInputs)-1 {
-			m.shadowDetailIndex++
-			m.updateShadowDetailFocus()
-		}
 	case StateTestConnection:
 		if m.connectionTestResult == "failed" && m.retryChoice < 2 {
 			m.retryChoice++
@@ -407,11 +379,6 @@ func (m *WizardModel) handleTab() (tea.Model, tea.Cmd) {
 		if len(m.inputs) > 0 {
 			m.focusIndex = (m.focusIndex + 1) % len(m.inputs)
 			m.updateInputFocus()
-		}
-	case StateShadowDetails:
-		if len(m.shadowDetailInputs) > 0 {
-			m.shadowDetailIndex = (m.shadowDetailIndex + 1) % len(m.shadowDetailInputs)
-			m.updateShadowDetailFocus()
 		}
 	}
 	return m, nil
@@ -448,12 +415,11 @@ func (m *WizardModel) handleBack() (tea.Model, tea.Cmd) {
 		m.errors = make(map[string]string)
 		return m, nil
 
-	case StateShadowOptions:
+	case StateShadowPreview:
+		// Go back to connection details to edit
 		m.state = StateConnectionDetails
-		return m, nil
-
-	case StateShadowDetails:
-		m.state = StateShadowOptions
+		m.connectionTestResult = ""
+		m.connectionError = nil
 		return m, nil
 
 	case StateSelectExisting:
@@ -501,12 +467,6 @@ func (m *WizardModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.inputs) > 0 {
 			var cmd tea.Cmd
 			m.inputs[m.focusIndex], cmd = m.inputs[m.focusIndex].Update(msg)
-			return m, cmd
-		}
-	case StateShadowDetails:
-		if len(m.shadowDetailInputs) > 0 {
-			var cmd tea.Cmd
-			m.shadowDetailInputs[m.shadowDetailIndex], cmd = m.shadowDetailInputs[m.shadowDetailIndex].Update(msg)
 			return m, cmd
 		}
 	}
@@ -583,119 +543,6 @@ func (m *WizardModel) updateInputFocus() {
 		} else {
 			m.inputs[i].Blur()
 			m.inputs[i].PromptStyle = blurredPromptStyle
-		}
-	}
-}
-
-func (m *WizardModel) prepareShadowOptions() {
-	m.shadowModeChoice = 0
-	m.shadowDetailInputs = []textinput.Model{}
-	m.shadowDetailIndex = 0
-	m.shadowDetailErrors = make(map[string]string)
-	m.state = StateShadowOptions
-}
-
-func (m *WizardModel) shadowOptionCount() int {
-	switch m.currentEnv.DatabaseType {
-	case "postgres":
-		return 2
-	case "sqlite", "libsql":
-		return 2
-	default:
-		return 1
-	}
-}
-
-func (m *WizardModel) shadowOptionLabels() []string {
-	switch m.currentEnv.DatabaseType {
-	case "postgres":
-		dbName := fallback(m.currentEnv.Database, "lockplane")
-		port := fallback(m.currentEnv.ShadowDBPort, "5433")
-		return []string{
-			fmt.Sprintf("Separate database (%s_shadow on port %s)", dbName, port),
-			fmt.Sprintf("Reuse %s via SHADOW_SCHEMA", dbName),
-		}
-	case "sqlite":
-		defaultPath := BuildSQLiteShadowConnectionString(m.currentEnv)
-		return []string{
-			fmt.Sprintf("Use recommended file (%s)", defaultPath),
-			"Provide custom shadow file path",
-		}
-	case "libsql":
-		defaultPath := BuildLibSQLShadowConnectionString(m.currentEnv)
-		return []string{
-			fmt.Sprintf("Use local SQLite file (%s)", defaultPath),
-			"Provide custom shadow file path",
-		}
-	default:
-		return []string{"Use recommended defaults"}
-	}
-}
-
-func (m *WizardModel) shadowDetailDescription() string {
-	switch m.currentEnv.DatabaseType {
-	case "postgres":
-		if m.shadowModeChoice == 0 {
-			return "Customize the port used for the separate shadow database (defaults to 5433)."
-		}
-		return "Enter the schema name Lockplane should use inside your primary database."
-	case "sqlite":
-		return "Confirm or override the SQLite file path for your shadow database."
-	case "libsql":
-		return "Confirm or override the local SQLite file path used for Turso validation."
-	default:
-		return "Configure your shadow database settings."
-	}
-}
-
-func (m *WizardModel) initializeShadowDetailInputs() {
-	m.shadowDetailInputs = []textinput.Model{}
-	m.shadowDetailIndex = 0
-	m.shadowDetailErrors = make(map[string]string)
-
-	switch m.currentEnv.DatabaseType {
-	case "postgres":
-		if m.shadowModeChoice == 0 {
-			defaultPort := m.currentEnv.ShadowDBPort
-			if defaultPort == "" {
-				defaultPort = "5433"
-			}
-			m.shadowDetailInputs = append(m.shadowDetailInputs, m.makeInput("Shadow DB port", defaultPort, false))
-		} else {
-			defaultSchema := m.currentEnv.ShadowSchema
-			if defaultSchema == "" {
-				defaultSchema = "lockplane_shadow"
-			}
-			m.shadowDetailInputs = append(m.shadowDetailInputs, m.makeInput("Shadow schema name", defaultSchema, false))
-		}
-	case "sqlite":
-		defaultPath := m.currentEnv.ShadowDBPath
-		if defaultPath == "" {
-			defaultPath = BuildSQLiteShadowConnectionString(m.currentEnv)
-		}
-		m.shadowDetailInputs = append(m.shadowDetailInputs, m.makeInput("Shadow DB path", defaultPath, false))
-	case "libsql":
-		defaultPath := m.currentEnv.ShadowDBPath
-		if defaultPath == "" {
-			defaultPath = BuildLibSQLShadowConnectionString(m.currentEnv)
-		}
-		m.shadowDetailInputs = append(m.shadowDetailInputs, m.makeInput("Shadow DB path", defaultPath, false))
-	}
-
-	if len(m.shadowDetailInputs) > 0 {
-		m.shadowDetailInputs[0].Focus()
-		m.shadowDetailInputs[0].PromptStyle = focusedPromptStyle
-	}
-}
-
-func (m *WizardModel) updateShadowDetailFocus() {
-	for i := range m.shadowDetailInputs {
-		if i == m.shadowDetailIndex {
-			m.shadowDetailInputs[i].Focus()
-			m.shadowDetailInputs[i].PromptStyle = focusedPromptStyle
-		} else {
-			m.shadowDetailInputs[i].Blur()
-			m.shadowDetailInputs[i].PromptStyle = blurredPromptStyle
 		}
 	}
 }
@@ -800,48 +647,6 @@ func (m *WizardModel) collectInputValues() error {
 		m.focusIndex = 0
 		m.state = StateCheckExisting
 		return fmt.Errorf("environment name already exists")
-	}
-
-	return nil
-}
-
-func (m *WizardModel) collectShadowDetailValues() error {
-	m.shadowDetailErrors = make(map[string]string)
-
-	switch m.currentEnv.DatabaseType {
-	case "postgres":
-		if len(m.shadowDetailInputs) < 1 {
-			return fmt.Errorf("not enough inputs")
-		}
-		value := strings.TrimSpace(m.shadowDetailInputs[0].Value())
-		if value == "" {
-			err := fmt.Errorf("shadow configuration is required")
-			m.shadowDetailErrors["shadow"] = err.Error()
-			return err
-		}
-
-		if m.shadowModeChoice == 0 {
-			if err := ValidatePort(value); err != nil {
-				m.shadowDetailErrors["shadow"] = err.Error()
-				return err
-			}
-			m.currentEnv.ShadowDBPort = value
-			m.currentEnv.ShadowSchema = ""
-		} else {
-			m.currentEnv.ShadowSchema = value
-			m.currentEnv.ShadowDBPort = ""
-		}
-	case "sqlite", "libsql":
-		if len(m.shadowDetailInputs) < 1 {
-			return fmt.Errorf("not enough inputs")
-		}
-		path := strings.TrimSpace(m.shadowDetailInputs[0].Value())
-		if path == "" {
-			err := fmt.Errorf("shadow DB path is required")
-			m.shadowDetailErrors["shadow"] = err.Error()
-			return err
-		}
-		m.currentEnv.ShadowDBPath = normalizeSQLitePath(path)
 	}
 
 	return nil
@@ -1093,75 +898,6 @@ func (m WizardModel) renderPostgresInputMethod() string {
 	return borderStyle.Render(b.String())
 }
 
-func (m WizardModel) renderShadowOptions() string {
-	var b strings.Builder
-
-	dbType := DatabaseTypes[m.dbTypeIndex]
-
-	b.WriteString(renderHeader("Lockplane Init Wizard"))
-	b.WriteString("\n\n")
-	b.WriteString(renderSectionHeader("Shadow Database Strategy"))
-	b.WriteString("\n\n")
-	b.WriteString(renderInfo("Lockplane tests migrations on a shadow database before touching your real data. Choose how you want that shadow provisioned."))
-	b.WriteString("\n\n")
-	b.WriteString(fmt.Sprintf("Selected database: %s %s\n\n", dbType.Icon, dbType.DisplayName))
-
-	switch m.currentEnv.DatabaseType {
-	case "postgres":
-		b.WriteString(renderInfo("Options:\n  • Separate database (<database>_shadow on port 5433)\n  • Schema inside the same database via SHADOW_SCHEMA"))
-	case "sqlite":
-		b.WriteString(renderInfo("Options:\n  • File beside your primary DB (<filename>_shadow.db)\n  • Custom file path"))
-	case "libsql":
-		b.WriteString(renderInfo("Options:\n  • Local SQLite shadow (./schema/turso_shadow.db)\n  • Custom file path"))
-	}
-
-	b.WriteString("\n\n")
-	for i, option := range m.shadowOptionLabels() {
-		b.WriteString(renderOption(i, m.shadowModeChoice == i, option))
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n")
-	b.WriteString(renderStatusBar("↑/↓: choose option  Enter: select  Esc: back  Ctrl-C: quit"))
-
-	return borderStyle.Render(b.String())
-}
-
-func (m WizardModel) renderShadowDetails() string {
-	var b strings.Builder
-
-	b.WriteString(renderHeader("Lockplane Init Wizard"))
-	b.WriteString("\n\n")
-	b.WriteString(renderSectionHeader("Shadow Database Configuration"))
-	b.WriteString("\n\n")
-	b.WriteString(renderInfo(m.shadowDetailDescription()))
-	b.WriteString("\n\n")
-
-	for i, input := range m.shadowDetailInputs {
-		label := input.Placeholder
-		if i == m.shadowDetailIndex {
-			b.WriteString(selectedStyle.Render("► " + label + ":"))
-		} else {
-			b.WriteString(labelStyle.Render("  " + label + ":"))
-		}
-		b.WriteString("\n  ")
-		b.WriteString(input.View())
-		b.WriteString("\n\n")
-	}
-
-	if len(m.shadowDetailErrors) > 0 {
-		for _, errMsg := range m.shadowDetailErrors {
-			b.WriteString(renderError(errMsg))
-			b.WriteString("\n")
-		}
-		b.WriteString("\n")
-	}
-
-	b.WriteString(renderStatusBar("Enter: save  ↑/↓ or Tab: navigate  Esc: back  Ctrl-C: quit"))
-
-	return borderStyle.Render(b.String())
-}
-
 func (m WizardModel) renderConnectionDetails() string {
 	var b strings.Builder
 
@@ -1253,6 +989,73 @@ func (m WizardModel) renderTestConnection() string {
 	} else {
 		b.WriteString(renderStatusBar("Press Enter to continue"))
 	}
+
+	return borderStyle.Render(b.String())
+}
+
+func (m WizardModel) renderShadowPreview() string {
+	var b strings.Builder
+
+	b.WriteString(renderHeader("Lockplane Init Wizard"))
+	b.WriteString("\n\n")
+	b.WriteString(renderSectionHeader("Shadow Database Configuration"))
+	b.WriteString("\n\n")
+
+	// Explanation
+	b.WriteString(renderInfo("Shadow databases are used to safely test migrations before applying them to your main database."))
+	b.WriteString("\n")
+	b.WriteString(renderInfo("Lockplane will automatically configure a shadow database for validation."))
+	b.WriteString("\n\n")
+
+	// Show configuration based on database type
+	switch m.currentEnv.DatabaseType {
+	case "postgres":
+		b.WriteString("📊 Main Database:\n")
+		b.WriteString(fmt.Sprintf("   Host:     %s\n", m.currentEnv.Host))
+		b.WriteString(fmt.Sprintf("   Port:     %s\n", m.currentEnv.Port))
+		b.WriteString(fmt.Sprintf("   Database: %s\n", m.currentEnv.Database))
+		b.WriteString("\n")
+		b.WriteString("🔄 Shadow Database (auto-configured):\n")
+		b.WriteString(fmt.Sprintf("   Host:     %s\n", m.currentEnv.Host))
+		shadowPort := m.currentEnv.ShadowDBPort
+		if shadowPort == "" {
+			shadowPort = "5433" // Default
+		}
+		b.WriteString(fmt.Sprintf("   Port:     %s\n", shadowPort))
+		shadowDB := m.currentEnv.Database + "_shadow"
+		b.WriteString(fmt.Sprintf("   Database: %s\n", shadowDB))
+		b.WriteString("\n")
+		b.WriteString(renderInfo("Environment variable: POSTGRES_SHADOW_URL"))
+
+	case "sqlite":
+		b.WriteString("📊 Main Database:\n")
+		b.WriteString(fmt.Sprintf("   Path: %s\n", m.currentEnv.FilePath))
+		b.WriteString("\n")
+		b.WriteString("🔄 Shadow Database (auto-configured):\n")
+		shadowPath := m.currentEnv.ShadowDBPath
+		if shadowPath == "" {
+			// Generate default shadow path
+			shadowPath = strings.TrimSuffix(m.currentEnv.FilePath, ".db") + "_shadow.db"
+		}
+		b.WriteString(fmt.Sprintf("   Path: %s\n", shadowPath))
+		b.WriteString("\n")
+		b.WriteString(renderInfo("Environment variable: SQLITE_SHADOW_DB_PATH"))
+
+	case "libsql":
+		b.WriteString("📊 Main Database:\n")
+		b.WriteString(fmt.Sprintf("   URL: %s\n", m.currentEnv.URL))
+		b.WriteString("\n")
+		b.WriteString("🔄 Shadow Database (auto-configured):\n")
+		shadowPath := "./schema/turso_shadow.db"
+		b.WriteString(fmt.Sprintf("   Local Path: %s\n", shadowPath))
+		b.WriteString("\n")
+		b.WriteString(renderInfo("libSQL/Turso uses a local SQLite file for shadow testing"))
+		b.WriteString("\n")
+		b.WriteString(renderInfo("Environment variable: LIBSQL_SHADOW_DB_PATH"))
+	}
+
+	b.WriteString("\n\n")
+	b.WriteString(renderStatusBar("Press Enter to continue  Esc: back  Ctrl-C: quit"))
 
 	return borderStyle.Render(b.String())
 }
