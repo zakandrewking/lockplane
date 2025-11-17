@@ -130,9 +130,23 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 		}
 
 		col.Type = strings.TrimSpace(col.Type)
+
+		// Detect SERIAL/BIGSERIAL pseudo-types
+		// PostgreSQL converts BIGSERIAL to BIGINT with nextval() default
+		// and SERIAL to INTEGER with nextval() default
+		actualType := col.Type
+		if defaultVal.Valid && isSerialDefault(defaultVal.String) {
+			if strings.EqualFold(col.Type, "bigint") {
+				actualType = "bigserial"
+			} else if strings.EqualFold(col.Type, "integer") {
+				actualType = "serial"
+			}
+		}
+
+		col.Type = actualType
 		col.TypeMetadata = &database.TypeMetadata{
-			Logical: strings.ToLower(col.Type),
-			Raw:     col.Type,
+			Logical: strings.ToLower(actualType),
+			Raw:     actualType,
 			Dialect: database.DialectPostgres,
 		}
 
@@ -273,6 +287,14 @@ func (i *Introspector) GetForeignKeys(ctx context.Context, db *sql.DB, tableName
 	}
 
 	return foreignKeys, nil
+}
+
+// isSerialDefault checks if a default value is from a sequence (indicating SERIAL/BIGSERIAL)
+func isSerialDefault(defaultVal string) bool {
+	// SERIAL/BIGSERIAL columns have defaults like:
+	// - nextval('tablename_columnname_seq'::regclass)
+	// - nextval('sequence_name'::regclass)
+	return strings.HasPrefix(defaultVal, "nextval(") && strings.Contains(defaultVal, "_seq")
 }
 
 // GetRLSEnabled checks if Row Level Security is enabled for a table
