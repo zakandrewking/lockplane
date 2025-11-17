@@ -1051,6 +1051,12 @@ func validationFailure(message string, details []string) {
 	if mainMsg == "" {
 		mainMsg = "Schema validation failed."
 	}
+
+	// Add helpful debugging context for connection errors
+	if isConnectionError(mainMsg) {
+		mainMsg = enhanceConnectionError(mainMsg)
+	}
+
 	formatted := mainMsg
 	if len(details) > 0 {
 		formatted = fmt.Sprintf("%s\n%s", mainMsg, strings.Join(details, "\n"))
@@ -1080,6 +1086,84 @@ func validationFailure(message string, details []string) {
 		}
 	}
 	os.Exit(1)
+}
+
+// isConnectionError checks if the error message is related to database connection issues
+func isConnectionError(msg string) bool {
+	connectionPatterns := []string{
+		"connection refused",
+		"dial tcp",
+		"Failed to connect",
+		"Failed to create shadow schema",
+		"Failed to set shadow schema",
+		"Failed to clean shadow database",
+		"no such host",
+		"network unreachable",
+		"i/o timeout",
+	}
+	msgLower := strings.ToLower(msg)
+	for _, pattern := range connectionPatterns {
+		if strings.Contains(msgLower, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+	return false
+}
+
+// enhanceConnectionError adds debugging context to connection errors
+func enhanceConnectionError(msg string) string {
+	var helpText string
+	if strings.Contains(strings.ToLower(msg), "connection refused") || strings.Contains(strings.ToLower(msg), "dial tcp") {
+		helpText = `
+
+💡 Debugging steps:
+  1. Check if your database is running
+     • For local PostgreSQL: sudo systemctl status postgresql
+     • For Docker: docker ps | grep postgres
+
+  2. Verify connection settings in your config
+     • Check lockplane.toml [environments] section
+     • Check .env files (SHADOW_DATABASE_URL, SHADOW_SCHEMA)
+
+  3. Test the connection manually
+     • PostgreSQL: psql <connection-string>
+     • Run: lockplane init to reconfigure shadow database
+
+  4. Common issues:
+     • Wrong port number (default PostgreSQL is 5432)
+     • Database server not started
+     • Firewall blocking the connection
+     • Wrong host (should be 'localhost' or '127.0.0.1' for local)`
+	} else if strings.Contains(strings.ToLower(msg), "failed to create shadow schema") {
+		helpText = `
+
+💡 Debugging steps:
+  1. Verify you have permissions to create schemas
+     • Check database user permissions
+     • May need CREATEDB or schema creation privileges
+
+  2. Check if the schema already exists
+     • PostgreSQL: \dn in psql
+     • May need to drop existing schema first
+
+  3. Verify connection to the correct database
+     • Check lockplane.toml configuration
+     • Run: lockplane init to reconfigure
+
+  4. Check shadow database configuration
+     • Ensure SHADOW_DATABASE_URL is set correctly
+     • Default shadow schema name: "lockplane_shadow"`
+	} else {
+		helpText = `
+
+💡 Debugging steps:
+  1. Verify your database connection settings in lockplane.toml
+  2. Check that your database server is running
+  3. Test connection manually with psql or your database client
+  4. Run: lockplane init to reconfigure shadow database settings`
+	}
+
+	return msg + helpText
 }
 
 func validationSuccess(result *planner.ExecutionResult, warnings []SyntaxError) {
