@@ -493,7 +493,7 @@ func detectTrailingComma(sqlText string, errMsg string, cursorPos int, startLine
 		// Calculate line and column for the comma
 		line := startLine + strings.Count(sqlText[:commaPos+1], "\n")
 		lastNewline := strings.LastIndex(sqlText[:commaPos+1], "\n")
-		column := 1
+		var column int
 		if lastNewline >= 0 {
 			column = commaPos - lastNewline
 		} else {
