@@ -40,14 +40,14 @@ Three modes of operation:
 }
 
 var (
-	applyTarget      string
-	applyTargetEnv   string
-	applySchema      string
-	applyAutoApprove bool
-	applySkipShadow  bool
-	applyShadowDB    string
-	applyShadowEnv   string
-	applyVerbose     bool
+	applyTarget       string
+	applyTargetEnv    string
+	applySchema       string
+	applyAutoApprove  bool
+	applySkipShadow   bool
+	applyShadowDB     string
+	applyShadowSchema string
+	applyVerbose      bool
 )
 
 func init() {
@@ -59,7 +59,7 @@ func init() {
 	applyCmd.Flags().BoolVar(&applyAutoApprove, "auto-approve", false, "Skip interactive approval")
 	applyCmd.Flags().BoolVar(&applySkipShadow, "skip-shadow", false, "Skip shadow DB validation (not recommended)")
 	applyCmd.Flags().StringVar(&applyShadowDB, "shadow-db", "", "Shadow database URL")
-	applyCmd.Flags().StringVar(&applyShadowEnv, "shadow-environment", "", "Shadow environment")
+	applyCmd.Flags().StringVar(&applyShadowSchema, "shadow-schema", "", "Shadow schema name (PostgreSQL only)")
 	applyCmd.Flags().BoolVarP(&applyVerbose, "verbose", "v", false, "Verbose logging")
 }
 
@@ -282,30 +282,31 @@ func runApply(cmd *cobra.Command, args []string) {
 	var shadowSchema string
 	if !applySkipShadow {
 		shadowConnStr := strings.TrimSpace(applyShadowDB)
-		if shadowConnStr == "" {
-			shadowEnvName := strings.TrimSpace(applyShadowEnv)
-			if shadowEnvName == "" {
-				shadowEnvName = resolvedTarget.Name
-			}
-			resolvedShadow, err := config.ResolveEnvironment(cfg, shadowEnvName)
-			if err != nil {
-				log.Fatalf("Failed to resolve shadow environment: %v", err)
-			}
-			shadowConnStr = resolvedShadow.ShadowDatabaseURL
-			shadowSchema = resolvedShadow.ShadowSchema
+		shadowSchema = strings.TrimSpace(applyShadowSchema)
+		resolvedShadow := resolvedTarget
 
-			// For SQLite/libSQL, default to :memory: if no shadow DB configured
-			if shadowConnStr == "" && (driverType == "sqlite" || driverType == "sqlite3" || driverType == "libsql") {
-				shadowConnStr = ":memory:"
-				_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "ℹ️  Using in-memory shadow database (fast, zero config)\n")
-			} else if shadowConnStr == "" {
-				fmt.Fprintf(os.Stderr, "Error: no shadow database configured for environment %q.\n", resolvedShadow.Name)
-				fmt.Fprintf(os.Stderr, "Options:\n")
-				fmt.Fprintf(os.Stderr, "  - Add SHADOW_DATABASE_URL to .env.%s\n", resolvedShadow.Name)
-				fmt.Fprintf(os.Stderr, "  - Add SHADOW_SCHEMA=lockplane_shadow (PostgreSQL only)\n")
-				fmt.Fprintf(os.Stderr, "  - Provide --shadow-db flag\n")
-				os.Exit(1)
-			}
+		if shadowConnStr == "" {
+			shadowConnStr = resolvedShadow.ShadowDatabaseURL
+		}
+		if shadowSchema == "" {
+			shadowSchema = resolvedShadow.ShadowSchema
+		}
+		if shadowSchema != "" && shadowConnStr == "" {
+			// Reuse the main database when only a schema override is provided.
+			shadowConnStr = targetConnStr
+		}
+
+		// For SQLite/libSQL, default to :memory: if no shadow DB configured
+		if shadowConnStr == "" && (driverType == "sqlite" || driverType == "sqlite3" || driverType == "libsql") {
+			shadowConnStr = ":memory:"
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "ℹ️  Using in-memory shadow database (fast, zero config)\n")
+		} else if shadowConnStr == "" {
+			fmt.Fprintf(os.Stderr, "Error: no shadow database configured for environment %q.\n", resolvedShadow.Name)
+			fmt.Fprintf(os.Stderr, "Options:\n")
+			fmt.Fprintf(os.Stderr, "  - Add SHADOW_DATABASE_URL to .env.%s\n", resolvedShadow.Name)
+			fmt.Fprintf(os.Stderr, "  - Add/override SHADOW_SCHEMA (or --shadow-schema) to reuse the primary database\n")
+			fmt.Fprintf(os.Stderr, "  - Provide --shadow-db flag\n")
+			os.Exit(1)
 		}
 
 		// Detect shadow database driver type

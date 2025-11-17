@@ -54,7 +54,7 @@ var (
 	planVerbose         bool
 	planOutput          string
 	planShadowDB        string
-	planShadowEnv       string
+	planShadowSchema    string
 	planCacheDir        string
 )
 
@@ -69,7 +69,7 @@ func init() {
 	planCmd.Flags().BoolVarP(&planVerbose, "verbose", "v", false, "Enable verbose logging")
 	planCmd.Flags().StringVar(&planOutput, "output", "", "Output format: json (for IDE integration)")
 	planCmd.Flags().StringVar(&planShadowDB, "shadow-db", "", "Shadow database URL for validation")
-	planCmd.Flags().StringVar(&planShadowEnv, "shadow-environment", "", "Shadow database environment for validation")
+	planCmd.Flags().StringVar(&planShadowSchema, "shadow-schema", "", "Shadow schema name when reusing an existing database")
 	planCmd.Flags().StringVar(&planCacheDir, "cache-dir", "", "Directory for caching shadow DB state (for incremental validation)")
 }
 
@@ -362,20 +362,34 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 	// Step 2: Resolve shadow DB connection
 	shadowConnStr := strings.TrimSpace(planShadowDB)
-	if shadowConnStr == "" {
-		// Try to resolve from environment
-		shadowEnv, err := config.ResolveEnvironment(cfg, planShadowEnv)
-		if err == nil && shadowEnv.ShadowDatabaseURL != "" {
-			shadowConnStr = shadowEnv.ShadowDatabaseURL
+	shadowSchema := strings.TrimSpace(planShadowSchema)
+
+	var resolvedShadow *config.ResolvedEnvironment
+	if shadowConnStr == "" || shadowSchema == "" {
+		if env, err := config.ResolveEnvironment(cfg, ""); err == nil {
+			resolvedShadow = env
+			if shadowConnStr == "" {
+				shadowConnStr = env.ShadowDatabaseURL
+			}
+			if shadowSchema == "" {
+				shadowSchema = env.ShadowSchema
+			}
+			if shadowSchema != "" && shadowConnStr == "" {
+				shadowConnStr = env.DatabaseURL
+			}
 		}
 	}
 
 	if shadowConnStr == "" {
+		exampleEnv := "local"
+		if resolvedShadow != nil && resolvedShadow.Name != "" {
+			exampleEnv = resolvedShadow.Name
+		}
 		fmt.Fprintf(os.Stderr, "Error: No shadow database configured.\n\n")
 		fmt.Fprintf(os.Stderr, "Provide shadow DB via:\n")
 		fmt.Fprintf(os.Stderr, "  - --shadow-db flag\n")
-		fmt.Fprintf(os.Stderr, "  - --shadow-environment flag\n")
-		fmt.Fprintf(os.Stderr, "  - shadow_database_url in lockplane.toml\n\n")
+		fmt.Fprintf(os.Stderr, "  - SHADOW_DATABASE_URL or SHADOW_SCHEMA in .env.%s\n", exampleEnv)
+		fmt.Fprintf(os.Stderr, "  - lockplane init (auto-configures shadow DB settings)\n\n")
 		os.Exit(1)
 	}
 
@@ -397,6 +411,16 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 	defer func() {
 		_ = shadowDB.Close()
 	}()
+
+	if shadowSchema != "" && driver.SupportsSchemas() {
+		if err := driver.CreateSchema(ctx, shadowDB, shadowSchema); err != nil {
+			log.Fatalf("Failed to create shadow schema: %v", err)
+		}
+		if err := driver.SetSchema(ctx, shadowDB, shadowSchema); err != nil {
+			log.Fatalf("Failed to set shadow schema: %v", err)
+		}
+		fmt.Fprintf(os.Stderr, "ℹ️  Using shadow schema %q for validation\n", shadowSchema)
+	}
 
 	// Step 4: Clean shadow DB
 	if planVerbose {

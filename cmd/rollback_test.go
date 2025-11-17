@@ -30,7 +30,7 @@ func TestRollbackCommandFlags(t *testing.T) {
 		"auto-approve":       "bool",
 		"skip-shadow":        "bool",
 		"shadow-db":          "string",
-		"shadow-environment": "string",
+		"shadow-schema":      "string",
 		"verbose":            "bool",
 	}
 

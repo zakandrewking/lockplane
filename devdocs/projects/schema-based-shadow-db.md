@@ -1,6 +1,8 @@
 # Schema-Based Shadow Database Support
 
-> **Design Decision**: SQLite shadow databases will use `:memory:` as the default instead of temporary files. This provides the fastest possible performance, automatic cleanup, and zero configuration. Users can still override with an explicit file path for debugging if needed.
+> **Status**: 🏗️ Reopened (2025-11-17) to finish CLI + docs parity, drop the deprecated `--shadow-environment` flag, and ship a first-class `--shadow-schema` override.
+>
+> **Design Decision**: SQLite shadow databases use `:memory:` by default for speed and zero-config cleanup. Users can still supply explicit file paths when debugging.
 
 ## Progress Checklist
 
@@ -27,13 +29,15 @@
 - [x] Add support for explicit file path override
 - [x] Automatic cleanup (connection close handles it)
 
-### Phase 4: Configuration & UX ✅
+### Phase 4: Configuration & UX
 - [x] Environment resolution handles SHADOW_SCHEMA variable
 - [x] Helpful error messages for missing shadow configuration
 - [x] Automatic :memory: fallback for SQLite/libSQL
 - [x] Clear user messages about shadow strategy being used
-- [ ] Update `lockplane init` wizard with schema options (future)
-- [ ] Add `--shadow-schema` CLI flag (future - can use env var for now)
+- [x] Update `lockplane init` wizard with schema options
+- [ ] Add `--shadow-schema` CLI flag (apply/plan/rollback parity)
+- [ ] Remove `--shadow-environment` flag (reduce redundant UX)
+- [ ] Document fallback order when both `--shadow-db` and schema overrides exist
 
 ### Phase 5: Testing ✅
 - [x] Unit tests for schema operations (postgres + sqlite drivers)
@@ -117,6 +121,17 @@ lockplane apply migration.json  # Creates temp shadow DB, cleans up after
 2. **Lower costs**: Eliminate need for separate database instances
 3. **Maintain safety**: Preserve isolation between production and shadow operations
 4. **Backward compatibility**: Existing configurations continue to work
+
+---
+
+## Current Focus (Nov 2025)
+
+- [ ] Wire `--shadow-schema` through `apply`, `plan --validate`, and `rollback` so CLI users can opt into schema isolation without touching `.env` files.
+- [ ] Remove `--shadow-environment` and default to the current target environment unless `--shadow-db` overrides the connection.
+- [ ] Clarify documentation/help text about how Lockplane chooses the shadow database when `SHADOW_SCHEMA` (or `--shadow-schema`) is set:
+  - Prefer explicit `--shadow-db` / `POSTGRES_SHADOW_URL`
+  - Otherwise reuse the target database connection and isolate work inside the requested schema
+- [ ] Add regression tests covering the new flag + precedence rules.
 
 ### Non-Goals
 

@@ -230,6 +230,7 @@ PostgreSQL flags:
 - `--password` - Password (default: "lockplane")
 - `--ssl-mode` - SSL mode (auto-detected if not specified)
 - `--shadow-db-port` - Shadow database port (default: "5433")
+- `--shadow-schema` - Shadow schema for Postgres (reuses the primary database unless `--shadow-db` overrides)
 
 SQLite flags:
 - `--file-path` - Database file path (default: "schema/lockplane.db")
@@ -327,6 +328,8 @@ POSTGRES_SHADOW_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmo
 # (Lockplane will use SHADOW_SCHEMA and re-use POSTGRES_URL)
 # SHADOW_SCHEMA=lockplane_shadow
 EOF
+
+Prefer CLI overrides? Pass `--shadow-schema lockplane_shadow` (or `--shadow-db ...`) to `apply`, `rollback`, and `plan --validate`.
 ```
 
 #### Example: SQLite
@@ -404,6 +407,14 @@ LIBSQL_SHADOW_DB_PATH=./test/turso_shadow.db
 Lockplane automatically loads `.env.<name>` for the selected environment (for the
 default environment, `.env.local`). You can still override any value with CLI flags
 such as `--target` or `--shadow-db` when needed.
+
+**How Lockplane picks the shadow target (priority order):**
+1. CLI `--shadow-db`
+2. Environment variables / `.env` entries (`POSTGRES_SHADOW_URL`, `SQLITE_SHADOW_DB_PATH`, etc.)
+3. Schema overrides (`SHADOW_SCHEMA` / `--shadow-schema`) – reuses the primary connection and isolates work inside that schema
+4. Built-in defaults (`:memory:` for SQLite/libSQL, `<database>_shadow` on port 5433 for PostgreSQL)
+
+This means you can keep your `.env` minimal: choose schema mode once (via wizard, `.env`, or `--shadow-schema`) and Lockplane automatically reuses the correct database unless you explicitly point it elsewhere with `--shadow-db`.
 
 ### Apply the migration
 
@@ -686,6 +697,11 @@ npx lockplane apply plan.json \
   --target-environment staging \
   --target "postgresql://override@host/db" \
   --shadow-db "postgresql://override@host/db_shadow"
+
+# Reuse the primary database but isolate work inside a schema
+npx lockplane apply plan.json \
+  --target-environment staging \
+  --shadow-schema lockplane_shadow
 ```
 
 **Supported database formats:**
@@ -748,6 +764,9 @@ npx lockplane plan --validate schema/ --output json
 
 # Specify shadow DB
 npx lockplane plan --validate schema/ --shadow-db "postgresql://..."
+
+# Reuse the main database with a dedicated schema
+npx lockplane plan --validate schema/ --shadow-schema lockplane_shadow
 ```
 
 **What's validated:**
@@ -1159,6 +1178,8 @@ Always use shadow DB validation to test dangerous migrations before production:
 ```bash
 # Test on shadow DB first (automatic with apply command)
 npx lockplane apply migration.json --target $DATABASE_URL --shadow-db $SHADOW_DB_URL
+# or reuse the same database with a schema override
+npx lockplane apply migration.json --target $DATABASE_URL --shadow-schema lockplane_shadow
 
 # Shadow DB validation will:
 # 1. Apply migration to shadow DB

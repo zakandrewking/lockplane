@@ -40,7 +40,7 @@ func TestApplyCommandFlags(t *testing.T) {
 		"auto-approve",
 		"skip-shadow",
 		"shadow-db",
-		"shadow-environment",
+		"shadow-schema",
 		"verbose",
 	}
 
@@ -56,7 +56,7 @@ func TestApplyCommandFlagTypes(t *testing.T) {
 	flags := applyCmd.Flags()
 
 	// Test string flags
-	stringFlags := []string{"target", "target-environment", "schema", "shadow-db", "shadow-environment"}
+	stringFlags := []string{"target", "target-environment", "schema", "shadow-db", "shadow-schema"}
 	for _, flagName := range stringFlags {
 		flag := flags.Lookup(flagName)
 		if flag != nil && flag.Value.Type() != "string" {

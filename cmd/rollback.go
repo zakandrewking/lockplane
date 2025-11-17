@@ -53,16 +53,16 @@ saved, and applied later using 'lockplane apply'.`,
 }
 
 var (
-	rollbackPlan        string
-	rollbackFrom        string
-	rollbackFromEnv     string
-	rollbackTarget      string
-	rollbackTargetEnv   string
-	rollbackAutoApprove bool
-	rollbackSkipShadow  bool
-	rollbackShadowDB    string
-	rollbackShadowEnv   string
-	rollbackVerbose     bool
+	rollbackPlan         string
+	rollbackFrom         string
+	rollbackFromEnv      string
+	rollbackTarget       string
+	rollbackTargetEnv    string
+	rollbackAutoApprove  bool
+	rollbackSkipShadow   bool
+	rollbackShadowDB     string
+	rollbackShadowSchema string
+	rollbackVerbose      bool
 
 	planRollbackPlan    string
 	planRollbackFrom    string
@@ -83,7 +83,7 @@ func init() {
 	rollbackCmd.Flags().BoolVar(&rollbackAutoApprove, "auto-approve", false, "Skip interactive approval")
 	rollbackCmd.Flags().BoolVar(&rollbackSkipShadow, "skip-shadow", false, "Skip shadow DB validation (not recommended)")
 	rollbackCmd.Flags().StringVar(&rollbackShadowDB, "shadow-db", "", "Shadow database URL")
-	rollbackCmd.Flags().StringVar(&rollbackShadowEnv, "shadow-environment", "", "Shadow environment")
+	rollbackCmd.Flags().StringVar(&rollbackShadowSchema, "shadow-schema", "", "Shadow schema name (PostgreSQL only)")
 	rollbackCmd.Flags().BoolVarP(&rollbackVerbose, "verbose", "v", false, "Verbose logging")
 	_ = rollbackCmd.MarkFlagRequired("plan")
 
@@ -247,31 +247,31 @@ func runRollback(cmd *cobra.Command, args []string) {
 	var shadowSchema string
 	if !rollbackSkipShadow {
 		shadowConnStr := strings.TrimSpace(rollbackShadowDB)
-		if shadowConnStr == "" {
-			shadowEnvName := strings.TrimSpace(rollbackShadowEnv)
-			if shadowEnvName == "" {
-				shadowEnvName = resolvedTarget.Name
-			}
-			resolvedShadow, err := config.ResolveEnvironment(cfg, shadowEnvName)
-			if err != nil {
-				log.Fatalf("Failed to resolve shadow environment: %v", err)
-			}
-			shadowConnStr = resolvedShadow.ShadowDatabaseURL
-			shadowSchema = resolvedShadow.ShadowSchema
+		shadowSchema = strings.TrimSpace(rollbackShadowSchema)
+		resolvedShadow := resolvedTarget
 
-			// For SQLite/libSQL, default to :memory: if no shadow DB configured
-			if shadowConnStr == "" && (mainDriverType == "sqlite" || mainDriverType == "sqlite3" || mainDriverType == "libsql") {
-				shadowConnStr = ":memory:"
-				_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "ℹ️  Using in-memory shadow database (fast, zero config)\n")
-			} else if shadowConnStr == "" {
-				fmt.Fprintf(os.Stderr, "Error: no shadow database configured for environment %q.\n", resolvedShadow.Name)
-				fmt.Fprintf(os.Stderr, "Options:\n")
-				fmt.Fprintf(os.Stderr, "  - Add SHADOW_DATABASE_URL to .env.%s\n", resolvedShadow.Name)
-				fmt.Fprintf(os.Stderr, "  - Add SHADOW_SCHEMA=lockplane_shadow (PostgreSQL only)\n")
-				fmt.Fprintf(os.Stderr, "  - Provide --shadow-db flag\n")
-				fmt.Fprintf(os.Stderr, "  - Use --skip-shadow to skip shadow DB validation (not recommended)\n")
-				os.Exit(1)
-			}
+		if shadowConnStr == "" {
+			shadowConnStr = resolvedShadow.ShadowDatabaseURL
+		}
+		if shadowSchema == "" {
+			shadowSchema = resolvedShadow.ShadowSchema
+		}
+		if shadowSchema != "" && shadowConnStr == "" {
+			shadowConnStr = targetConnStr
+		}
+
+		// For SQLite/libSQL, default to :memory: if no shadow DB configured
+		if shadowConnStr == "" && (mainDriverType == "sqlite" || mainDriverType == "sqlite3" || mainDriverType == "libsql") {
+			shadowConnStr = ":memory:"
+			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "ℹ️  Using in-memory shadow database (fast, zero config)\n")
+		} else if shadowConnStr == "" {
+			fmt.Fprintf(os.Stderr, "Error: no shadow database configured for environment %q.\n", resolvedShadow.Name)
+			fmt.Fprintf(os.Stderr, "Options:\n")
+			fmt.Fprintf(os.Stderr, "  - Add SHADOW_DATABASE_URL to .env.%s\n", resolvedShadow.Name)
+			fmt.Fprintf(os.Stderr, "  - Add/override SHADOW_SCHEMA (or --shadow-schema) to reuse the primary database\n")
+			fmt.Fprintf(os.Stderr, "  - Provide --shadow-db flag\n")
+			fmt.Fprintf(os.Stderr, "  - Use --skip-shadow to skip shadow DB validation (not recommended)\n")
+			os.Exit(1)
 		}
 
 		// Detect shadow database driver type
