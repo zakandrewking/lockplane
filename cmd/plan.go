@@ -425,6 +425,92 @@ func splitSQLStatements(sqlText string) []SQLStatement {
 	return statements
 }
 
+// detectTrailingComma checks if a syntax error is caused by a trailing comma
+// and returns an adjusted error pointing to the comma with a specific message
+func detectTrailingComma(sqlText string, errMsg string, cursorPos int, startLine int) *SyntaxError {
+	// Only check for errors that mention syntax error near closing tokens
+	if !strings.Contains(errMsg, "syntax error") {
+		return nil
+	}
+
+	// Check if error mentions closing tokens
+	closingTokenMentioned := strings.Contains(errMsg, "near \")\"") ||
+		strings.Contains(errMsg, "at or near \")\"") ||
+		strings.Contains(errMsg, "near \"}\"") ||
+		strings.Contains(errMsg, "at or near \"}\"") ||
+		strings.Contains(errMsg, "near \"]\"") ||
+		strings.Contains(errMsg, "at or near \"]\"")
+
+	if !closingTokenMentioned {
+		return nil
+	}
+
+	// Look backward from cursor position to find closing paren/bracket
+	// then check if there's a comma before it
+	searchStart := cursorPos
+	if searchStart > len(sqlText) {
+		searchStart = len(sqlText)
+	}
+	if searchStart < 0 {
+		return nil
+	}
+
+	// Search backward to find closing token
+	closingPos := -1
+	for i := searchStart - 1; i >= 0; i-- {
+		ch := sqlText[i]
+		if ch == ')' || ch == '}' || ch == ']' {
+			closingPos = i
+			break
+		}
+		// Stop if we've gone too far (found something substantial)
+		if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' && ch != ';' {
+			return nil
+		}
+	}
+
+	if closingPos < 0 {
+		return nil
+	}
+
+	// Now search backward from closing token to find comma
+	commaPos := -1
+	for i := closingPos - 1; i >= 0; i-- {
+		ch := sqlText[i]
+		if ch == ',' {
+			commaPos = i
+			break
+		}
+		// Stop if we hit something that's not whitespace/newline
+		if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
+			break
+		}
+	}
+
+	// If we found a comma immediately before the closing token (with only whitespace between),
+	// it's a trailing comma error
+	if commaPos >= 0 {
+		// Calculate line and column for the comma
+		line := startLine + strings.Count(sqlText[:commaPos+1], "\n")
+		lastNewline := strings.LastIndex(sqlText[:commaPos+1], "\n")
+		column := 1
+		if lastNewline >= 0 {
+			column = commaPos - lastNewline
+		} else {
+			column = commaPos + 1
+		}
+
+		return &SyntaxError{
+			File:    "", // Will be filled in by caller
+			Line:    line,
+			Column:  column,
+			Message: "trailing comma not allowed here",
+		}
+	}
+
+	return nil
+}
+
 // preValidateSQLSyntax checks all SQL files for syntax errors before hitting the database.
 // Returns all syntax errors found across all files.
 func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxError {
@@ -472,11 +558,12 @@ func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxEr
 					errMsg := parseErr.Error()
 					line := stmt.StartLine
 					column := 1
+					cursorPos := 0
 
 					// pg_query returns *parser.Error with Cursorpos field
 					// Calculate line number by counting newlines up to cursor position
 					if pgErr, ok := parseErr.(*parser.Error); ok && pgErr.Cursorpos > 0 {
-						cursorPos := pgErr.Cursorpos
+						cursorPos = pgErr.Cursorpos
 						if cursorPos <= len(stmt.Text) {
 							// Add the offset from the start of the statement
 							line = stmt.StartLine + strings.Count(stmt.Text[:cursorPos], "\n")
@@ -491,12 +578,19 @@ func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxEr
 						}
 					}
 
-					errors = append(errors, SyntaxError{
-						File:    path,
-						Line:    line,
-						Column:  column,
-						Message: errMsg,
-					})
+					// Check for trailing comma and adjust error location if found
+					adjustedErr := detectTrailingComma(stmt.Text, errMsg, cursorPos, stmt.StartLine)
+					if adjustedErr != nil {
+						adjustedErr.File = path
+						errors = append(errors, *adjustedErr)
+					} else {
+						errors = append(errors, SyntaxError{
+							File:    path,
+							Line:    line,
+							Column:  column,
+							Message: errMsg,
+						})
+					}
 				}
 			}
 		} else {

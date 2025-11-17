@@ -535,3 +535,186 @@ CREATE INDEX idx_genomes_name ON genomes(name);`
 		})
 	}
 }
+
+func TestDetectTrailingComma(t *testing.T) {
+	tests := []struct {
+		name           string
+		sqlText        string
+		errMsg         string
+		cursorPos      int
+		startLine      int
+		expectAdjusted bool
+		expectLine     int
+		expectColumn   int
+	}{
+		{
+			name: "trailing comma in table definition",
+			sqlText: `CREATE TABLE genomes(
+    name text NOT NULL,
+);`,
+			errMsg:         `syntax error at or near ")"`,
+			cursorPos:      47, // Position of the semicolon (from pg_query)
+			startLine:      1,
+			expectAdjusted: true,
+			expectLine:     2,
+			expectColumn:   23, // Position of the comma (1-indexed from start of line)
+		},
+		{
+			name: "trailing comma with multiple columns",
+			sqlText: `CREATE TABLE users(
+    id serial PRIMARY KEY,
+    email text NOT NULL,
+);`,
+			errMsg:         `syntax error at or near ")"`,
+			cursorPos:      73,
+			startLine:      1,
+			expectAdjusted: true,
+			expectLine:     3,
+			expectColumn:   24,
+		},
+		{
+			name: "trailing comma in function call",
+			sqlText: `INSERT INTO users VALUES(
+    'test',
+    'email',
+);`,
+			errMsg:         `syntax error at or near ")"`,
+			cursorPos:      52,
+			startLine:      1,
+			expectAdjusted: true,
+			expectLine:     3,
+			expectColumn:   12,
+		},
+		{
+			name:           "no trailing comma - legitimate syntax error",
+			sqlText:        "CEATE TABLE users(id int);",
+			errMsg:         `syntax error at or near "CEATE"`,
+			cursorPos:      0,
+			startLine:      1,
+			expectAdjusted: false,
+		},
+		{
+			name:           "error not near closing token",
+			sqlText:        "CREATE TABLE users id int);",
+			errMsg:         `syntax error at or near "id"`,
+			cursorPos:      19,
+			startLine:      1,
+			expectAdjusted: false,
+		},
+		{
+			name: "trailing comma with extra whitespace",
+			sqlText: `CREATE TABLE test(
+    col1 int,
+
+);`,
+			errMsg:         `syntax error at or near ")"`,
+			cursorPos:      35,
+			startLine:      1,
+			expectAdjusted: true,
+			expectLine:     2,
+			expectColumn:   13,
+		},
+		{
+			name:           "single line trailing comma",
+			sqlText:        "CREATE TABLE test(id int,);",
+			errMsg:         `syntax error at or near ")"`,
+			cursorPos:      26,
+			startLine:      1,
+			expectAdjusted: true,
+			expectLine:     1,
+			expectColumn:   25,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detectTrailingComma(tt.sqlText, tt.errMsg, tt.cursorPos, tt.startLine)
+
+			if tt.expectAdjusted {
+				if result == nil {
+					t.Fatalf("expected adjusted error, got nil")
+				}
+				if result.Line != tt.expectLine {
+					t.Errorf("expected line %d, got %d", tt.expectLine, result.Line)
+				}
+				if result.Column != tt.expectColumn {
+					t.Errorf("expected column %d, got %d", tt.expectColumn, result.Column)
+				}
+				if result.Message != "trailing comma not allowed here" {
+					t.Errorf("expected trailing comma message, got: %s", result.Message)
+				}
+			} else {
+				if result != nil {
+					t.Errorf("expected nil result, got adjusted error at line %d column %d", result.Line, result.Column)
+				}
+			}
+		})
+	}
+}
+
+func TestTrailingCommaIntegration(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name         string
+		sql          string
+		expectLine   int
+		expectColumn int
+		expectMsg    string
+	}{
+		{
+			name: "trailing comma in CREATE TABLE",
+			sql: `CREATE TABLE genomes(
+    name text NOT NULL,
+);`,
+			expectLine:   2,
+			expectColumn: 23,
+			expectMsg:    "trailing comma not allowed here",
+		},
+		{
+			name: "trailing comma with multiple columns",
+			sql: `CREATE TABLE users(
+    id serial PRIMARY KEY,
+    email text NOT NULL,
+);`,
+			expectLine:   3,
+			expectColumn: 24,
+			expectMsg:    "trailing comma not allowed here",
+		},
+		{
+			name:         "trailing comma single line",
+			sql:          "CREATE TABLE test(id int,);",
+			expectLine:   1,
+			expectColumn: 25,
+			expectMsg:    "trailing comma not allowed here",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testFile := filepath.Join(tmpDir, "test.sql")
+			if err := os.WriteFile(testFile, []byte(tt.sql), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			errors := preValidateSQLSyntax(tmpDir, database.DialectPostgres)
+
+			if len(errors) != 1 {
+				t.Fatalf("expected 1 error, got %d", len(errors))
+			}
+
+			if errors[0].Line != tt.expectLine {
+				t.Errorf("expected line %d, got %d", tt.expectLine, errors[0].Line)
+			}
+			if errors[0].Column != tt.expectColumn {
+				t.Errorf("expected column %d, got %d", tt.expectColumn, errors[0].Column)
+			}
+			if errors[0].Message != tt.expectMsg {
+				t.Errorf("expected message %q, got %q", tt.expectMsg, errors[0].Message)
+			}
+
+			// Cleanup
+			_ = os.Remove(testFile)
+		})
+	}
+}
