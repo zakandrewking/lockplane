@@ -11,7 +11,31 @@ export interface ValidationResult {
 }
 
 /**
- * Validate a schema file or directory using the lockplane CLI
+ * Lockplane CLI diagnostic output structure (from plan --validate --output json)
+ */
+export interface LockplaneDiagnostic {
+  code?: string;
+  message: string;
+  severity: "error" | "warning" | "info";
+  // Optional location information if available
+  file?: string;
+  line?: number;
+  column?: number;
+}
+
+export interface LockplaneSummary {
+  errors: number;
+  warnings?: number;
+  valid: boolean;
+}
+
+export interface LockplaneValidationOutput {
+  diagnostics?: LockplaneDiagnostic[];
+  summary?: LockplaneSummary;
+}
+
+/**
+ * Legacy interface (kept for backwards compatibility)
  */
 export interface SQLValidationIssue {
   file: string;
@@ -68,30 +92,72 @@ export async function validateSchema(
 
         // Parse JSON output from plan --validate command
         try {
-          const result: SQLValidationResult = JSON.parse(stdout);
-          console.log(`[Lockplane] Validation result:`, result);
+          const output = JSON.parse(stdout);
+          console.log(`[Lockplane] Validation output:`, output);
 
-          if (result.valid) {
-            // Schema is valid
-            console.log("[Lockplane] Schema is valid");
-            resolve([]);
+          // Try to parse as the new lockplane format (with diagnostics and summary)
+          const lockplaneOutput = output as LockplaneValidationOutput;
+
+          // Check if this is the expected format
+          if (lockplaneOutput.summary !== undefined || lockplaneOutput.diagnostics !== undefined) {
+            // New format detected
+            const isValid = lockplaneOutput.summary?.valid ?? true;
+            const diagnostics = lockplaneOutput.diagnostics ?? [];
+
+            console.log(`[Lockplane] Schema is ${isValid ? 'valid' : 'invalid'}, found ${diagnostics.length} diagnostics`);
+
+            if (isValid && diagnostics.length === 0) {
+              // Schema is valid and no diagnostics
+              console.log("[Lockplane] Schema is valid");
+              resolve([]);
+              return;
+            }
+
+            // Convert LockplaneDiagnostic[] to ValidationResult[]
+            const results: ValidationResult[] = diagnostics.map((diagnostic) => ({
+              // Use provided file/line/column if available, otherwise default to schema file
+              file: diagnostic.file || schemaPath,
+              line: diagnostic.line || 1,
+              column: diagnostic.column || 1,
+              severity: diagnostic.severity || "error",
+              message: diagnostic.message,
+              code: diagnostic.code,
+            }));
+
+            console.log(`[Lockplane] Parsed ${results.length} validation issues`);
+            resolve(results);
             return;
           }
 
-          // Convert SQLValidationIssue[] to ValidationResult[]
-          const results: ValidationResult[] = (result.issues || []).map(
-            (issue) => ({
-              file: issue.file,
-              line: issue.line,
-              column: issue.column,
-              severity: issue.severity === "warning" ? "warning" : "error",
-              message: issue.message,
-              code: issue.code,
-            })
-          );
+          // Try legacy format (with valid and issues)
+          const legacyResult = output as SQLValidationResult;
+          if (legacyResult.valid !== undefined) {
+            console.log(`[Lockplane] Legacy format detected, valid: ${legacyResult.valid}`);
 
-          console.log(`[Lockplane] Parsed ${results.length} validation issues`);
-          resolve(results);
+            if (legacyResult.valid) {
+              resolve([]);
+              return;
+            }
+
+            const results: ValidationResult[] = (legacyResult.issues || []).map(
+              (issue) => ({
+                file: issue.file,
+                line: issue.line,
+                column: issue.column,
+                severity: issue.severity === "warning" ? "warning" : "error",
+                message: issue.message,
+                code: issue.code,
+              })
+            );
+
+            console.log(`[Lockplane] Parsed ${results.length} legacy validation issues`);
+            resolve(results);
+            return;
+          }
+
+          // Unknown format
+          console.error("[Lockplane] Unexpected JSON structure:", output);
+          reject(new Error("Unexpected JSON structure from lockplane CLI. Expected 'diagnostics' and 'summary' fields."));
         } catch (parseError) {
           // If JSON parsing fails, treat as a general error
           console.error("[Lockplane] Failed to parse JSON output:", parseError);
