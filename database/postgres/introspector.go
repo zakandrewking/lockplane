@@ -135,11 +135,14 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 		// PostgreSQL converts BIGSERIAL to BIGINT with nextval() default
 		// and SERIAL to INTEGER with nextval() default
 		actualType := col.Type
+		isSerial := false
 		if defaultVal.Valid && isSerialDefault(defaultVal.String) {
 			if strings.EqualFold(col.Type, "bigint") {
 				actualType = "bigserial"
+				isSerial = true
 			} else if strings.EqualFold(col.Type, "integer") {
 				actualType = "serial"
+				isSerial = true
 			}
 		}
 
@@ -151,10 +154,18 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 		}
 
 		col.Nullable = nullable == "YES"
-		if defaultVal.Valid {
-			col.Default = &defaultVal.String
+
+		// For SERIAL/BIGSERIAL, the default is implicit, so don't store it
+		// For other columns, normalize the default value
+		if isSerial {
+			col.Default = nil
+			col.DefaultMetadata = nil
+		} else if defaultVal.Valid {
+			// Normalize default values by removing unnecessary type casts
+			normalized := normalizeDefault(defaultVal.String)
+			col.Default = &normalized
 			col.DefaultMetadata = &database.DefaultMetadata{
-				Raw:     defaultVal.String,
+				Raw:     normalized,
 				Dialect: database.DialectPostgres,
 			}
 		} else {
@@ -295,6 +306,22 @@ func isSerialDefault(defaultVal string) bool {
 	// - nextval('tablename_columnname_seq'::regclass)
 	// - nextval('sequence_name'::regclass)
 	return strings.HasPrefix(defaultVal, "nextval(") && strings.Contains(defaultVal, "_seq")
+}
+
+// normalizeDefault normalizes PostgreSQL default values for comparison
+// Removes type casts that are redundant (e.g., '{}'::jsonb -> '{}')
+func normalizeDefault(defaultVal string) string {
+	// Remove trailing type casts like ::jsonb, ::text, etc.
+	// Pattern: anything::type at the end
+	if idx := strings.LastIndex(defaultVal, "::"); idx > 0 {
+		// Check if this is a type cast (not part of a string literal)
+		beforeCast := defaultVal[:idx]
+		// Simple heuristic: if it's balanced quotes, it's likely a cast
+		if strings.Count(beforeCast, "'")%2 == 0 {
+			return beforeCast
+		}
+	}
+	return defaultVal
 }
 
 // GetRLSEnabled checks if Row Level Security is enabled for a table
