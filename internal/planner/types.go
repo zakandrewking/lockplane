@@ -11,6 +11,9 @@ type Plan struct {
 type PlanStep struct {
 	Description string   `json:"description"`
 	SQL         []string `json:"sql"` // Array of SQL statements to execute in order
+	// Source location metadata (optional, for error reporting)
+	SourceFile string `json:"source_file,omitempty"` // Original file where this step was defined
+	SourceLine int    `json:"source_line,omitempty"` // Line number in the source file
 }
 
 // ExecutionResult tracks the outcome of executing a plan

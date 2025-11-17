@@ -3,9 +3,11 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lockplane/lockplane/database"
+	"github.com/lockplane/lockplane/internal/planner"
 )
 
 func TestSplitSQLStatements(t *testing.T) {
@@ -309,6 +311,227 @@ func TestPreValidateSQLSyntax_StringLiterals(t *testing.T) {
 
 			// Cleanup
 			_ = os.Remove(testFile)
+		})
+	}
+}
+
+func TestFindEntityInSQLFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name       string
+		files      map[string]string
+		entityName string
+		expectFile string
+		expectLine int
+	}{
+		{
+			name: "find index in single file",
+			files: map[string]string{
+				"schema.sql": `CREATE TABLE genomes(
+    name text NOT NULL
+);
+
+CREATE INDEX idx_genomes_name ON genomes(name);`,
+			},
+			entityName: "idx_genomes_name",
+			expectFile: "schema.sql",
+			expectLine: 5,
+		},
+		{
+			name: "find table definition",
+			files: map[string]string{
+				"schema.sql": `CREATE TABLE users(
+    id serial PRIMARY KEY,
+    name text NOT NULL
+);`,
+			},
+			entityName: "users",
+			expectFile: "schema.sql",
+			expectLine: 1,
+		},
+		{
+			name: "find duplicate index - first occurrence",
+			files: map[string]string{
+				"schema.sql": `CREATE TABLE genomes(
+    name text NOT NULL
+);
+
+CREATE INDEX idx_genomes_name ON genomes(name);
+
+CREATE INDEX idx_genomes_name ON genomes(name);`,
+			},
+			entityName: "idx_genomes_name",
+			expectFile: "schema.sql",
+			expectLine: 5, // Should find first occurrence
+		},
+		{
+			name: "find in multiple files",
+			files: map[string]string{
+				"tables.sql": "CREATE TABLE posts(id int);",
+				"indexes.sql": `CREATE TABLE users(id int);
+
+CREATE INDEX idx_users_id ON users(id);`,
+			},
+			entityName: "idx_users_id",
+			expectFile: "indexes.sql",
+			expectLine: 3,
+		},
+		{
+			name: "entity not found",
+			files: map[string]string{
+				"schema.sql": "CREATE TABLE users(id int);",
+			},
+			entityName: "nonexistent_index",
+			expectFile: "",
+			expectLine: 0,
+		},
+		{
+			name: "find UNIQUE INDEX",
+			files: map[string]string{
+				"schema.sql": `CREATE TABLE users(
+    email text NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_users_email ON users(email);`,
+			},
+			entityName: "idx_users_email",
+			expectFile: "schema.sql",
+			expectLine: 5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testDir := filepath.Join(tmpDir, tt.name)
+			if err := os.MkdirAll(testDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+
+			// Write test files
+			for filename, content := range tt.files {
+				path := filepath.Join(testDir, filename)
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// Search for entity
+			result := findEntityInSQLFiles(testDir, tt.entityName)
+
+			if tt.expectFile == "" {
+				if result != nil {
+					t.Errorf("expected nil result, got file %s line %d", result.File, result.Line)
+				}
+			} else {
+				if result == nil {
+					t.Fatalf("expected to find entity, got nil")
+				}
+				if !strings.HasSuffix(result.File, tt.expectFile) {
+					t.Errorf("expected file ending with %s, got %s", tt.expectFile, result.File)
+				}
+				if result.Line != tt.expectLine {
+					t.Errorf("expected line %d, got %d", tt.expectLine, result.Line)
+				}
+			}
+		})
+	}
+}
+
+func TestFindSourceLocationsForErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create test schema with duplicate index
+	schemaContent := `CREATE TABLE genomes(
+    name text NOT NULL
+);
+
+CREATE INDEX idx_genomes_name ON genomes(name);
+
+CREATE INDEX idx_genomes_name ON genomes(name);`
+
+	testFile := filepath.Join(tmpDir, "schema.sql")
+	if err := os.WriteFile(testFile, []byte(schemaContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name          string
+		errors        []string
+		expectedCount int
+		checkResult   func(t *testing.T, errors []RuntimeError)
+	}{
+		{
+			name: "duplicate relation error",
+			errors: []string{
+				`step 3 failed: pq: relation "idx_genomes_name" already exists`,
+			},
+			expectedCount: 1,
+			checkResult: func(t *testing.T, errors []RuntimeError) {
+				if !strings.HasSuffix(errors[0].File, "schema.sql") {
+					t.Errorf("expected file ending with schema.sql, got %s", errors[0].File)
+				}
+				if errors[0].Line != 5 {
+					t.Errorf("expected line 5, got %d", errors[0].Line)
+				}
+				if errors[0].Step != 3 {
+					t.Errorf("expected step 3, got %d", errors[0].Step)
+				}
+				if !strings.Contains(errors[0].Message, "already exists") {
+					t.Errorf("expected error message to contain 'already exists', got: %s", errors[0].Message)
+				}
+			},
+		},
+		{
+			name: "error with detailed statement info",
+			errors: []string{
+				`step 3, statement 1/1 (Create index idx_genomes_name on table genomes) failed: pq: relation "idx_genomes_name" already exists`,
+			},
+			expectedCount: 1,
+			checkResult: func(t *testing.T, errors []RuntimeError) {
+				if errors[0].Line != 5 {
+					t.Errorf("expected line 5, got %d", errors[0].Line)
+				}
+			},
+		},
+		{
+			name: "error without relation name",
+			errors: []string{
+				"step 1 failed: syntax error",
+			},
+			expectedCount: 0, // No entity name to extract
+		},
+		{
+			name: "multiple errors",
+			errors: []string{
+				`step 2 failed: pq: relation "idx_genomes_name" already exists`,
+				`step 3 failed: pq: relation "idx_genomes_name" already exists`,
+			},
+			expectedCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock ExecutionResult
+			result := &planner.ExecutionResult{
+				Success:      false,
+				StepsApplied: 0,
+				Errors:       tt.errors,
+			}
+
+			runtimeErrors := findSourceLocationsForErrors(tmpDir, result, nil)
+
+			if len(runtimeErrors) != tt.expectedCount {
+				t.Errorf("expected %d runtime errors, got %d", tt.expectedCount, len(runtimeErrors))
+				for i, err := range runtimeErrors {
+					t.Logf("  Error %d: %s:%d - %s", i+1, err.File, err.Line, err.Message)
+				}
+			}
+
+			if tt.checkResult != nil && len(runtimeErrors) > 0 {
+				tt.checkResult(t, runtimeErrors)
+			}
 		})
 	}
 }

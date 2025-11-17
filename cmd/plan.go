@@ -674,6 +674,13 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 	// Step 8: Output results
 	if err != nil {
+		// Try to find source locations for runtime errors
+		runtimeErrors := findSourceLocationsForErrors(schemaDir, result, err)
+		if len(runtimeErrors) > 0 {
+			runtimeValidationFailure(runtimeErrors)
+		}
+
+		// Fallback to old error format if we couldn't find source locations
 		var extras []string
 		if result != nil {
 			extras = result.Errors
@@ -682,6 +689,132 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 	}
 
 	validationSuccess(result)
+}
+
+// RuntimeError represents an error that occurred during plan execution with source location
+type RuntimeError struct {
+	File    string
+	Line    int
+	Column  int
+	Message string
+	Step    int
+}
+
+// findSourceLocationsForErrors attempts to find source locations for runtime errors
+func findSourceLocationsForErrors(schemaDir string, result *planner.ExecutionResult, err error) []RuntimeError {
+	if result == nil || len(result.Errors) == 0 {
+		return nil
+	}
+
+	var runtimeErrors []RuntimeError
+
+	// Parse each error to extract entity names and find their source locations
+	for _, errMsg := range result.Errors {
+		// Extract entity name from error messages like:
+		// "step 3 failed: pq: relation \"idx_genomes_name\" already exists"
+		// "step 3, statement 1/1 (Create index idx_genomes_name on table genomes) failed: pq: relation \"idx_genomes_name\" already exists"
+
+		// Try to extract the entity name from the error
+		var entityName string
+		var stepNum int
+
+		// Extract step number
+		if strings.Contains(errMsg, "step ") {
+			_, _ = fmt.Sscanf(errMsg, "step %d", &stepNum)
+		}
+
+		// Extract entity name from relation "name" or similar patterns
+		if strings.Contains(errMsg, "relation \"") {
+			start := strings.Index(errMsg, "relation \"") + len("relation \"")
+			end := strings.Index(errMsg[start:], "\"")
+			if end > 0 {
+				entityName = errMsg[start : start+end]
+			}
+		}
+
+		// If we have an entity name, search for it in the SQL files
+		if entityName != "" {
+			location := findEntityInSQLFiles(schemaDir, entityName)
+			if location != nil {
+				runtimeErrors = append(runtimeErrors, RuntimeError{
+					File:    location.File,
+					Line:    location.Line,
+					Column:  location.Column,
+					Message: errMsg,
+					Step:    stepNum,
+				})
+			}
+		}
+	}
+
+	return runtimeErrors
+}
+
+// findEntityInSQLFiles searches SQL files for an entity definition
+func findEntityInSQLFiles(schemaDir string, entityName string) *SyntaxError {
+	var result *SyntaxError
+
+	_ = filepath.Walk(schemaDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".sql") {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		// Search for CREATE statements mentioning this entity
+		// Look for patterns like: CREATE INDEX entity_name, CREATE TABLE entity_name, etc.
+		lines := strings.Split(string(content), "\n")
+		for lineNum, line := range lines {
+			upperLine := strings.ToUpper(line)
+			if (strings.Contains(upperLine, "CREATE INDEX") ||
+				strings.Contains(upperLine, "CREATE TABLE") ||
+				strings.Contains(upperLine, "CREATE UNIQUE INDEX")) &&
+				strings.Contains(line, entityName) {
+				result = &SyntaxError{
+					File:   path,
+					Line:   lineNum + 1,
+					Column: strings.Index(line, entityName) + 1,
+				}
+				return filepath.SkipDir // Found it, stop searching
+			}
+		}
+		return nil
+	})
+
+	return result
+}
+
+// runtimeValidationFailure outputs structured diagnostics for runtime errors
+func runtimeValidationFailure(errors []RuntimeError) {
+	if !isJSONOutput() {
+		return // Let the regular error handler take over for non-JSON output
+	}
+
+	var diagnostics []map[string]interface{}
+	for _, err := range errors {
+		diagnostics = append(diagnostics, map[string]interface{}{
+			"severity": "error",
+			"message":  err.Message,
+			"code":     "runtime_error",
+			"file":     err.File,
+			"line":     err.Line,
+			"column":   err.Column,
+		})
+	}
+
+	output := map[string]interface{}{
+		"diagnostics": diagnostics,
+		"summary": map[string]interface{}{
+			"errors": len(errors),
+			"valid":  false,
+		},
+	}
+	jsonBytes, _ := json.MarshalIndent(output, "", "  ")
+	fmt.Println(string(jsonBytes))
+	os.Exit(1)
 }
 
 func isJSONOutput() bool {
