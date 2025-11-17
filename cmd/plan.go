@@ -467,16 +467,8 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 	syntaxErrors := preValidateSQLSyntax(schemaDir, dialect)
 	if len(syntaxErrors) > 0 {
-		// Convert syntax errors to diagnostic format
-		var diagnosticMsgs []string
-		for _, syntaxErr := range syntaxErrors {
-			msg := fmt.Sprintf("%s:%d:%d: %s", syntaxErr.File, syntaxErr.Line, syntaxErr.Column, syntaxErr.Message)
-			diagnosticMsgs = append(diagnosticMsgs, msg)
-		}
-
-		// Report all syntax errors
-		mainMsg := fmt.Sprintf("Found %d syntax error(s) in schema files", len(syntaxErrors))
-		validationFailure(mainMsg, diagnosticMsgs)
+		// Report all syntax errors with structured diagnostics
+		syntaxValidationFailure(syntaxErrors)
 	}
 
 	if planVerbose {
@@ -602,6 +594,40 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 func isJSONOutput() bool {
 	return strings.EqualFold(strings.TrimSpace(planOutput), "json")
+}
+
+func syntaxValidationFailure(syntaxErrors []SyntaxError) {
+	if isJSONOutput() {
+		// Create separate diagnostic for each syntax error with proper file/line/column
+		var diagnostics []map[string]interface{}
+		for _, syntaxErr := range syntaxErrors {
+			diagnostics = append(diagnostics, map[string]interface{}{
+				"severity": "error",
+				"message":  syntaxErr.Message,
+				"code":     "syntax_error",
+				"file":     syntaxErr.File,
+				"line":     syntaxErr.Line,
+				"column":   syntaxErr.Column,
+			})
+		}
+
+		output := map[string]interface{}{
+			"diagnostics": diagnostics,
+			"summary": map[string]interface{}{
+				"errors": len(syntaxErrors),
+				"valid":  false,
+			},
+		}
+		jsonBytes, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(jsonBytes))
+	} else {
+		fmt.Fprintf(os.Stderr, "❌ Schema validation FAILED\n\n")
+		fmt.Fprintf(os.Stderr, "Found %d syntax error(s) in schema files:\n", len(syntaxErrors))
+		for _, syntaxErr := range syntaxErrors {
+			fmt.Fprintf(os.Stderr, "  - %s:%d:%d: %s\n", syntaxErr.File, syntaxErr.Line, syntaxErr.Column, syntaxErr.Message)
+		}
+	}
+	os.Exit(1)
 }
 
 func validationFailure(message string, details []string) {
