@@ -6,7 +6,6 @@ package parser
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -260,16 +259,8 @@ func parsePostgresSQLSchema(sql string) (*database.Schema, error) {
 			}
 
 		case *pg_query.Node_AlterTableStmt:
-			// Warn users that ALTER TABLE in schema files is not recommended
-			tableName := ""
-			if node.AlterTableStmt.Relation != nil {
-				tableName = node.AlterTableStmt.Relation.Relname
-			}
-			fmt.Fprintf(os.Stderr, "⚠️  Warning: ALTER TABLE %s detected in schema file\n", tableName)
-			fmt.Fprintf(os.Stderr, "   Lockplane treats schema files as declarative (desired end state).\n")
-			fmt.Fprintf(os.Stderr, "   The ALTER TABLE will be merged into the CREATE TABLE definition.\n")
-			fmt.Fprintf(os.Stderr, "   Recommendation: Use only CREATE TABLE statements with final desired columns.\n\n")
-
+			// ALTER TABLE warnings are now handled by the validation layer (cmd/plan.go)
+			// which provides structured diagnostics with file/line/column info
 			err := parseAlterTable(schema, node.AlterTableStmt)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse ALTER TABLE: %w", err)

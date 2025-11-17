@@ -338,10 +338,11 @@ func runPlan(cmd *cobra.Command, args []string) {
 
 // SyntaxError represents a SQL syntax error in a specific file
 type SyntaxError struct {
-	File    string
-	Line    int
-	Column  int
-	Message string
+	File     string
+	Line     int
+	Column   int
+	Message  string
+	Severity string // "error" or "warning"
 }
 
 type SQLStatement struct {
@@ -501,10 +502,11 @@ func detectTrailingComma(sqlText string, errMsg string, cursorPos int, startLine
 		}
 
 		return &SyntaxError{
-			File:    "", // Will be filled in by caller
-			Line:    line,
-			Column:  column,
-			Message: "trailing comma not allowed here",
+			File:     "", // Will be filled in by caller
+			Line:     line,
+			Column:   column,
+			Message:  "trailing comma not allowed here",
+			Severity: "error",
 		}
 	}
 
@@ -512,7 +514,7 @@ func detectTrailingComma(sqlText string, errMsg string, cursorPos int, startLine
 }
 
 // preValidateSQLSyntax checks all SQL files for syntax errors before hitting the database.
-// Returns all syntax errors found across all files.
+// Returns all syntax errors and warnings found across all files.
 func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxError {
 	var errors []SyntaxError
 
@@ -531,10 +533,11 @@ func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxEr
 		content, readErr := os.ReadFile(path)
 		if readErr != nil {
 			errors = append(errors, SyntaxError{
-				File:    path,
-				Line:    1,
-				Column:  1,
-				Message: fmt.Sprintf("Failed to read file: %v", readErr),
+				File:     path,
+				Line:     1,
+				Column:   1,
+				Message:  fmt.Sprintf("Failed to read file: %v", readErr),
+				Severity: "error",
 			})
 			return nil // Continue processing other files
 		}
@@ -552,7 +555,48 @@ func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxEr
 					continue
 				}
 
-				_, parseErr := pg_query.Parse(stmt.Text)
+				parseResult, parseErr := pg_query.Parse(stmt.Text)
+
+				// Check for ALTER TABLE statements (warn even if parse succeeds)
+				if parseErr == nil && parseResult != nil {
+					for _, parsedStmt := range parseResult.Stmts {
+						if parsedStmt.Stmt != nil {
+							if _, isAlterTable := parsedStmt.Stmt.Node.(*pg_query.Node_AlterTableStmt); isAlterTable {
+								// Extract table name from ALTER TABLE statement
+								tableName := ""
+								if alterNode, ok := parsedStmt.Stmt.Node.(*pg_query.Node_AlterTableStmt); ok {
+									if alterNode.AlterTableStmt.Relation != nil {
+										tableName = alterNode.AlterTableStmt.Relation.Relname
+									}
+								}
+
+								// Find the position of "ALTER TABLE" in the statement
+								alterPos := strings.Index(strings.ToUpper(stmt.Text), "ALTER TABLE")
+								line := stmt.StartLine
+								column := 1
+								if alterPos >= 0 {
+									line = stmt.StartLine + strings.Count(stmt.Text[:alterPos], "\n")
+									lastNewline := strings.LastIndex(stmt.Text[:alterPos], "\n")
+									if lastNewline >= 0 {
+										column = alterPos - lastNewline
+									} else {
+										column = alterPos + 1
+									}
+								}
+
+								warningMsg := fmt.Sprintf("ALTER TABLE %s detected in schema file. Lockplane treats schema files as declarative (desired end state). The ALTER TABLE will be merged into the CREATE TABLE definition. Recommendation: Use only CREATE TABLE statements with final desired columns.", tableName)
+								errors = append(errors, SyntaxError{
+									File:     path,
+									Line:     line,
+									Column:   column,
+									Message:  warningMsg,
+									Severity: "warning",
+								})
+							}
+						}
+					}
+				}
+
 				if parseErr != nil {
 					// Extract line number from pg_query error
 					errMsg := parseErr.Error()
@@ -582,13 +626,15 @@ func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxEr
 					adjustedErr := detectTrailingComma(stmt.Text, errMsg, cursorPos, stmt.StartLine)
 					if adjustedErr != nil {
 						adjustedErr.File = path
+						adjustedErr.Severity = "error"
 						errors = append(errors, *adjustedErr)
 					} else {
 						errors = append(errors, SyntaxError{
-							File:    path,
-							Line:    line,
-							Column:  column,
-							Message: errMsg,
+							File:     path,
+							Line:     line,
+							Column:   column,
+							Message:  errMsg,
+							Severity: "error",
 						})
 					}
 				}
@@ -604,10 +650,11 @@ func preValidateSQLSyntax(schemaDir string, dialect database.Dialect) []SyntaxEr
 
 	if err != nil {
 		errors = append(errors, SyntaxError{
-			File:    schemaDir,
-			Line:    1,
-			Column:  1,
-			Message: fmt.Sprintf("Failed to walk directory: %v", err),
+			File:     schemaDir,
+			Line:     1,
+			Column:   1,
+			Message:  fmt.Sprintf("Failed to walk directory: %v", err),
+			Severity: "error",
 		})
 	}
 
@@ -651,10 +698,32 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 	// For now, use Postgres as the default since that's our primary dialect
 	dialect := database.DialectPostgres
 
-	syntaxErrors := preValidateSQLSyntax(schemaDir, dialect)
+	syntaxDiagnostics := preValidateSQLSyntax(schemaDir, dialect)
+
+	// Separate errors from warnings
+	var syntaxErrors []SyntaxError
+	var syntaxWarnings []SyntaxError
+	for _, diag := range syntaxDiagnostics {
+		if diag.Severity == "warning" {
+			syntaxWarnings = append(syntaxWarnings, diag)
+		} else {
+			syntaxErrors = append(syntaxErrors, diag)
+		}
+	}
+
+	// Show warnings in human-readable mode
+	if len(syntaxWarnings) > 0 && !isJSONOutput() {
+		fmt.Fprintf(os.Stderr, "\n")
+		for _, warn := range syntaxWarnings {
+			fmt.Fprintf(os.Stderr, "⚠️  %s:%d:%d: %s\n", warn.File, warn.Line, warn.Column, warn.Message)
+		}
+		fmt.Fprintf(os.Stderr, "\n")
+	}
+
+	// Fail validation only if there are errors (not warnings)
 	if len(syntaxErrors) > 0 {
 		// Report all syntax errors with structured diagnostics
-		syntaxValidationFailure(syntaxErrors)
+		syntaxValidationFailure(syntaxDiagnostics)
 	}
 
 	if planVerbose {
@@ -782,7 +851,7 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 		validationFailure(fmt.Sprintf("Schema validation failed: %v", err), extras)
 	}
 
-	validationSuccess(result)
+	validationSuccess(result, syntaxWarnings)
 }
 
 // RuntimeError represents an error that occurred during plan execution with source location
@@ -915,35 +984,63 @@ func isJSONOutput() bool {
 	return strings.EqualFold(strings.TrimSpace(planOutput), "json")
 }
 
-func syntaxValidationFailure(syntaxErrors []SyntaxError) {
+func syntaxValidationFailure(syntaxDiagnostics []SyntaxError) {
+	// Separate errors from warnings
+	var errors []SyntaxError
+	var warnings []SyntaxError
+	for _, diag := range syntaxDiagnostics {
+		if diag.Severity == "warning" {
+			warnings = append(warnings, diag)
+		} else {
+			errors = append(errors, diag)
+		}
+	}
+
 	if isJSONOutput() {
-		// Create separate diagnostic for each syntax error with proper file/line/column
+		// Create separate diagnostic for each syntax error/warning with proper file/line/column
 		var diagnostics []map[string]interface{}
-		for _, syntaxErr := range syntaxErrors {
+		for _, syntaxDiag := range syntaxDiagnostics {
+			severity := syntaxDiag.Severity
+			if severity == "" {
+				severity = "error"
+			}
+			code := "syntax_error"
+			if severity == "warning" {
+				code = "schema_warning"
+			}
 			diagnostics = append(diagnostics, map[string]interface{}{
-				"severity": "error",
-				"message":  syntaxErr.Message,
-				"code":     "syntax_error",
-				"file":     syntaxErr.File,
-				"line":     syntaxErr.Line,
-				"column":   syntaxErr.Column,
+				"severity": severity,
+				"message":  syntaxDiag.Message,
+				"code":     code,
+				"file":     syntaxDiag.File,
+				"line":     syntaxDiag.Line,
+				"column":   syntaxDiag.Column,
 			})
 		}
 
 		output := map[string]interface{}{
 			"diagnostics": diagnostics,
 			"summary": map[string]interface{}{
-				"errors": len(syntaxErrors),
-				"valid":  false,
+				"errors":   len(errors),
+				"warnings": len(warnings),
+				"valid":    false,
 			},
 		}
 		jsonBytes, _ := json.MarshalIndent(output, "", "  ")
 		fmt.Println(string(jsonBytes))
 	} else {
 		fmt.Fprintf(os.Stderr, "❌ Schema validation FAILED\n\n")
-		fmt.Fprintf(os.Stderr, "Found %d syntax error(s) in schema files:\n", len(syntaxErrors))
-		for _, syntaxErr := range syntaxErrors {
-			fmt.Fprintf(os.Stderr, "  - %s:%d:%d: %s\n", syntaxErr.File, syntaxErr.Line, syntaxErr.Column, syntaxErr.Message)
+		if len(errors) > 0 {
+			fmt.Fprintf(os.Stderr, "Found %d syntax error(s) in schema files:\n", len(errors))
+			for _, syntaxErr := range errors {
+				fmt.Fprintf(os.Stderr, "  - %s:%d:%d: %s\n", syntaxErr.File, syntaxErr.Line, syntaxErr.Column, syntaxErr.Message)
+			}
+		}
+		if len(warnings) > 0 {
+			fmt.Fprintf(os.Stderr, "\nWarnings:\n")
+			for _, warn := range warnings {
+				fmt.Fprintf(os.Stderr, "  ⚠️  %s:%d:%d: %s\n", warn.File, warn.Line, warn.Column, warn.Message)
+			}
 		}
 	}
 	os.Exit(1)
@@ -985,24 +1082,41 @@ func validationFailure(message string, details []string) {
 	os.Exit(1)
 }
 
-func validationSuccess(result *planner.ExecutionResult) {
+func validationSuccess(result *planner.ExecutionResult, warnings []SyntaxError) {
 	steps := 0
 	if result != nil {
 		steps = result.StepsApplied
 	}
 	if isJSONOutput() {
-		diagnostics := map[string]interface{}{
-			"diagnostics": []map[string]interface{}{},
+		// Include warnings in the diagnostics array
+		var diagnostics []map[string]interface{}
+		for _, warn := range warnings {
+			diagnostics = append(diagnostics, map[string]interface{}{
+				"severity": "warning",
+				"message":  warn.Message,
+				"code":     "schema_warning",
+				"file":     warn.File,
+				"line":     warn.Line,
+				"column":   warn.Column,
+			})
+		}
+
+		output := map[string]interface{}{
+			"diagnostics": diagnostics,
 			"summary": map[string]interface{}{
 				"errors":        0,
+				"warnings":      len(warnings),
 				"valid":         true,
 				"steps_applied": steps,
 			},
 		}
-		jsonBytes, _ := json.MarshalIndent(diagnostics, "", "  ")
+		jsonBytes, _ := json.MarshalIndent(output, "", "  ")
 		fmt.Println(string(jsonBytes))
 	} else {
 		fmt.Fprintf(os.Stderr, "✅ Schema validation PASSED\n")
 		fmt.Fprintf(os.Stderr, "   Applied %d steps successfully\n", steps)
+		if len(warnings) > 0 {
+			fmt.Fprintf(os.Stderr, "\n⚠️  %d warning(s) found (see above)\n", len(warnings))
+		}
 	}
 }
