@@ -62,6 +62,8 @@ flags:
       - "planner.go"
       - "rollback.go"
       - "diff.go"
+      - "json_schema.go"
+      - "init_command.go"
       - "main.go"
     carryforward: true
 
@@ -73,6 +75,8 @@ flags:
       - "planner.go"
       - "rollback.go"
       - "diff.go"
+      - "json_schema.go"
+      - "init_command.go"
       - "main.go"
     carryforward: true
 

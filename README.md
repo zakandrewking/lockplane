@@ -166,13 +166,13 @@ npx lockplane init
 
 The wizard will guide you through:
 - **Database type selection**: Choose PostgreSQL, SQLite, or libSQL/Turso
-- **Connection input method** (PostgreSQL): Choose to enter individual fields or paste a connection string
+- **Connection input method (PostgreSQL only)**: Enter individual fields or paste a connection string
 - **Connection details**: Enter your database credentials with smart defaults
-- **Connection testing**: Verify your database is reachable before proceeding
+- **Shadow strategy selection**: Pick a separate PostgreSQL database, a schema via `SHADOW_SCHEMA`, or a custom SQLite/Turso shadow file
+- **Shadow configuration inputs**: Confirm port/schema/path values before Lockplane touches your environment
+- **Connection testing**: Verify your database (and shadow settings) are reachable before proceeding
 - **Environment setup**: Configure multiple environments (local, staging, production)
-- **Shadow DB preview/customization**: See the exact shadow host/port/path per database type and optionally customize it before entering credentials
-- **Shadow DB configuration**: Automatically set up shadow databases for safe migrations (PostgreSQL, SQLite, and libSQL)
-- **File generation**: Creates `lockplane.toml` and `.env.*` files with secure permissions
+- **Summary & file generation**: Creates `lockplane.toml`, `.env.*`, and `.gitignore` updates with secure permissions
 
 **Features:**
 - Detects existing configurations and offers to add new environments
@@ -319,9 +319,13 @@ Next, provide the actual credentials in `.env.local` (ignored by Git by default)
 cat <<'EOF' > .env.local
 # PostgreSQL connection (auto-detected sslmode=disable for localhost)
 POSTGRES_URL=postgresql://user:password@localhost:5432/myapp?sslmode=disable
-# Shadow database (always configured for PostgreSQL - safe migrations)
-# Auto-configured on port 5433 with <database>_shadow naming
+
+# Option 1: Separate shadow database (default)
 POSTGRES_SHADOW_URL=postgresql://user:password@localhost:5433/myapp_shadow?sslmode=disable
+
+# Option 2: Use a schema inside the same database
+# (Lockplane will use SHADOW_SCHEMA and re-use POSTGRES_URL)
+# SHADOW_SCHEMA=lockplane_shadow
 EOF
 ```
 
@@ -365,6 +369,7 @@ Lockplane automatically configures shadow databases during `lockplane init`:
 - Uses `<database>_shadow` naming convention
 - Example: `myapp` → `myapp_shadow`
 - Configured via `POSTGRES_SHADOW_URL`
+- Alternatively, set `SHADOW_SCHEMA=lockplane_shadow` to reuse the primary database and isolate work inside that schema (no second database required)
 
 **SQLite:**
 - Creates a shadow file alongside your main database
@@ -386,6 +391,8 @@ You can override shadow DB settings in your `.env.<environment>` files:
 ```bash
 # PostgreSQL - Use different port or host
 POSTGRES_SHADOW_URL=postgresql://user:pass@localhost:5434/myapp_shadow?sslmode=disable
+# PostgreSQL - Use schema in same database
+SHADOW_SCHEMA=lockplane_shadow
 
 # SQLite - Use different path
 SQLITE_SHADOW_DB_PATH=./test/shadow.db

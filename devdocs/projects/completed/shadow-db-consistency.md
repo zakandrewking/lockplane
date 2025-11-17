@@ -1,61 +1,63 @@
 # Shadow Database Consistency Project
 
-**Status**: ✅ Completed (2025-11-15)
-**Goal**: Align shadow database documentation, tooling, and wizard UX so users always understand how migrations stay safe.
+**Status**: ✅ Completed (2025-11-16)
+**Goal**: Align docs, CLI UX, and automation so every workflow clearly exposes schema-based and database-based shadow options in the required order.
 
 ---
 
-## Outcomes
+## Completed Checklist
 
-1. **Documentation is accurate across the board**
-   - README.md, CLAUDE.md, llms.txt, and Supabase docs now describe all three shadow DB strategies (PostgreSQL, SQLite, libSQL/Turso).
-   - Examples show the real `_shadow.db` files and the default PostgreSQL `<database>_shadow` + port `5433` behavior.
-   - The manual configuration section highlights overriding shadow URLs or using `SHADOW_SCHEMA` for schema-based isolation.
+### Phase A: Documentation & Project Tracking
+- [x] Move the project document back under `devdocs/projects/` while in progress, then archive here after completion
+- [x] Update README Shadow DB + manual configuration examples to highlight both `POSTGRES_SHADOW_URL` and `SHADOW_SCHEMA`
+- [x] Document schema-based selection in wizard copy and environment summaries
 
-2. **Init wizard now surfaces shadow DB behavior**
-   - After choosing a database type (or PostgreSQL input method), the wizard shows a dedicated “Shadow Database Preview” screen that explains exactly what will be provisioned.
-   - Users can press Esc to revisit their database selection before entering credentials.
-   - The post-connection summary displays each environment’s primary and shadow targets before any files are written, reinforcing that migrations are validated safely.
+### Phase B: Wizard Flow Rework
+- [x] Enforce required flow (DB → Postgres input method → connection details → shadow strategy → shadow details → test)
+- [x] Replace the legacy `StateShadowInfo/StateShadowAdvanced` with the new `StateShadowOptions` + `StateShadowDetails` phases
+- [x] Provide database-specific defaults:
+  - PostgreSQL: choose between `<db>_shadow` via dedicated port vs. schema mode, collecting port/schema input
+  - SQLite/libSQL: confirm recommended shadow file path or enter a custom override
+- [x] Wire the new state data into summaries and `.env` generation (including `SHADOW_SCHEMA`)
 
-3. **Per-environment summary before saving**
-   - The summary screen now lists every new or updated environment with:
-     - Primary connection (host/file/url)
-     - Shadow configuration preview (e.g., `user@host:5433/app_shadow`, `./schema/mydb_shadow.db`, or `./schema/turso_shadow.db`)
-   - Clear “Enter to create files / Esc to go back” messaging ensures users can review shadow settings before anything hits disk.
-
----
-
-## Implementation Details
-
-### Documentation
-- README wizard section gained a dedicated bullet explaining the new preview step plus a note that summaries include shadow info.
-- Existing references to “PostgreSQL-only shadow DBs” or “SQLite uses :memory:” were removed (already backed by schema-based support and file-backed SQLite shadow DBs).
-- No new flags were introduced—shadow overrides remain available via `.env`, `--shadow-db`, or `SHADOW_SCHEMA`.
-
-### Wizard Enhancements (`internal/wizard/wizard.go`)
-- Added `StateShadowInfo` and `renderShadowInfo()` with database-specific messaging.
-- Updated flow so every environment (Postgres, SQLite, libSQL) pauses on the explanation screen before input.
-- Summary view now uses helper formatters to print primary and shadow targets. Pressing “Save and finish” or Esc from the “Add another?” step always routes through this confirmation screen first.
-- Extended tests (`internal/wizard/wizard_test.go`) to cover the new state transitions and summary behavior.
+### Phase C: Tests & Verification
+- [x] Extend wizard tests to cover schema mode, SQLite normalization, libSQL defaults, and new navigation states
+- [x] Update `.env.example` to include the schema override guidance
+- [x] Run the full Go quality + build checklist
 
 ---
 
-## Testing
+## Key Outcomes
 
-- `go fmt ./...`
-- `go vet ./...`
-- `errcheck ./...`
-- `staticcheck ./...`
-- `go test -v ./...`
-- `go build .`
-- `go install .`
+1. **README + manual setup flows now explain schema-based isolation up front.** Examples show both `POSTGRES_SHADOW_URL` and `SHADOW_SCHEMA`, and the wizard section describes the decision point explicitly.
+2. **Wizard UX mirrors the desired decision order.** After entering connection info, users land on a dedicated shadow strategy screen, then a focused detail form that captures either the port or schema (Postgres) or the exact file path (SQLite/libSQL).
+3. **Env outputs & summaries accurately reflect schema mode.** The summary prints either `user@host:port/db_shadow` or `db (schema: <name>)`, `.env` files emit `SHADOW_SCHEMA` when selected, and `.env.example` now teaches overriding via schema.
+4. **Regression coverage expanded.** New tests exercise the separate DB defaults, schema inputs, libSQL defaults, and back-navigation, ensuring the flow can’t regress silently.
 
 ---
 
-## Future Considerations
+## Implementation Notes
 
-- **Advanced customization**: Provide “Advanced shadow options” inside the wizard to tweak port/path without editing `.env`.
-- **Non-interactive flags**: Mirror those advanced options for `lockplane init --yes`.
-- **Additional presets**: Offer Turso/libSQL templates that explicitly show the local SQLite shadow DB in the wizard summary.
+- `internal/wizard/wizard.go`
+  - Added `StateShadowOptions`/`StateShadowDetails`, keyboard handlers, and focus management for the new text inputs.
+  - `renderConnectionDetails` now describes the next (shadow) step, and `renderShadowOptions` renders database-specific labels (`<db>_shadow on port 5433`, `SHADOW_SCHEMA`, normalized file paths, etc.).
+  - Connection detail collection resets validation errors each time, `collectShadowDetailValues` normalizes SQLite/Turso paths, and summaries only display the schema tip when applicable.
+- `internal/wizard/generation.go`
+  - `.env` generation writes either `POSTGRES_SHADOW_URL` or `SHADOW_SCHEMA`.
+  - `.env.example` gained a sample `SHADOW_SCHEMA` line so users discover schema mode without digging.
+- `internal/wizard/wizard_test.go`
+  - Added coverage for schema selection, separate DB port overrides, libSQL defaults, SQLite normalization, and validation reset behavior.
+- `README.md` + supporting docs
+  - Reordered the wizard bullet list to match the new state machine and highlighted the schema option everywhere shadow behavior is discussed.
 
-These items can spin out into a follow-up project if/when users need more control over automatic shadow configuration.
+---
+
+## Testing & Verification
+
+✅ `go fmt ./...`
+✅ `go vet ./...`
+✅ `errcheck ./...`
+✅ `staticcheck ./...`
+✅ `go test -v ./...`
+✅ `go build .`
+✅ `go install .`

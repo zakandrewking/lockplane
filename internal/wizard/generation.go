@@ -225,9 +225,14 @@ func generateEnvFile(path string, env EnvironmentInput) error {
 		b.WriteString(fmt.Sprintf("# PostgreSQL connection (auto-detected sslmode=%s)\n", env.SSLMode))
 		b.WriteString(fmt.Sprintf("POSTGRES_URL=%s\n", connStr))
 
-		shadowConnStr := BuildPostgresShadowConnectionString(env)
-		b.WriteString("# Shadow database (always configured for PostgreSQL - safe migrations)\n")
-		b.WriteString(fmt.Sprintf("POSTGRES_SHADOW_URL=%s\n", shadowConnStr))
+		if strings.TrimSpace(env.ShadowSchema) != "" {
+			b.WriteString("# Shadow schema (reuses the primary database)\n")
+			b.WriteString(fmt.Sprintf("SHADOW_SCHEMA=%s\n", env.ShadowSchema))
+		} else {
+			shadowConnStr := BuildPostgresShadowConnectionString(env)
+			b.WriteString("# Shadow database (always configured for PostgreSQL - safe migrations)\n")
+			b.WriteString(fmt.Sprintf("POSTGRES_SHADOW_URL=%s\n", shadowConnStr))
+		}
 
 	case "sqlite":
 		connStr := BuildSQLiteConnectionString(env)
@@ -271,6 +276,7 @@ func createOrUpdateEnvExample(environments []EnvironmentInput) error {
 	// Check if database-specific variables already exist
 	hasPostgresURL := strings.Contains(existingContent, "POSTGRES_URL=")
 	hasPostgresShadowURL := strings.Contains(existingContent, "POSTGRES_SHADOW_URL=")
+	hasShadowSchema := strings.Contains(existingContent, "SHADOW_SCHEMA=")
 	hasSQLiteDBPath := strings.Contains(existingContent, "SQLITE_DB_PATH=")
 	hasSQLiteShadowDBPath := strings.Contains(existingContent, "SQLITE_SHADOW_DB_PATH=")
 	hasLibSQLURL := strings.Contains(existingContent, "LIBSQL_URL=")
@@ -324,6 +330,10 @@ func createOrUpdateEnvExample(environments []EnvironmentInput) error {
 		}
 		if !hasPostgresShadowURL {
 			b.WriteString("POSTGRES_SHADOW_URL=postgresql://user:password@localhost:5433/database_shadow?sslmode=disable\n")
+		}
+		if !hasShadowSchema {
+			b.WriteString("# Optional: reuse the primary database and isolate via schema\n")
+			b.WriteString("SHADOW_SCHEMA=lockplane_shadow\n")
 		}
 	}
 

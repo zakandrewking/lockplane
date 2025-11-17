@@ -103,21 +103,41 @@ The version in `package.json` must match the GitHub release tag (without the `v`
 - GitHub release: `https://github.com/lockplane/lockplane/releases/tag/v0.1.0`
 - Binaries: `lockplane_0.1.0_Linux_x86_64.tar.gz`, etc.
 
-## Automated Publishing
+## Automated Publishing (Trusted Publishers / OIDC)
 
-You can automate npm publishing with GitHub Actions. Add to `.github/workflows/release.yml`:
+Publishing is automated in `.github/workflows/release.yml` using npm's Trusted Publisher support. To authorize GitHub Actions to publish on your behalf:
+
+1. **Create a GitHub Environment** named `npm`
+   - In your repository settings, add an environment called `npm` (the workflow already references it).
+   - Optionally require reviewers so releases need approval before publishing.
+
+2. **Configure npm Trusted Publisher**
+   - Log in to [npmjs.com](https://www.npmjs.com/) → _Access Tokens_ → _Trusted publishers_.
+   - Add a new Trusted Publisher pointing to this GitHub repo and the `npm` environment.
+   - npm will now accept OIDC tokens issued for that environment.
+
+3. **Workflow requirements** (already satisfied in `release.yml`):
 
 ```yaml
-- name: Publish to npm
-  if: startsWith(github.ref, 'refs/tags/v')
-  run: |
-    echo "//registry.npmjs.org/:_authToken=\${NPM_TOKEN}" > ~/.npmrc
-    npm publish
-  env:
-    NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  npm-publish:
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm publish --provenance --access public
 ```
 
-Don't forget to add `NPM_TOKEN` to your GitHub secrets.
+No `NPM_TOKEN` secret is required—`setup-node` exchanges the GitHub OIDC token for a short-lived npm token automatically. If you need to force provenance on every publish, you can also set `NPM_CONFIG_PROVENANCE=true`, but the workflow already passes `--provenance`.
+
+> ℹ️ You never set `NODE_AUTH_TOKEN` or `NPM_TOKEN` manually when using Trusted Publishers; npm injects those after validating the GitHub OIDC token.
 
 ## Troubleshooting
 

@@ -51,19 +51,12 @@ func TestHandleEnterDatabaseType(t *testing.T) {
 		t.Errorf("expected database type to be 'postgres', got %s", m.currentEnv.DatabaseType)
 	}
 
-	// Now select input method and proceed through shadow info
-	newModel, _ = m.handleEnter()
-	m = *newModel.(*WizardModel)
-
-	if m.state != StateShadowInfo {
-		t.Errorf("expected state to be StateShadowInfo after selecting input method, got %v", m.state)
-	}
-
+	// Now select input method and proceed to connection details
 	newModel, _ = m.handleEnter()
 	m = *newModel.(*WizardModel)
 
 	if m.state != StateConnectionDetails {
-		t.Errorf("expected state to be StateConnectionDetails after shadow info, got %v", m.state)
+		t.Errorf("expected state to be StateConnectionDetails after selecting input method, got %v", m.state)
 	}
 
 	if len(m.inputs) == 0 {
@@ -79,16 +72,9 @@ func TestHandleEnterDatabaseTypeSQLite(t *testing.T) {
 	newModel, _ := m.handleEnter()
 	m = *newModel.(*WizardModel)
 
-	if m.state != StateShadowInfo {
-		t.Errorf("expected state to be StateShadowInfo after selecting SQLite, got %v", m.state)
-	}
-
-	newModel, _ = m.handleEnter()
-	m = *newModel.(*WizardModel)
-
 	// After shadow info, go to connection details
 	if m.state != StateConnectionDetails {
-		t.Errorf("expected state to be StateConnectionDetails after shadow info, got %v", m.state)
+		t.Errorf("expected state to be StateConnectionDetails after selecting SQLite, got %v", m.state)
 	}
 
 	if m.currentEnv.DatabaseType != "sqlite" {
@@ -100,7 +86,7 @@ func TestHandleEnterDatabaseTypeSQLite(t *testing.T) {
 	}
 }
 
-func TestShadowAdvancedPostgres(t *testing.T) {
+func TestShadowOptionsPostgresSchema(t *testing.T) {
 	m := New()
 	m.state = StateDatabaseType
 	m.dbTypeIndex = 0 // PostgreSQL
@@ -108,66 +94,177 @@ func TestShadowAdvancedPostgres(t *testing.T) {
 	// Select Postgres
 	newModel, _ := m.handleEnter()
 	m = *newModel.(*WizardModel)
-	// Enter shadow info
+
+	// Go to connection details
 	newModel, _ = m.handleEnter()
 	m = *newModel.(*WizardModel)
 
-	m.shadowConfigChoice = 1
+	// Collect connection details (defaults)
 	newModel, _ = m.handleEnter()
 	m = *newModel.(*WizardModel)
 
-	if m.state != StateShadowAdvanced {
-		t.Fatalf("expected StateShadowAdvanced, got %v", m.state)
+	if m.state != StateShadowOptions {
+		t.Fatalf("expected StateShadowOptions, got %v", m.state)
 	}
 
-	if len(m.shadowInputs) != 1 {
-		t.Fatalf("expected 1 shadow input, got %d", len(m.shadowInputs))
-	}
-
-	m.shadowInputs[0].SetValue("5440")
+	// Choose schema mode
+	m.shadowModeChoice = 1
 	newModel, _ = m.handleEnter()
 	m = *newModel.(*WizardModel)
 
-	if m.currentEnv.ShadowDBPort != "5440" {
-		t.Fatalf("expected shadow port to be updated, got %s", m.currentEnv.ShadowDBPort)
+	if m.state != StateShadowDetails {
+		t.Fatalf("expected StateShadowDetails, got %v", m.state)
 	}
 
-	if m.state != StateConnectionDetails {
-		t.Fatalf("expected StateConnectionDetails after configuring shadow DB, got %v", m.state)
+	if len(m.shadowDetailInputs) != 1 {
+		t.Fatalf("expected 1 shadow input, got %d", len(m.shadowDetailInputs))
+	}
+
+	m.shadowDetailInputs[0].SetValue("team_shadow")
+	if err := m.collectShadowDetailValues(); err != nil {
+		t.Fatalf("expected no error collecting schema details: %v", err)
+	}
+
+	if m.currentEnv.ShadowSchema != "team_shadow" {
+		t.Fatalf("expected shadow schema to be set, got %s", m.currentEnv.ShadowSchema)
+	}
+	if m.currentEnv.ShadowDBPort != "" {
+		t.Fatalf("expected shadow port to be cleared in schema mode, got %s", m.currentEnv.ShadowDBPort)
 	}
 }
 
-func TestShadowAdvancedSQLite(t *testing.T) {
+func TestShadowOptionsSQLiteCustomPath(t *testing.T) {
 	m := New()
 	m.state = StateDatabaseType
 	m.dbTypeIndex = 1 // SQLite
 
 	newModel, _ := m.handleEnter()
 	m = *newModel.(*WizardModel)
-	// preview
-	m.shadowConfigChoice = 1
-	newModel, _ = m.handleEnter()
-	m = *newModel.(*WizardModel)
-
-	if m.state != StateShadowAdvanced {
-		t.Fatalf("expected StateShadowAdvanced, got %v", m.state)
-	}
-
-	if len(m.shadowInputs) != 1 {
-		t.Fatalf("expected 1 shadow input for sqlite, got %d", len(m.shadowInputs))
-	}
-
-	customPath := "./tmp/custom_shadow.db"
-	m.shadowInputs[0].SetValue(customPath)
-	newModel, _ = m.handleEnter()
-	m = *newModel.(*WizardModel)
-
-	if m.currentEnv.ShadowDBPath != customPath {
-		t.Fatalf("expected shadow path to update, got %s", m.currentEnv.ShadowDBPath)
-	}
 
 	if m.state != StateConnectionDetails {
-		t.Fatalf("expected to proceed to connection details, got %v", m.state)
+		t.Fatalf("expected StateConnectionDetails, got %v", m.state)
+	}
+
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowOptions {
+		t.Fatalf("expected StateShadowOptions, got %v", m.state)
+	}
+
+	m.shadowModeChoice = 1 // custom path
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowDetails {
+		t.Fatalf("expected StateShadowDetails, got %v", m.state)
+	}
+
+	customPath := "tmp/custom_shadow.db"
+	m.shadowDetailInputs[0].SetValue(customPath)
+	if err := m.collectShadowDetailValues(); err != nil {
+		t.Fatalf("expected no error collecting details: %v", err)
+	}
+	expected := "./" + customPath
+	if m.currentEnv.ShadowDBPath != expected {
+		t.Fatalf("expected shadow path to normalize to %s, got %s", expected, m.currentEnv.ShadowDBPath)
+	}
+}
+
+func TestShadowOptionsPostgresSeparateDBDefaultPort(t *testing.T) {
+	m := New()
+	m.state = StateDatabaseType
+	m.dbTypeIndex = 0
+
+	newModel, _ := m.handleEnter() // pick Postgres
+	m = *newModel.(*WizardModel)
+
+	newModel, _ = m.handleEnter() // accept input method
+	m = *newModel.(*WizardModel)
+
+	newModel, _ = m.handleEnter() // accept defaults
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowOptions {
+		t.Fatalf("expected StateShadowOptions, got %v", m.state)
+	}
+
+	newModel, _ = m.handleEnter() // default separate DB
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowDetails {
+		t.Fatalf("expected StateShadowDetails, got %v", m.state)
+	}
+
+	if got := m.shadowDetailInputs[0].Value(); got != "5433" {
+		t.Fatalf("expected default shadow port 5433, got %s", got)
+	}
+
+	m.shadowDetailInputs[0].SetValue("5434")
+	if err := m.collectShadowDetailValues(); err != nil {
+		t.Fatalf("expected no error collecting details: %v", err)
+	}
+	if m.currentEnv.ShadowDBPort != "5434" {
+		t.Fatalf("expected custom port to stick, got %s", m.currentEnv.ShadowDBPort)
+	}
+	if m.currentEnv.ShadowSchema != "" {
+		t.Fatalf("expected schema to remain empty for separate DB, got %s", m.currentEnv.ShadowSchema)
+	}
+}
+
+func TestShadowOptionsLibSQLDefaultPath(t *testing.T) {
+	m := New()
+	m.state = StateDatabaseType
+	m.dbTypeIndex = 2 // libSQL/Turso
+
+	newModel, _ := m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateConnectionDetails {
+		t.Fatalf("expected StateConnectionDetails, got %v", m.state)
+	}
+
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowOptions {
+		t.Fatalf("expected StateShadowOptions, got %v", m.state)
+	}
+
+	newModel, _ = m.handleEnter()
+	m = *newModel.(*WizardModel)
+
+	if m.state != StateShadowDetails {
+		t.Fatalf("expected StateShadowDetails, got %v", m.state)
+	}
+
+	defaultPath := "./schema/turso_shadow.db"
+	if m.shadowDetailInputs[0].Value() != defaultPath {
+		t.Fatalf("expected default path %s, got %s", defaultPath, m.shadowDetailInputs[0].Value())
+	}
+
+	if err := m.collectShadowDetailValues(); err != nil {
+		t.Fatalf("expected no error collecting details: %v", err)
+	}
+	if m.currentEnv.ShadowDBPath != defaultPath {
+		t.Fatalf("expected shadow path to be %s, got %s", defaultPath, m.currentEnv.ShadowDBPath)
+	}
+}
+
+func TestCollectInputValuesClearsErrors(t *testing.T) {
+	m := New()
+	m.state = StateConnectionDetails
+	m.currentEnv.DatabaseType = "sqlite"
+	m.initializeInputs()
+	m.inputs[0].SetValue("local")
+	m.inputs[1].SetValue("./schema/local.db")
+	m.errors["name"] = "previous error"
+
+	if err := m.collectInputValues(); err != nil {
+		t.Fatalf("expected collectInputValues to succeed: %v", err)
+	}
+	if len(m.errors) != 0 {
+		t.Fatalf("expected errors map to be cleared, got %v", m.errors)
 	}
 }
 
@@ -301,24 +398,20 @@ func TestHandleEnterTestConnectionFailedQuit(t *testing.T) {
 	}
 }
 
-func TestShadowInfoBackNavigation(t *testing.T) {
+func TestShadowOptionsBackNavigation(t *testing.T) {
 	m := New()
-	m.state = StateShadowInfo
+	m.state = StateConnectionDetails
 	m.currentEnv.DatabaseType = "sqlite"
+	m.prepareShadowOptions()
+
+	if m.state != StateShadowOptions {
+		t.Fatalf("expected StateShadowOptions, got %v", m.state)
+	}
 
 	newModel, _ := m.handleBack()
 	m = *newModel.(*WizardModel)
-	if m.state != StateDatabaseType {
-		t.Errorf("expected to return to StateDatabaseType, got %v", m.state)
-	}
-
-	m.state = StateShadowInfo
-	m.currentEnv.DatabaseType = "postgres"
-
-	newModel, _ = m.handleBack()
-	m = *newModel.(*WizardModel)
-	if m.state != StatePostgresInputMethod {
-		t.Errorf("expected to return to StatePostgresInputMethod for postgres, got %v", m.state)
+	if m.state != StateConnectionDetails {
+		t.Errorf("expected to return to StateConnectionDetails, got %v", m.state)
 	}
 }
 

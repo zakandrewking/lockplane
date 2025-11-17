@@ -11,10 +11,10 @@ const (
 	StateWelcome WizardState = iota
 	StateCheckExisting
 	StateDatabaseType
-	StatePostgresInputMethod // New state: choose between individual fields or connection string
-	StateShadowInfo          // Explain how shadow DBs will be configured
-	StateShadowAdvanced      // Configure advanced shadow DB options
+	StatePostgresInputMethod // Choose between individual fields or connection string
 	StateConnectionDetails
+	StateShadowOptions // Choose between default/schema/custom shadow strategies
+	StateShadowDetails // Collect shadow DB inputs
 	StateTestConnection
 	StateAddAnother
 	StateSummary
@@ -55,13 +55,13 @@ type WizardModel struct {
 	// Postgres input method selection (0=individual fields, 1=connection string)
 	postgresInputMethod int
 	// Shadow DB configuration choices
-	shadowConfigChoice int
-	shadowInputs       []textinput.Model
-	shadowInputIndex   int
+	shadowModeChoice   int
+	shadowDetailInputs []textinput.Model
+	shadowDetailIndex  int
 
 	// Validation
-	errors       map[string]string
-	shadowErrors map[string]string
+	errors             map[string]string
+	shadowDetailErrors map[string]string
 
 	// Final output
 	result *InitResult
@@ -89,6 +89,7 @@ type EnvironmentInput struct {
 	Password     string
 	SSLMode      string
 	ShadowDBPort string
+	ShadowSchema string
 
 	// SQLite fields
 	FilePath string
