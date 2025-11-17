@@ -275,3 +275,101 @@ CREATE INDEX idx_projects_user_id ON projects(user_id);
 		t.Fatalf("expected index columns [user_id], got %v", idx.Columns)
 	}
 }
+
+func TestParseSQLSchemaWithCurrentTimestamp(t *testing.T) {
+	sql := `
+CREATE TABLE events (
+    id BIGINT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`
+
+	schema, err := ParseSQLSchema(sql)
+	if err != nil {
+		t.Fatalf("ParseSQLSchema returned error: %v", err)
+	}
+
+	if len(schema.Tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(schema.Tables))
+	}
+
+	table := schema.Tables[0]
+	if table.Name != "events" {
+		t.Fatalf("expected table name events, got %s", table.Name)
+	}
+
+	if len(table.Columns) != 4 {
+		t.Fatalf("expected 4 columns, got %d", len(table.Columns))
+	}
+
+	// Check created_at column has CURRENT_TIMESTAMP default
+	createdAtCol := table.Columns[2]
+	if createdAtCol.Name != "created_at" {
+		t.Fatalf("expected column name created_at, got %s", createdAtCol.Name)
+	}
+	if createdAtCol.Default == nil {
+		t.Fatalf("expected created_at to have default value")
+	}
+	if *createdAtCol.Default != "CURRENT_TIMESTAMP" {
+		t.Fatalf("expected default CURRENT_TIMESTAMP, got %s", *createdAtCol.Default)
+	}
+
+	// Check updated_at column has CURRENT_TIMESTAMP default
+	updatedAtCol := table.Columns[3]
+	if updatedAtCol.Name != "updated_at" {
+		t.Fatalf("expected column name updated_at, got %s", updatedAtCol.Name)
+	}
+	if updatedAtCol.Default == nil {
+		t.Fatalf("expected updated_at to have default value")
+	}
+	if *updatedAtCol.Default != "CURRENT_TIMESTAMP" {
+		t.Fatalf("expected default CURRENT_TIMESTAMP, got %s", *updatedAtCol.Default)
+	}
+}
+
+func TestParseSQLSchemaWithSQLValueFunctions(t *testing.T) {
+	sql := `
+CREATE TABLE audit_log (
+    id BIGINT PRIMARY KEY,
+    event_date DATE DEFAULT CURRENT_DATE,
+    event_time TIME DEFAULT CURRENT_TIME,
+    event_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    local_time TIME DEFAULT LOCALTIME,
+    local_timestamp TIMESTAMP DEFAULT LOCALTIMESTAMP
+);
+`
+
+	schema, err := ParseSQLSchema(sql)
+	if err != nil {
+		t.Fatalf("ParseSQLSchema returned error: %v", err)
+	}
+
+	table := schema.Tables[0]
+
+	tests := []struct {
+		columnName      string
+		expectedDefault string
+	}{
+		{"event_date", "CURRENT_DATE"},
+		{"event_time", "CURRENT_TIME"},
+		{"event_timestamp", "CURRENT_TIMESTAMP"},
+		{"local_time", "LOCALTIME"},
+		{"local_timestamp", "LOCALTIMESTAMP"},
+	}
+
+	for i, tt := range tests {
+		col := table.Columns[i+1] // Skip id column
+		if col.Name != tt.columnName {
+			t.Errorf("expected column %d name %s, got %s", i, tt.columnName, col.Name)
+		}
+		if col.Default == nil {
+			t.Errorf("expected column %s to have default value", tt.columnName)
+			continue
+		}
+		if *col.Default != tt.expectedDefault {
+			t.Errorf("expected column %s default %s, got %s", tt.columnName, tt.expectedDefault, *col.Default)
+		}
+	}
+}

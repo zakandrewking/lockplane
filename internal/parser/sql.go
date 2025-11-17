@@ -880,6 +880,43 @@ func formatExpr(node *pg_query.Node) string {
 		if expr.TypeCast.Arg != nil {
 			return formatExpr(expr.TypeCast.Arg)
 		}
+
+	case *pg_query.Node_SqlvalueFunction:
+		// Handle SQL value functions like CURRENT_TIMESTAMP, CURRENT_USER, etc.
+		// Based on PostgreSQL's SVFOp enum (1-indexed)
+		// See: https://github.com/postgres/postgres/blob/master/src/include/nodes/primnodes.h
+		switch expr.SqlvalueFunction.Op {
+		case 1: // SVFOP_CURRENT_DATE
+			return "CURRENT_DATE"
+		case 2: // SVFOP_CURRENT_TIME
+			return "CURRENT_TIME"
+		case 3: // SVFOP_CURRENT_TIME_N (CURRENT_TIME with precision)
+			return "CURRENT_TIME"
+		case 4: // SVFOP_CURRENT_TIMESTAMP
+			return "CURRENT_TIMESTAMP"
+		case 5: // SVFOP_CURRENT_TIMESTAMP_N (CURRENT_TIMESTAMP with precision)
+			return "CURRENT_TIMESTAMP"
+		case 6: // SVFOP_LOCALTIME
+			return "LOCALTIME"
+		case 7: // SVFOP_LOCALTIME_N (LOCALTIME with precision)
+			return "LOCALTIME"
+		case 8: // SVFOP_LOCALTIMESTAMP
+			return "LOCALTIMESTAMP"
+		case 9: // SVFOP_LOCALTIMESTAMP_N (LOCALTIMESTAMP with precision)
+			return "LOCALTIMESTAMP"
+		case 10: // SVFOP_CURRENT_ROLE
+			return "CURRENT_ROLE"
+		case 11: // SVFOP_CURRENT_USER
+			return "CURRENT_USER"
+		case 12: // SVFOP_USER
+			return "USER"
+		case 13: // SVFOP_SESSION_USER
+			return "SESSION_USER"
+		case 14: // SVFOP_CURRENT_CATALOG
+			return "CURRENT_CATALOG"
+		case 15: // SVFOP_CURRENT_SCHEMA
+			return "CURRENT_SCHEMA"
+		}
 	}
 
 	// For anything else, return a placeholder
