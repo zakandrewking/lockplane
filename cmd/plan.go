@@ -67,7 +67,7 @@ func init() {
 	planCmd.Flags().StringVar(&planToEnvironment, "to-environment", "", "Environment providing the target database connection")
 	planCmd.Flags().BoolVar(&planValidate, "validate", false, "Validate schema files against shadow DB (when used alone) or migration safety (when used with --from/--to)")
 	planCmd.Flags().BoolVarP(&planVerbose, "verbose", "v", false, "Enable verbose logging")
-	planCmd.Flags().StringVar(&planOutput, "output", "", "Output format: json (for IDE integration)")
+	planCmd.Flags().StringVar(&planOutput, "output", "", "Output format (default: text, set to 'json' for IDE integration)")
 	planCmd.Flags().StringVar(&planShadowDB, "shadow-db", "", "Shadow database URL for validation")
 	planCmd.Flags().StringVar(&planShadowSchema, "shadow-schema", "", "Shadow schema name when reusing an existing database")
 	planCmd.Flags().StringVar(&planCacheDir, "cache-dir", "", "Directory for caching shadow DB state (for incremental validation)")
@@ -401,12 +401,12 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 	driverType := executor.DetectDriver(shadowConnStr)
 	driver, err := executor.NewDriver(driverType)
 	if err != nil {
-		log.Fatalf("Failed to create database driver: %v", err)
+		validationFailure(fmt.Sprintf("Failed to create database driver: %v", err), nil)
 	}
 
 	shadowDB, err := sql.Open(driverType, shadowConnStr)
 	if err != nil {
-		log.Fatalf("Failed to connect to shadow database: %v", err)
+		validationFailure(fmt.Sprintf("Failed to connect to shadow database: %v", err), nil)
 	}
 	defer func() {
 		_ = shadowDB.Close()
@@ -414,12 +414,14 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 	if shadowSchema != "" && driver.SupportsSchemas() {
 		if err := driver.CreateSchema(ctx, shadowDB, shadowSchema); err != nil {
-			log.Fatalf("Failed to create shadow schema: %v", err)
+			validationFailure(fmt.Sprintf("Failed to create shadow schema: %v", err), nil)
 		}
 		if err := driver.SetSchema(ctx, shadowDB, shadowSchema); err != nil {
-			log.Fatalf("Failed to set shadow schema: %v", err)
+			validationFailure(fmt.Sprintf("Failed to set shadow schema: %v", err), nil)
 		}
-		fmt.Fprintf(os.Stderr, "ℹ️  Using shadow schema %q for validation\n", shadowSchema)
+		if !isJSONOutput() {
+			fmt.Fprintf(os.Stderr, "ℹ️  Using shadow schema %q for validation\n", shadowSchema)
+		}
 	}
 
 	// Step 4: Clean shadow DB
@@ -428,7 +430,7 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 	}
 
 	if err := executor.CleanupShadowDB(ctx, shadowDB, driver, planVerbose); err != nil {
-		log.Fatalf("Failed to clean shadow database: %v", err)
+		validationFailure(fmt.Sprintf("Failed to clean shadow database: %v", err), nil)
 	}
 
 	// Step 5: Load schema files
@@ -440,7 +442,7 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 	opts := executor.BuildSchemaLoadOptions(schemaDir, dialect)
 	desiredSchema, err := executor.LoadSchemaOrIntrospectWithOptions(schemaDir, opts)
 	if err != nil {
-		log.Fatalf("Failed to load schema: %v", err)
+		validationFailure(fmt.Sprintf("Failed to load schema: %v", err), nil)
 	}
 
 	// Step 6: Generate a plan from empty schema to desired schema
@@ -449,7 +451,7 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 	plan, err := planner.GeneratePlanWithHash(diff, emptySchema, driver)
 	if err != nil {
-		log.Fatalf("Failed to generate plan: %v", err)
+		validationFailure(fmt.Sprintf("Failed to generate plan: %v", err), nil)
 	}
 
 	if planVerbose {
@@ -465,47 +467,74 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 	// Step 8: Output results
 	if err != nil {
-		if planOutput == "json" {
-			// Output as JSON for IDE integration
-			diagnostics := map[string]interface{}{
-				"diagnostics": []map[string]interface{}{
-					{
-						"severity": "error",
-						"message":  fmt.Sprintf("Schema validation failed: %v", err),
-						"code":     "validation_error",
-					},
-				},
-				"summary": map[string]interface{}{
-					"errors": 1,
-					"valid":  false,
-				},
-			}
-			jsonBytes, _ := json.MarshalIndent(diagnostics, "", "  ")
-			fmt.Println(string(jsonBytes))
-		} else {
-			fmt.Fprintf(os.Stderr, "❌ Schema validation FAILED\n\n")
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			for _, errMsg := range result.Errors {
-				fmt.Fprintf(os.Stderr, "  - %s\n", errMsg)
-			}
+		var extras []string
+		if result != nil {
+			extras = result.Errors
 		}
-		os.Exit(1)
+		validationFailure(fmt.Sprintf("Schema validation failed: %v", err), extras)
 	}
 
-	// Success!
-	if planOutput == "json" {
+	validationSuccess(result)
+}
+
+func isJSONOutput() bool {
+	return strings.EqualFold(strings.TrimSpace(planOutput), "json")
+}
+
+func validationFailure(message string, details []string) {
+	mainMsg := strings.TrimSpace(message)
+	if mainMsg == "" {
+		mainMsg = "Schema validation failed."
+	}
+	formatted := mainMsg
+	if len(details) > 0 {
+		formatted = fmt.Sprintf("%s\n%s", mainMsg, strings.Join(details, "\n"))
+	}
+
+	if isJSONOutput() {
+		diagnostics := map[string]interface{}{
+			"diagnostics": []map[string]interface{}{
+				{
+					"severity": "error",
+					"message":  formatted,
+					"code":     "validation_error",
+				},
+			},
+			"summary": map[string]interface{}{
+				"errors": 1,
+				"valid":  false,
+			},
+		}
+		jsonBytes, _ := json.MarshalIndent(diagnostics, "", "  ")
+		fmt.Println(string(jsonBytes))
+	} else {
+		fmt.Fprintf(os.Stderr, "❌ Schema validation FAILED\n\n")
+		fmt.Fprintf(os.Stderr, "%s\n", mainMsg)
+		for _, detail := range details {
+			fmt.Fprintf(os.Stderr, "  - %s\n", detail)
+		}
+	}
+	os.Exit(1)
+}
+
+func validationSuccess(result *planner.ExecutionResult) {
+	steps := 0
+	if result != nil {
+		steps = result.StepsApplied
+	}
+	if isJSONOutput() {
 		diagnostics := map[string]interface{}{
 			"diagnostics": []map[string]interface{}{},
 			"summary": map[string]interface{}{
 				"errors":        0,
 				"valid":         true,
-				"steps_applied": result.StepsApplied,
+				"steps_applied": steps,
 			},
 		}
 		jsonBytes, _ := json.MarshalIndent(diagnostics, "", "  ")
 		fmt.Println(string(jsonBytes))
 	} else {
 		fmt.Fprintf(os.Stderr, "✅ Schema validation PASSED\n")
-		fmt.Fprintf(os.Stderr, "   Applied %d steps successfully\n", result.StepsApplied)
+		fmt.Fprintf(os.Stderr, "   Applied %d steps successfully\n", steps)
 	}
 }
