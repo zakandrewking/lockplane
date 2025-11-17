@@ -24,7 +24,14 @@ jobs:
         run: go mod download
 
       - name: Run unit tests
-        run: go test -v -race -short ./...
+        run: go test -v -race -short -coverprofile=coverage-unit.txt -covermode=atomic ./...
+
+      - name: Upload unit test coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-unit.txt
+          name: unit-coverage
 
       - name: Format check
         run: |
@@ -103,7 +110,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-postgres.txt
-          flags: postgres
           name: postgres-coverage
 
   integration-tests-sqlite:
@@ -133,7 +139,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-sqlite.txt
-          flags: sqlite
           name: sqlite-coverage
 
   lint:

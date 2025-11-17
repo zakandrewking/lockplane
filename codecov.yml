@@ -35,7 +35,6 @@ comment:
   require_head: false
   layout: "reach, diff, flags, files"
   behavior: default
-  after_n_builds: 2  # Wait for both integration test uploads
 
 # GitHub checks - disable all status checks
 github_checks:
@@ -50,37 +49,3 @@ ignore:
   - "examples/**"
   - "devdocs/**"
   - "docs/**"
-
-# Flags for different coverage uploads
-# This allows us to track coverage from different test suites separately
-flags:
-  postgres:
-    paths:
-      - "cmd/"
-      - "internal/"
-      - "database/"
-      - "planner.go"
-      - "rollback.go"
-      - "diff.go"
-      - "json_schema.go"
-      - "init_command.go"
-      - "main.go"
-    carryforward: true
-
-  sqlite:
-    paths:
-      - "cmd/"
-      - "internal/"
-      - "database/"
-      - "planner.go"
-      - "rollback.go"
-      - "diff.go"
-      - "json_schema.go"
-      - "init_command.go"
-      - "main.go"
-    carryforward: true
-
-  unit:
-    paths:
-      - "."
-    carryforward: true
