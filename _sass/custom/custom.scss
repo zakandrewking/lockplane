@@ -1,16 +1,7 @@
 // Custom styles for Lockplane documentation
 
-// TEST
-body {
-  accent-color: green;
-}
-
-// Remove JTD 0.6 active-link gradient
-.site-nav .nav-list-link {
-  background-image: none;
-}
-
 // Highlight the active page with a flat color instead of gradient
 .nav-list .nav-list-item .nav-list-link:hover, .nav-list .nav-list-item .nav-list-link.active {
-  background-color: darken($sidebar-color, 4%);
+  background-color: darken($sidebar-color, 6%);
+  background-image: none;
 }
