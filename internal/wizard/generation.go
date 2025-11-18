@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 	_ "modernc.org/sqlite"
 )
+
+const defaultConfigSchemaPath = "schema"
 
 // GenerateFiles creates the lockplane.toml and .env files
 func GenerateFiles(environments []EnvironmentInput) (*InitResult, error) {
@@ -139,24 +142,28 @@ func createSQLiteDatabaseFile(filePath string) error {
 }
 
 func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) error {
-	// Load existing config if it exists
-	existingEnvs := make(map[string]tomlEnvironment)
-	var defaultEnv string
+	cfg := lockplaneConfig{
+		SchemaPath:   defaultConfigSchemaPath,
+		Environments: make(map[string]tomlEnvironment),
+	}
 
+	// Load existing config if it exists
 	if data, err := os.ReadFile(path); err == nil {
-		// Parse existing config
-		var existingConfig struct {
-			DefaultEnvironment string                     `toml:"default_environment"`
-			Environments       map[string]tomlEnvironment `toml:"environments"`
-		}
-		if err := toml.Unmarshal(data, &existingConfig); err == nil {
-			existingEnvs = existingConfig.Environments
-			defaultEnv = existingConfig.DefaultEnvironment
+		if err := toml.Unmarshal(data, &cfg); err == nil {
+			if cfg.Environments == nil {
+				cfg.Environments = make(map[string]tomlEnvironment)
+			}
+			if cfg.SchemaPath == "" {
+				cfg.SchemaPath = defaultConfigSchemaPath
+			}
 		}
 	}
 
 	// Merge new environments (new ones override existing with same name)
 	for _, env := range newEnvironments {
+		if env.Name == "" {
+			continue
+		}
 		description := env.Description
 		if description == "" {
 			switch env.DatabaseType {
@@ -166,21 +173,55 @@ func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) erro
 				description = "SQLite database"
 			case "libsql":
 				description = "libSQL/Turso database"
+			default:
+				description = "Database environment"
 			}
 		}
 
-		existingEnvs[env.Name] = tomlEnvironment{
+		cfg.Environments[env.Name] = tomlEnvironment{
 			Description: description,
 			Comment:     fmt.Sprintf("Connection: .env.%s", env.Name),
 		}
 	}
 
 	// Set default environment if not already set
-	if defaultEnv == "" && len(newEnvironments) > 0 {
-		defaultEnv = newEnvironments[0].Name
+	if cfg.DefaultEnvironment == "" && len(newEnvironments) > 0 {
+		cfg.DefaultEnvironment = newEnvironments[0].Name
 	}
 
-	// Build the TOML file
+	// Ensure global schema path exists
+	if cfg.SchemaPath == "" {
+		cfg.SchemaPath = defaultConfigSchemaPath
+	}
+
+	// Ensure global dialect/schemas exist if applicable
+	if cfg.Dialect == "" {
+		if inferred := inferDialectFromEnvironments(newEnvironments); inferred != "" {
+			cfg.Dialect = inferred
+		}
+	}
+	if len(cfg.Schemas) == 0 && shouldAddSchemaList(cfg, newEnvironments) {
+		cfg.Schemas = []string{"public"}
+	}
+
+	return writeLockplaneConfig(path, cfg)
+}
+
+// tomlEnvironment represents an environment in the TOML file
+type tomlEnvironment struct {
+	Description string `toml:"description"`
+	Comment     string `toml:"-"` // Not serialized, just for generation
+}
+
+type lockplaneConfig struct {
+	DefaultEnvironment string                     `toml:"default_environment"`
+	SchemaPath         string                     `toml:"schema_path"`
+	Dialect            string                     `toml:"dialect"`
+	Schemas            []string                   `toml:"schemas"`
+	Environments       map[string]tomlEnvironment `toml:"environments"`
+}
+
+func writeLockplaneConfig(path string, cfg lockplaneConfig) error {
 	var b strings.Builder
 
 	b.WriteString("# Lockplane Configuration\n")
@@ -189,25 +230,71 @@ func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) erro
 	b.WriteString("# Config location: Project root (lockplane.toml)\n")
 	b.WriteString("# Credentials: Stored in .env.* files (never in this file)\n\n")
 
-	if defaultEnv != "" {
-		b.WriteString(fmt.Sprintf("default_environment = \"%s\"\n\n", defaultEnv))
+	if cfg.DefaultEnvironment != "" {
+		b.WriteString(fmt.Sprintf("default_environment = \"%s\"\n", cfg.DefaultEnvironment))
+	}
+	if cfg.SchemaPath != "" {
+		b.WriteString(fmt.Sprintf("schema_path = \"%s\"\n", cfg.SchemaPath))
+	}
+	if cfg.Dialect != "" {
+		b.WriteString(fmt.Sprintf("dialect = \"%s\"\n", cfg.Dialect))
+	}
+	if len(cfg.Schemas) > 0 {
+		b.WriteString(fmt.Sprintf("schemas = %s\n", formatStringSlice(cfg.Schemas)))
+	}
+	if cfg.DefaultEnvironment != "" || cfg.SchemaPath != "" || cfg.Dialect != "" || len(cfg.Schemas) > 0 {
+		b.WriteString("\n")
 	}
 
-	// Write all environment sections
-	for envName, env := range existingEnvs {
+	envNames := make([]string, 0, len(cfg.Environments))
+	for name := range cfg.Environments {
+		envNames = append(envNames, name)
+	}
+	sort.Strings(envNames)
+
+	for _, envName := range envNames {
+		env := cfg.Environments[envName]
 		b.WriteString(fmt.Sprintf("[environments.%s]\n", envName))
 		b.WriteString(fmt.Sprintf("description = \"%s\"\n", env.Description))
-		b.WriteString(fmt.Sprintf("# %s\n", env.Comment))
-		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("# %s\n\n", env.Comment))
 	}
 
 	return os.WriteFile(path, []byte(b.String()), 0644)
 }
 
-// tomlEnvironment represents an environment in the TOML file
-type tomlEnvironment struct {
-	Description string `toml:"description"`
-	Comment     string `toml:"-"` // Not serialized, just for generation
+func inferDialectFromEnvironments(envs []EnvironmentInput) string {
+	for _, env := range envs {
+		switch strings.ToLower(env.DatabaseType) {
+		case "sqlite", "libsql":
+			return "sqlite"
+		case "postgres":
+			return "postgres"
+		}
+	}
+	return ""
+}
+
+func shouldAddSchemaList(cfg lockplaneConfig, envs []EnvironmentInput) bool {
+	if strings.EqualFold(cfg.Dialect, "postgres") {
+		return true
+	}
+	for _, env := range envs {
+		if strings.EqualFold(env.DatabaseType, "postgres") {
+			return true
+		}
+	}
+	return false
+}
+
+func formatStringSlice(values []string) string {
+	if len(values) == 0 {
+		return "[]"
+	}
+	formatted := make([]string, len(values))
+	for i, v := range values {
+		formatted[i] = fmt.Sprintf("\"%s\"", v)
+	}
+	return fmt.Sprintf("[%s]", strings.Join(formatted, ", "))
 }
 
 func generateEnvFile(path string, env EnvironmentInput) error {

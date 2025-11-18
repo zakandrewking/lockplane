@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -247,5 +248,32 @@ SHADOW_SCHEMA=lockplane_shadow
 	}
 	if env.ShadowDatabaseURL != env.DatabaseURL {
 		t.Fatalf("expected shadow DB to reuse POSTGRES_URL, got %q", env.ShadowDatabaseURL)
+	}
+}
+
+func TestResolveEnvironmentHonorsGlobalDialectAndSchemas(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	config := &Config{
+		DefaultEnvironment: "local",
+		configDir:          tempDir,
+		Dialect:            "sqlite",
+		Schemas:            []string{"public", "storage"},
+		Environments: map[string]EnvironmentConfig{
+			"local": {},
+		},
+	}
+
+	env, err := ResolveEnvironment(config, "local")
+	if err != nil {
+		t.Fatalf("ResolveEnvironment returned error: %v", err)
+	}
+
+	if env.Dialect != "sqlite" {
+		t.Fatalf("Expected dialect sqlite from global config, got %q", env.Dialect)
+	}
+	if !reflect.DeepEqual(env.Schemas, []string{"public", "storage"}) {
+		t.Fatalf("Expected schemas %#v, got %#v", []string{"public", "storage"}, env.Schemas)
 	}
 }

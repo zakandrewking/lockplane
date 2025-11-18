@@ -14,12 +14,12 @@ Move the per-file dialect declaration (currently a comment like `-- dialect: sql
 - Essential for multi-schema support (all schemas in a database share the same dialect).
 
 ## Decisions Made
-1. **Scope:** Dialect is set per-environment (all schemas in one database have the same dialect)
+1. **Scope:** Dialect + schema list (`schemas = [...]`) live at the global level (applies to every environment)
 2. **Backwards compatibility:** Use clear precedence order (see below) - no breaking changes
 3. **CLI defaults:** Auto-detect from connection string if not specified (current behavior)
 
 ## Implementation Summary
-- Extended `EnvironmentConfig` (`internal/config`) with `dialect` and `schemas` plus validation/helpers so every command can rely on the config layer.
+- Added global `dialect` / `schemas` fields on `config.Config` while keeping per-environment overrides for backward compatibility.
 - `executor.LoadSchemaOrIntrospectWithOptions` + CLI commands now always pass a dialect fallback sourced from resolved environments before falling back to driver detection.
 - `internal/schema/loader` applies the precedence chain (inline comment → config → auto detection) and emits a warning when config conflicts with inline hints.
 - Introspection (`internal/introspect`) and SQL generation (`database/postgres/generator`) are multi-schema aware, threading schema names through tables, policies, and plan steps.
@@ -28,13 +28,16 @@ Move the per-file dialect declaration (currently a comment like `-- dialect: sql
 ## Configuration Shape
 
 ```toml
+default_environment = "local"
+schema_path = "schema"
+dialect = "postgres"              # NEW: Explicit global dialect
+schemas = ["public", "storage"]   # NEW: Multi-schema support
+
 [environments.local]
 description = "Local development"
 database_url = "postgresql://postgres:postgres@localhost:5432/mydb"
 shadow_database_url = "postgresql://postgres:postgres@localhost:5432/mydb"
 shadow_schema = "lockplane_shadow"
-dialect = "postgres"              # NEW: Explicit dialect
-schemas = ["public", "storage"]   # NEW: Multi-schema support
 ```
 
 ## Precedence Order (Most to Least Specific)
@@ -54,8 +57,7 @@ schemas = ["public", "storage"]   # NEW: Multi-schema support
 - [x] Create design document
 
 ### Phase 2 – Config Changes ✅ (Done)
-- [x] Add `dialect` field to `EnvironmentConfig`
-- [x] Add `schemas` field to `EnvironmentConfig`
+- [x] Add global `dialect` and `schemas` fields to `config.Config` (environments can still override if needed)
 - [x] Add validation for dialect values ("postgres", "sqlite")
 - [x] Update config resolution to use dialect from config
 

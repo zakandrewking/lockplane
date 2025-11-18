@@ -104,6 +104,18 @@ func TestGenerateFiles(t *testing.T) {
 		t.Error("config should contain default_environment")
 	}
 
+	if !strings.Contains(configStr, "schema_path = \"schema\"") {
+		t.Error("config should set schema_path when missing")
+	}
+
+	if !strings.Contains(configStr, "dialect = \"postgres\"") {
+		t.Error("config should contain global dialect")
+	}
+
+	if !strings.Contains(configStr, "schemas = [\"public\"]") {
+		t.Error("config should contain default schema list")
+	}
+
 	if !strings.Contains(configStr, "[environments.local]") {
 		t.Error("config should contain local environment")
 	}

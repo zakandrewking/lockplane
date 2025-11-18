@@ -20,8 +20,8 @@ type EnvironmentConfig struct {
 	DatabaseURL       string   `toml:"database_url"`
 	ShadowDatabaseURL string   `toml:"shadow_database_url"`
 	SchemaPath        string   `toml:"schema_path"`
-	Dialect           string   `toml:"dialect"` // Database dialect: "postgres", "sqlite" (optional, auto-detected if not set)
-	Schemas           []string `toml:"schemas"` // PostgreSQL schemas to manage (optional, defaults to current_schema())
+	Dialect           string   `toml:"dialect"` // Deprecated: prefer global dialect
+	Schemas           []string `toml:"schemas"` // Deprecated: prefer global schema list
 	ShadowSchema      string   `toml:"shadow_schema"`
 }
 
@@ -29,6 +29,8 @@ type EnvironmentConfig struct {
 type Config struct {
 	DefaultEnvironment string                       `toml:"default_environment"`
 	SchemaPath         string                       `toml:"schema_path"`
+	Dialect            string                       `toml:"dialect"`
+	Schemas            []string                     `toml:"schemas"`
 	DatabaseURL        string                       `toml:"database_url"`        // legacy fallback
 	ShadowDatabaseURL  string                       `toml:"shadow_database_url"` // legacy fallback
 	Environments       map[string]EnvironmentConfig `toml:"environments"`

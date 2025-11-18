@@ -54,12 +54,19 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		Name:              envName,
 		SchemaPath:        "",
 		ResolvedConfigDir: "",
+		Schemas:           []string{},
 	}
 
 	if config != nil {
 		resolved.ResolvedConfigDir = config.ConfigDir()
 		if config.SchemaPath != "" {
 			resolved.SchemaPath = config.SchemaPath
+		}
+		if config.Dialect != "" {
+			resolved.Dialect = config.Dialect
+		}
+		if len(config.Schemas) > 0 {
+			resolved.Schemas = append([]string{}, config.Schemas...)
 		}
 		if config.DatabaseURL != "" && envConfig.DatabaseURL == "" {
 			envConfig.DatabaseURL = config.DatabaseURL
@@ -78,8 +85,12 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 
 	resolved.DatabaseURL = envConfig.DatabaseURL
 	resolved.ShadowDatabaseURL = envConfig.ShadowDatabaseURL
-	resolved.Dialect = envConfig.Dialect
-	resolved.Schemas = envConfig.Schemas
+	if envConfig.Dialect != "" {
+		resolved.Dialect = envConfig.Dialect
+	}
+	if len(envConfig.Schemas) > 0 {
+		resolved.Schemas = append([]string{}, envConfig.Schemas...)
+	}
 	resolved.ShadowSchema = envConfig.ShadowSchema
 	if envExists {
 		resolved.FromConfig = true
@@ -215,6 +226,9 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 			base = config.ConfigDir()
 		}
 		resolved.SchemaPath = resolveSchemaPath(resolved.SchemaPath, base)
+	}
+	if len(resolved.Schemas) == 0 {
+		resolved.Schemas = nil
 	}
 
 	if config != nil && config.Environments != nil && len(config.Environments) > 0 && !envExists {
