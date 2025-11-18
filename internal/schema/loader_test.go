@@ -379,51 +379,33 @@ func TestSchemaJSON_ConsistencyWithGoTypes(t *testing.T) {
 }
 
 // TestDialectPrecedence verifies that dialect resolution follows the correct precedence order:
-// 1. Inline file comment (-- dialect: sqlite)
-// 2. Config (opts.Dialect)
-// 3. Default (postgres)
+// 1. Config (opts.Dialect)
+// 2. Default (postgres)
+// Inline comments should be ignored entirely.
 func TestDialectPrecedence(t *testing.T) {
 	tests := []struct {
 		name            string
 		sqlContent      string
 		configDialect   database.Dialect
 		expectedDialect database.Dialect
-		expectWarning   bool
 	}{
 		{
-			name:            "inline comment takes precedence over config",
+			name:            "config dialect takes precedence even with inline hint",
 			sqlContent:      "-- dialect: sqlite\nCREATE TABLE users (id INTEGER PRIMARY KEY);",
 			configDialect:   database.DialectPostgres,
-			expectedDialect: database.DialectSQLite,
-			expectWarning:   true, // Should warn about conflict
+			expectedDialect: database.DialectPostgres,
 		},
 		{
 			name:            "config used when no inline comment",
 			sqlContent:      "CREATE TABLE users (id BIGSERIAL PRIMARY KEY);",
 			configDialect:   database.DialectSQLite,
 			expectedDialect: database.DialectSQLite,
-			expectWarning:   false,
 		},
 		{
-			name:            "default to postgres when neither specified",
-			sqlContent:      "CREATE TABLE users (id BIGSERIAL PRIMARY KEY);",
+			name:            "default to postgres when unspecified even with inline hint",
+			sqlContent:      "-- dialect: sqlite\nCREATE TABLE users (id BIGSERIAL PRIMARY KEY);",
 			configDialect:   database.DialectUnknown,
 			expectedDialect: database.DialectPostgres,
-			expectWarning:   false,
-		},
-		{
-			name:            "inline comment without conflict",
-			sqlContent:      "-- dialect: postgres\nCREATE TABLE users (id BIGSERIAL PRIMARY KEY);",
-			configDialect:   database.DialectUnknown,
-			expectedDialect: database.DialectPostgres,
-			expectWarning:   false,
-		},
-		{
-			name:            "inline and config match - no warning",
-			sqlContent:      "-- dialect: postgres\nCREATE TABLE users (id BIGSERIAL PRIMARY KEY);",
-			configDialect:   database.DialectPostgres,
-			expectedDialect: database.DialectPostgres,
-			expectWarning:   false,
 		},
 	}
 
@@ -441,9 +423,6 @@ func TestDialectPrecedence(t *testing.T) {
 			if schema.Dialect != tt.expectedDialect {
 				t.Errorf("Expected dialect %s, got %s", tt.expectedDialect, schema.Dialect)
 			}
-
-			// Note: We can't easily test for warning output in this test,
-			// but we verify the precedence logic works correctly
 		})
 	}
 }

@@ -95,22 +95,12 @@ that end in `.lp.sql`. These files contain normal valid SQL DDL (supporting
 either PostgreSQL or SQLite dialects), but with an extra level of strictness to
 guarantee that your schema is safe to use.
 
-> **Dialect hint**
+> **Dialect selection**
 >
-> Lockplane parses `.lp.sql` files with PostgreSQL rules by default.
-> To treat a file as SQLite DDL, add a comment at the top:
->
-> ```sql
-> -- dialect: sqlite
-> CREATE TABLE todos (
->   id INTEGER PRIMARY KEY,
->   completed INTEGER NOT NULL DEFAULT 0,
->   created_at TEXT NOT NULL DEFAULT (datetime('now'))
-> );
-> ```
->
-> When you supply SQLite connection strings (e.g., `sqlite://…`) Lockplane
-> automatically uses SQLite parsing for introspection and planning.
+> Lockplane parses `.lp.sql` files with PostgreSQL rules by default. For SQLite
+> projects, specify `dialect = "sqlite"` in `lockplane.toml` (global) or provide
+> SQLite connection strings when running commands. Inline `-- dialect:` comments
+> are ignored.
 
 Let's get started with an example. Create a new directory called `schema/` at
 the root of your project, and create a new file called `users.lp.sql`. Add the
@@ -306,10 +296,12 @@ You can also use the sample at `lockplane.toml.example` as a starting point.
 
 ```toml
 default_environment = "local"
+schema_path = "."
+dialect = "postgres"
+schemas = ["public"]
 
 [environments.local]
 description = "Local development database"
-schema_path = "."
 ```
 
 Next, provide the actual credentials in `.env.local` (ignored by Git by default).

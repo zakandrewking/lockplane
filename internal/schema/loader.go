@@ -60,36 +60,13 @@ func LoadSQLSchemaWithOptions(path string, opts *SchemaLoadOptions) (*database.S
 // LoadSQLSchemaFromBytes loads a SQL schema from a byte slice
 func LoadSQLSchemaFromBytes(data []byte, opts *SchemaLoadOptions) (*database.Schema, error) {
 	// Precedence order (most to least specific):
-	// 1. CLI flag (future, passed via opts)
-	// 2. Inline file comment (-- dialect: postgres/sqlite)
-	// 3. Environment config (passed via opts.Dialect)
-	// 4. Auto-detect from connection string (not implemented here)
-	// 5. Default to Postgres
+	// 1. CLI/config flag (opts.Dialect)
+	// 2. Auto-detect from connection string (handled by callers)
+	// 3. Default to Postgres
 
-	// Check for inline comment first (highest file-level precedence)
-	inlineDialect := detectDialectFromSQL(data)
-
-	// Get config dialect from options (if provided)
-	configDialect := database.DialectUnknown
+	dialect := database.DialectPostgres
 	if opts != nil && opts.Dialect != database.DialectUnknown {
-		configDialect = opts.Dialect
-	}
-
-	// Warn if both are set and they conflict
-	if inlineDialect != database.DialectUnknown && configDialect != database.DialectUnknown && inlineDialect != configDialect {
-		fmt.Fprintf(os.Stderr, "⚠️  Warning: Inline dialect comment (%s) conflicts with config dialect (%s). Using inline dialect.\n",
-			inlineDialect, configDialect)
-	}
-
-	// Apply precedence: inline > config > default
-	var dialect database.Dialect
-	switch {
-	case inlineDialect != database.DialectUnknown:
-		dialect = inlineDialect
-	case configDialect != database.DialectUnknown:
-		dialect = configDialect
-	default:
-		dialect = database.DialectPostgres // Default
+		dialect = opts.Dialect
 	}
 
 	// Parse SQL DDL
@@ -156,48 +133,6 @@ func loadSchemaFromDir(dir string, opts *SchemaLoadOptions) (*database.Schema, e
 	}
 
 	return LoadSQLSchemaFromBytes([]byte(builder.String()), opts)
-}
-
-func detectDialectFromSQL(data []byte) database.Dialect {
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "--") {
-			lower := strings.ToLower(strings.TrimPrefix(trimmed, "--"))
-			lower = strings.TrimSpace(lower)
-
-			if strings.HasPrefix(lower, "dialect:") {
-				value := strings.TrimSpace(strings.TrimPrefix(lower, "dialect:"))
-				return parseDialect(value)
-			}
-			if strings.HasPrefix(lower, "dialect") {
-				value := strings.TrimSpace(strings.TrimPrefix(lower, "dialect"))
-				if strings.HasPrefix(value, ":") {
-					value = strings.TrimSpace(strings.TrimPrefix(value, ":"))
-				}
-				return parseDialect(value)
-			}
-			continue
-		}
-
-		// Stop scanning when we hit a non-comment statement.
-		break
-	}
-	return database.DialectUnknown
-}
-
-func parseDialect(value string) database.Dialect {
-	switch strings.ToLower(value) {
-	case "postgres", "postgresql":
-		return database.DialectPostgres
-	case "sqlite", "sqlite3", "libsql":
-		return database.DialectSQLite
-	default:
-		return database.DialectUnknown
-	}
 }
 
 // DriverNameToDialect converts a driver name to a dialect

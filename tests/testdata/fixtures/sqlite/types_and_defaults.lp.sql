@@ -1,4 +1,3 @@
--- dialect: sqlite
 -- SQLite schema fixture testing type preservation and default expressions
 
 CREATE TABLE tasks (

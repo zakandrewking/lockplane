@@ -29,7 +29,6 @@ func TestSQLitePlanGeneration_CreateTable(t *testing.T) {
 
 	// Schema with one table (after)
 	afterDDL := `
--- dialect: sqlite
 CREATE TABLE tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -84,7 +83,6 @@ CREATE TABLE tasks (
 // TestSQLitePlanGeneration_AddColumn tests adding a column to an existing table
 func TestSQLitePlanGeneration_AddColumn(t *testing.T) {
 	beforeDDL := `
--- dialect: sqlite
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     email TEXT NOT NULL
@@ -96,7 +94,6 @@ CREATE TABLE users (
 	}
 
 	afterDDL := `
--- dialect: sqlite
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     email TEXT NOT NULL,
@@ -168,7 +165,6 @@ func TestSQLitePlanExecution_EndToEnd(t *testing.T) {
 
 	// Target schema
 	targetDDL := `
--- dialect: sqlite
 CREATE TABLE products (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -248,7 +244,6 @@ CREATE INDEX idx_products_name ON products(name);
 func TestSQLiteRollbackGeneration(t *testing.T) {
 	// Schema with table
 	beforeDDL := `
--- dialect: sqlite
 CREATE TABLE notes (
     id INTEGER PRIMARY KEY,
     content TEXT NOT NULL
@@ -508,8 +503,7 @@ CREATE INDEX idx_books_author ON books(author_id);
 	}
 
 	// Parse the same DDL as target schema
-	targetDDL := `-- dialect: sqlite
-` + schemaDDL
+	targetDDL := schemaDDL
 	targetSchema, err := schema.LoadSQLSchemaFromBytes([]byte(targetDDL), &schema.SchemaLoadOptions{Dialect: database.DialectSQLite})
 	if err != nil {
 		t.Fatalf("failed to parse target schema: %v", err)

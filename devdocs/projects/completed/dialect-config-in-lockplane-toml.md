@@ -5,7 +5,7 @@
 **Combined with**: Multi-schema support (see `multi-schema-and-policies.md`)
 
 ## Goal
-Move the per-file dialect declaration (currently a comment like `-- dialect: sqlite`) into a first-class option within `lockplane.toml`, making schema dialect selection explicit, tool-friendly, and easier to discover.
+Replace the legacy per-file dialect hint (previously `-- dialect: sqlite`) with first-class configuration in `lockplane.toml`, making schema dialect selection explicit, tool-friendly, and easier to discover.
 
 ## Motivation
 - Comments are invisible to tooling and easy to forget.
@@ -21,7 +21,7 @@ Move the per-file dialect declaration (currently a comment like `-- dialect: sql
 ## Implementation Summary
 - Added global `dialect` / `schemas` fields on `config.Config` while keeping per-environment overrides for backward compatibility.
 - `executor.LoadSchemaOrIntrospectWithOptions` + CLI commands now always pass a dialect fallback sourced from resolved environments before falling back to driver detection.
-- `internal/schema/loader` applies the precedence chain (inline comment → config → auto detection) and emits a warning when config conflicts with inline hints.
+- `internal/schema/loader` now ignores inline comments entirely and relies on config/connection metadata for dialect selection.
 - Introspection (`internal/introspect`) and SQL generation (`database/postgres/generator`) are multi-schema aware, threading schema names through tables, policies, and plan steps.
 - `internal/schema/loader_test.go` captures the precedence tests so regressions are caught automatically.
 
@@ -43,11 +43,10 @@ shadow_schema = "lockplane_shadow"
 ## Precedence Order (Most to Least Specific)
 
 1. **CLI flag** (future: `--dialect postgres`)
-2. **Inline file comment** (`-- dialect: sqlite` in schema file)
-3. **Environment config** (`dialect = "postgres"` in `lockplane.toml`)
-4. **Auto-detect** from connection string (current behavior)
+2. **Environment config** (`dialect = "postgres"` in `lockplane.toml`)
+3. **Auto-detect** from connection string (current behavior)
 
-**Rule**: Most specific wins. If conflict exists between layers, show warning.
+**Rule**: Most specific wins.
 
 ## Implementation Plan
 
@@ -63,7 +62,7 @@ shadow_schema = "lockplane_shadow"
 
 ### Phase 3 – Schema Loading ✅ (Done)
 - [x] Update schema loader to respect config dialect
-- [x] Warn if inline comment conflicts with config dialect
+- [x] Remove inline comment detection entirely
 - [x] Use config dialect as fallback before auto-detection
 - [x] Update plan, rollback, and apply commands to use config dialect
 - [x] Add tests for dialect precedence

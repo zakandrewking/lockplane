@@ -506,7 +506,7 @@ Extracted pure file loading functions to internal/schema:
   - LoadSchema, LoadSchemaWithOptions
   - LoadSQLSchema, LoadSQLSchemaWithOptions, LoadSQLSchemaFromBytes
   - loadSchemaFromDir
-  - detectDialectFromSQL, parseDialect, DriverNameToDialect
+  - DriverNameToDialect
   - LoadJSONSchema, ValidateJSONSchema
 - Created `internal/planner/loader.go`:
   - LoadJSONPlan (moved here to avoid circular dependency)
