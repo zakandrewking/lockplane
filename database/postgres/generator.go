@@ -209,11 +209,9 @@ func (g *Generator) CreatePolicy(schemaName, tableName string, policy database.P
 	var sb strings.Builder
 
 	// Build table reference (schema-qualified if schema is specified)
-	tableRef := tableName
+	tableRef := quoteIdentifier(tableName)
 	if schemaName != "" && schemaName != "public" {
-		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), quoteIdentifier(tableName))
-	} else {
-		tableRef = quoteIdentifier(tableName)
+		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), tableRef)
 	}
 
 	sb.WriteString(fmt.Sprintf("CREATE POLICY %s ON %s\n",
@@ -253,11 +251,9 @@ func (g *Generator) CreatePolicy(schemaName, tableName string, policy database.P
 // DropPolicy generates SQL to drop an RLS policy
 func (g *Generator) DropPolicy(schemaName, tableName string, policy database.Policy) (string, string) {
 	// Build table reference (schema-qualified if schema is specified)
-	tableRef := tableName
+	tableRef := quoteIdentifier(tableName)
 	if schemaName != "" && schemaName != "public" {
-		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), quoteIdentifier(tableName))
-	} else {
-		tableRef = quoteIdentifier(tableName)
+		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), tableRef)
 	}
 
 	sql := fmt.Sprintf("DROP POLICY %s ON %s",
@@ -271,11 +267,9 @@ func (g *Generator) DropPolicy(schemaName, tableName string, policy database.Pol
 // EnableRLS generates SQL to enable Row Level Security on a table
 func (g *Generator) EnableRLS(schemaName, tableName string) (string, string) {
 	// Build table reference (schema-qualified if schema is specified)
-	tableRef := tableName
+	tableRef := quoteIdentifier(tableName)
 	if schemaName != "" && schemaName != "public" {
-		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), quoteIdentifier(tableName))
-	} else {
-		tableRef = quoteIdentifier(tableName)
+		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), tableRef)
 	}
 
 	sql := fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", tableRef)
@@ -286,11 +280,9 @@ func (g *Generator) EnableRLS(schemaName, tableName string) (string, string) {
 // DisableRLS generates SQL to disable Row Level Security on a table
 func (g *Generator) DisableRLS(schemaName, tableName string) (string, string) {
 	// Build table reference (schema-qualified if schema is specified)
-	tableRef := tableName
+	tableRef := quoteIdentifier(tableName)
 	if schemaName != "" && schemaName != "public" {
-		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), quoteIdentifier(tableName))
-	} else {
-		tableRef = quoteIdentifier(tableName)
+		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), tableRef)
 	}
 
 	sql := fmt.Sprintf("ALTER TABLE %s DISABLE ROW LEVEL SECURITY", tableRef)

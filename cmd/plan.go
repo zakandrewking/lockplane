@@ -118,10 +118,8 @@ func runPlan(cmd *cobra.Command, args []string) {
 				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
 			}
 			// Resolve environment to get dialect for schema directory
-			var err error
-			resolvedTo, err = config.ResolveEnvironment(cfg, planToEnvironment)
-			if err == nil {
-				// Successfully resolved, can use dialect from config
+			if env, err := config.ResolveEnvironment(cfg, planToEnvironment); err == nil {
+				resolvedTo = env
 			}
 		} else {
 			// Fall back to environment resolution

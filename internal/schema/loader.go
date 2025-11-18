@@ -82,12 +82,13 @@ func LoadSQLSchemaFromBytes(data []byte, opts *SchemaLoadOptions) (*database.Sch
 	}
 
 	// Apply precedence: inline > config > default
-	dialect := database.DialectUnknown
-	if inlineDialect != database.DialectUnknown {
+	var dialect database.Dialect
+	switch {
+	case inlineDialect != database.DialectUnknown:
 		dialect = inlineDialect
-	} else if configDialect != database.DialectUnknown {
+	case configDialect != database.DialectUnknown:
 		dialect = configDialect
-	} else {
+	default:
 		dialect = database.DialectPostgres // Default
 	}
 
