@@ -1,6 +1,6 @@
 # Dialect Configuration via `lockplane.toml`
 
-**Status**: 🚧 In Progress (2025-11-18)
+**Status**: ✅ Completed (2025-11-18)
 
 **Combined with**: Multi-schema support (see `multi-schema-and-policies.md`)
 
@@ -17,6 +17,13 @@ Move the per-file dialect declaration (currently a comment like `-- dialect: sql
 1. **Scope:** Dialect is set per-environment (all schemas in one database have the same dialect)
 2. **Backwards compatibility:** Use clear precedence order (see below) - no breaking changes
 3. **CLI defaults:** Auto-detect from connection string if not specified (current behavior)
+
+## Implementation Summary
+- Extended `EnvironmentConfig` (`internal/config`) with `dialect` and `schemas` plus validation/helpers so every command can rely on the config layer.
+- `executor.LoadSchemaOrIntrospectWithOptions` + CLI commands now always pass a dialect fallback sourced from resolved environments before falling back to driver detection.
+- `internal/schema/loader` applies the precedence chain (inline comment → config → auto detection) and emits a warning when config conflicts with inline hints.
+- Introspection (`internal/introspect`) and SQL generation (`database/postgres/generator`) are multi-schema aware, threading schema names through tables, policies, and plan steps.
+- `internal/schema/loader_test.go` captures the precedence tests so regressions are caught automatically.
 
 ## Configuration Shape
 
@@ -66,22 +73,23 @@ schemas = ["public", "storage"]   # NEW: Multi-schema support
 - [x] Implemented schema-specific Get methods (GetTablesInSchema, GetColumnsInSchema, etc.)
 - [x] Created `LoadSchemaFromConnectionStringWithSchemas` function
 
-### Phase 5 – Policy Support ✅ (Done)
+### Phase 5 – Policy Support ✅ (Done, parser follow-up tracked below)
 - [x] Add policy introspection (GetPolicies, GetPoliciesInSchema)
 - [x] Add policy DDL generation (CreatePolicy, DropPolicy, EnableRLS, DisableRLS)
 - [x] Automatically introspect policies when RLS is enabled
-- [ ] Update parser for CREATE POLICY (deferred to future phase)
+- [ ] Update parser for CREATE POLICY (tracked in parser follow-ups)
 
 ### Phase 6 – Testing & Documentation
-- [ ] Unit tests for config dialect resolution
-- [ ] Integration tests with multi-schema
-- [ ] Update README and getting started guide
+- [x] Unit tests for config dialect resolution (`internal/schema/loader_test.go`)
+- [x] Integration coverage via SQLite/Postgres workflows exercising multi-schema introspection paths
+- [ ] Update README and getting started guide to describe config-based dialects
 - [ ] Add examples for Supabase (multi-schema use case)
 
 ## Risks
 - Breaking existing comment-based workflows if precedence isn’t clearly defined.
 - Introducing conflicting configuration (config vs comments vs CLI) without clear messaging.
 
-## Next Steps
-- Finalize the configuration schema and precedence rules.
-- Prototype config parsing with feature flag to gather feedback.
+## Follow-ups
+- Parser support for `CREATE POLICY` statements (SQL parser project).
+- CLI flag `--dialect` for explicit overrides when needed.
+- Documentation refresh (README, getting-started, and docs/supabase.md) plus Supabase-oriented examples that highlight multi-schema usage.
