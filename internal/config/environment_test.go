@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -275,5 +276,33 @@ func TestResolveEnvironmentHonorsGlobalDialectAndSchemas(t *testing.T) {
 	}
 	if !reflect.DeepEqual(env.Schemas, []string{"public", "storage"}) {
 		t.Fatalf("Expected schemas %#v, got %#v", []string{"public", "storage"}, env.Schemas)
+	}
+}
+
+func TestResolveEnvironmentWarnsOnDialectMismatch(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	config := &Config{
+		DefaultEnvironment: "prod",
+		configDir:          tempDir,
+		Dialect:            "sqlite",
+		Environments: map[string]EnvironmentConfig{
+			"prod": {
+				DatabaseURL: "postgresql://user:pass@localhost:5432/db",
+			},
+		},
+	}
+
+	env, err := ResolveEnvironment(config, "prod")
+	if err != nil {
+		t.Fatalf("ResolveEnvironment returned error: %v", err)
+	}
+
+	if len(env.Warnings) == 0 {
+		t.Fatal("expected warning about dialect mismatch, got none")
+	}
+	if !strings.Contains(env.Warnings[0], "dialect") {
+		t.Fatalf("expected warning to mention dialect mismatch, got %q", env.Warnings[0])
 	}
 }

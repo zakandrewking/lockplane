@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+
+	"github.com/lockplane/lockplane/database"
 )
 
 // ResolvedEnvironment represents a fully-resolved environment with concrete values.
@@ -22,6 +24,7 @@ type ResolvedEnvironment struct {
 	ResolvedConfigDir string
 	Dialect           string   // Database dialect: "postgres" or "sqlite"
 	Schemas           []string // PostgreSQL schemas to manage
+	Warnings          []string
 }
 
 // ResolveEnvironment resolves a named environment into concrete connection strings.
@@ -231,6 +234,18 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 		resolved.Schemas = nil
 	}
 
+	// Warn if configured dialect conflicts with connection string
+	if resolved.Dialect != "" {
+		matchDialect := detectDialectFromConnectionString(resolved.DatabaseURL)
+		configDialect := database.Dialect(strings.ToLower(resolved.Dialect))
+		if configDialect != database.DialectUnknown && matchDialect != database.DialectUnknown && matchDialect != configDialect {
+			warning := fmt.Sprintf("⚠️  Warning: environment %q configures dialect %q but connection string looks like %q. Update lockplane.toml or use a matching connection string.",
+				resolved.Name, configDialect, matchDialect)
+			fmt.Fprintln(os.Stderr, warning)
+			resolved.Warnings = append(resolved.Warnings, warning)
+		}
+	}
+
 	if config != nil && config.Environments != nil && len(config.Environments) > 0 && !envExists {
 		if !resolved.FromDotenv {
 			return nil, fmt.Errorf("environment %q not defined in lockplane.toml and %s not found", envName, resolved.DotenvPath)
@@ -238,4 +253,27 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 	}
 
 	return resolved, nil
+}
+
+func detectDialectFromConnectionString(connStr string) database.Dialect {
+	if connStr == "" {
+		return database.DialectUnknown
+	}
+	lower := strings.ToLower(connStr)
+
+	switch {
+	case strings.HasPrefix(lower, "postgres://"),
+		strings.HasPrefix(lower, "postgresql://"):
+		return database.DialectPostgres
+	case strings.HasPrefix(lower, "sqlite://"),
+		strings.HasPrefix(lower, "file:"),
+		strings.HasSuffix(lower, ".db"),
+		strings.HasSuffix(lower, ".sqlite"),
+		strings.HasSuffix(lower, ".sqlite3"),
+		lower == ":memory:",
+		strings.HasPrefix(lower, "libsql://"):
+		return database.DialectSQLite
+	default:
+		return database.DialectUnknown
+	}
 }
