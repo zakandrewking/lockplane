@@ -37,7 +37,7 @@
   - [x] Add regression test verifying planner emits RLS steps when schema toggles
   - [x] Add rollback test confirming reverse statements
 - 🚦 Apply / CLI experience
-  - [ ] Ensure `lockplane apply` no longer blocks ENABLE/DISABLE statements (safety gates see ✅)
+- [x] Ensure `lockplane apply` no longer blocks ENABLE/DISABLE statements (safety gates see ✅)
   - [ ] Add end-to-end CLI test (after DB harness) toggling RLS via plan+apply
 
 **Files to investigate** (with anchors):

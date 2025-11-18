@@ -212,110 +212,15 @@ func runPlan(cmd *cobra.Command, args []string) {
 		validationResults := validation.ValidateSchemaDiffWithSchema(diff, after)
 
 		if len(validationResults) > 0 {
-			fmt.Fprintf(os.Stderr, "\n=== Migration Safety Report ===\n\n")
-
-			for i, result := range validationResults {
-				// Show safety classification with icon
-				if result.Safety != nil {
-					fmt.Fprintf(os.Stderr, "%s %s", result.Safety.Level.Icon(), result.Safety.Level.String())
-					if result.Valid {
-						fmt.Fprintf(os.Stderr, " (Operation %d)\n", i+1)
-					} else {
-						fmt.Fprintf(os.Stderr, " - BLOCKED (Operation %d)\n", i+1)
-					}
-				} else if result.Valid {
-					fmt.Fprintf(os.Stderr, "✓ Operation %d: PASS\n", i+1)
-				} else {
-					fmt.Fprintf(os.Stderr, "✗ Operation %d: FAIL\n", i+1)
-				}
-
-				// Show safety details
-				if result.Safety != nil {
-					if result.Safety.BreakingChange {
-						fmt.Fprintf(os.Stderr, "  ⚠️  Breaking change - will affect running applications\n")
-					}
-					if result.Safety.DataLoss {
-						fmt.Fprintf(os.Stderr, "  💥 Permanent data loss\n")
-					}
-					if !result.Reversible && result.Safety.RollbackDescription != "" {
-						fmt.Fprintf(os.Stderr, "  ↩️  Rollback: %s\n", result.Safety.RollbackDescription)
-					} else if result.Reversible && result.Safety.RollbackDataLoss {
-						fmt.Fprintf(os.Stderr, "  ↩️  Rollback: %s\n", result.Safety.RollbackDescription)
-					}
-				} else if !result.Reversible {
-					fmt.Fprintf(os.Stderr, "  ⚠️  NOT REVERSIBLE\n")
-				}
-
-				for _, err := range result.Errors {
-					fmt.Fprintf(os.Stderr, "  ❌ Error: %s\n", err)
-				}
-
-				for _, warning := range result.Warnings {
-					fmt.Fprintf(os.Stderr, "  ⚠️  Warning: %s\n", warning)
-				}
-
-				// Show safer alternatives for dangerous operations
-				if result.Safety != nil && len(result.Safety.SaferAlternatives) > 0 {
-					fmt.Fprintf(os.Stderr, "\n  💡 Safer alternatives:\n")
-					for _, alt := range result.Safety.SaferAlternatives {
-						fmt.Fprintf(os.Stderr, "     • %s\n", alt)
-					}
-				}
-
-				fmt.Fprintf(os.Stderr, "\n")
-			}
-
-			// Summary section
-			fmt.Fprintf(os.Stderr, "=== Summary ===\n\n")
-
-			// Count by safety level
-			safeCnt, reviewCnt, lossyCnt, dangerousCnt, multiPhaseCnt := 0, 0, 0, 0, 0
-			for _, r := range validationResults {
-				if r.Safety != nil {
-					switch r.Safety.Level {
-					case validation.SafetyLevelSafe:
-						safeCnt++
-					case validation.SafetyLevelReview:
-						reviewCnt++
-					case validation.SafetyLevelLossy:
-						lossyCnt++
-					case validation.SafetyLevelDangerous:
-						dangerousCnt++
-					case validation.SafetyLevelMultiPhase:
-						multiPhaseCnt++
-					}
-				}
-			}
-
-			if safeCnt > 0 {
-				fmt.Fprintf(os.Stderr, "  ✅ %d safe operation(s)\n", safeCnt)
-			}
-			if reviewCnt > 0 {
-				fmt.Fprintf(os.Stderr, "  ⚠️  %d operation(s) require review\n", reviewCnt)
-			}
-			if lossyCnt > 0 {
-				fmt.Fprintf(os.Stderr, "  🔶 %d lossy operation(s)\n", lossyCnt)
-			}
-			if dangerousCnt > 0 {
-				fmt.Fprintf(os.Stderr, "  ❌ %d dangerous operation(s)\n", dangerousCnt)
-			}
-			if multiPhaseCnt > 0 {
-				fmt.Fprintf(os.Stderr, "  🔄 %d operation(s) require multi-phase migration\n", multiPhaseCnt)
-			}
-
-			fmt.Fprintf(os.Stderr, "\n")
-
+			printValidationReport(validationResults, "=== Migration Safety Report ===")
 			if !validation.AllValid(validationResults) {
 				fmt.Fprintf(os.Stderr, "❌ Validation FAILED: Some operations are not safe\n\n")
 				os.Exit(1)
 			}
-
-			// Warn about dangerous operations
 			if validation.HasDangerousOperations(validationResults) {
 				fmt.Fprintf(os.Stderr, "⚠️  WARNING: This migration contains dangerous operations.\n")
 				fmt.Fprintf(os.Stderr, "   Review safer alternatives above before proceeding.\n\n")
 			}
-
 			if validation.AllReversible(validationResults) {
 				fmt.Fprintf(os.Stderr, "✓ All operations are reversible\n\n")
 			} else {

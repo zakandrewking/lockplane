@@ -16,6 +16,7 @@ import (
 	"github.com/lockplane/lockplane/internal/planner"
 	"github.com/lockplane/lockplane/internal/schema"
 	"github.com/lockplane/lockplane/internal/sqliteutil"
+	"github.com/lockplane/lockplane/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -187,6 +188,25 @@ func runApply(cmd *cobra.Command, args []string) {
 
 		// Generate diff
 		diff := schema.DiffSchemas(before, after)
+
+		validationResults := validation.ValidateSchemaDiffWithSchema(diff, after)
+		if len(validationResults) > 0 {
+			printValidationReport(validationResults, "=== Migration Safety Report ===")
+			if !validation.AllValid(validationResults) {
+				fmt.Fprintf(os.Stderr, "❌ Validation FAILED: Some operations are not safe\n\n")
+				os.Exit(1)
+			}
+			if validation.HasDangerousOperations(validationResults) {
+				fmt.Fprintf(os.Stderr, "⚠️  WARNING: This migration contains dangerous operations.\n")
+				fmt.Fprintf(os.Stderr, "   Review safer alternatives above before proceeding.\n\n")
+			}
+			if validation.AllReversible(validationResults) {
+				fmt.Fprintf(os.Stderr, "✓ All operations are reversible\n\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "⚠️  Warning: Some operations are NOT reversible\n")
+				fmt.Fprintf(os.Stderr, "   Data loss may be permanent. Test on shadow DB first.\n\n")
+			}
+		}
 
 		// Check if there are any changes
 		if diff.IsEmpty() {
