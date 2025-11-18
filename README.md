@@ -109,6 +109,11 @@ guarantee that your schema is safe to use.
 > `schema_path = "supabase/schema"` in `lockplane.toml`. All commands (plan/apply)
 > now auto-detect `supabase/schema/` before falling back to `schema/` when no
 > `--schema` flag is provided.
+>
+> **Custom schema directories**
+>
+> Set `LOCKPLANE_SCHEMA_DIR` (single path or `PATH`-style list) to teach Lockplane
+> where to look before it falls back to `supabase/schema/` and `schema/`.
 
 Let's get started with an example. Create a new directory called `schema/` at
 the root of your project, and create a new file called `users.lp.sql`. Add the
