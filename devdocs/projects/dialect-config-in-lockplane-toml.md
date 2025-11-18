@@ -66,10 +66,11 @@ schemas = ["public", "storage"]   # NEW: Multi-schema support
 - [x] Implemented schema-specific Get methods (GetTablesInSchema, GetColumnsInSchema, etc.)
 - [x] Created `LoadSchemaFromConnectionStringWithSchemas` function
 
-### Phase 5 – Policy Support
-- [ ] Add policy introspection
-- [ ] Add policy DDL generation
-- [ ] Update parser for CREATE POLICY
+### Phase 5 – Policy Support ✅ (Done)
+- [x] Add policy introspection (GetPolicies, GetPoliciesInSchema)
+- [x] Add policy DDL generation (CreatePolicy, DropPolicy, EnableRLS, DisableRLS)
+- [x] Automatically introspect policies when RLS is enabled
+- [ ] Update parser for CREATE POLICY (deferred to future phase)
 
 ### Phase 6 – Testing & Documentation
 - [ ] Unit tests for config dialect resolution

@@ -203,3 +203,97 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
+
+// CreatePolicy generates SQL to create an RLS policy
+func (g *Generator) CreatePolicy(schemaName, tableName string, policy database.Policy) (string, string) {
+	var sb strings.Builder
+
+	// Build table reference (schema-qualified if schema is specified)
+	tableRef := tableName
+	if schemaName != "" && schemaName != "public" {
+		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), quoteIdentifier(tableName))
+	} else {
+		tableRef = quoteIdentifier(tableName)
+	}
+
+	sb.WriteString(fmt.Sprintf("CREATE POLICY %s ON %s\n",
+		quoteIdentifier(policy.Name),
+		tableRef))
+
+	// AS PERMISSIVE/RESTRICTIVE
+	if !policy.Permissive {
+		sb.WriteString("  AS RESTRICTIVE\n")
+	}
+
+	// FOR command
+	sb.WriteString(fmt.Sprintf("  FOR %s\n", policy.Command))
+
+	// TO roles
+	if len(policy.Roles) > 0 {
+		sb.WriteString(fmt.Sprintf("  TO %s\n", strings.Join(policy.Roles, ", ")))
+	}
+
+	// USING clause
+	if policy.Using != nil {
+		sb.WriteString(fmt.Sprintf("  USING (%s)", *policy.Using))
+	}
+
+	// WITH CHECK clause
+	if policy.WithCheck != nil {
+		if policy.Using != nil {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf("  WITH CHECK (%s)", *policy.WithCheck))
+	}
+
+	description := fmt.Sprintf("Create policy %s on %s", policy.Name, tableRef)
+	return sb.String(), description
+}
+
+// DropPolicy generates SQL to drop an RLS policy
+func (g *Generator) DropPolicy(schemaName, tableName string, policy database.Policy) (string, string) {
+	// Build table reference (schema-qualified if schema is specified)
+	tableRef := tableName
+	if schemaName != "" && schemaName != "public" {
+		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), quoteIdentifier(tableName))
+	} else {
+		tableRef = quoteIdentifier(tableName)
+	}
+
+	sql := fmt.Sprintf("DROP POLICY %s ON %s",
+		quoteIdentifier(policy.Name),
+		tableRef)
+
+	description := fmt.Sprintf("Drop policy %s from %s", policy.Name, tableRef)
+	return sql, description
+}
+
+// EnableRLS generates SQL to enable Row Level Security on a table
+func (g *Generator) EnableRLS(schemaName, tableName string) (string, string) {
+	// Build table reference (schema-qualified if schema is specified)
+	tableRef := tableName
+	if schemaName != "" && schemaName != "public" {
+		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), quoteIdentifier(tableName))
+	} else {
+		tableRef = quoteIdentifier(tableName)
+	}
+
+	sql := fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", tableRef)
+	description := fmt.Sprintf("Enable RLS on %s", tableRef)
+	return sql, description
+}
+
+// DisableRLS generates SQL to disable Row Level Security on a table
+func (g *Generator) DisableRLS(schemaName, tableName string) (string, string) {
+	// Build table reference (schema-qualified if schema is specified)
+	tableRef := tableName
+	if schemaName != "" && schemaName != "public" {
+		tableRef = fmt.Sprintf("%s.%s", quoteIdentifier(schemaName), quoteIdentifier(tableName))
+	} else {
+		tableRef = quoteIdentifier(tableName)
+	}
+
+	sql := fmt.Sprintf("ALTER TABLE %s DISABLE ROW LEVEL SECURITY", tableRef)
+	description := fmt.Sprintf("Disable RLS on %s", tableRef)
+	return sql, description
+}
