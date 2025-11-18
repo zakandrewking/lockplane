@@ -15,10 +15,12 @@ type Schema struct {
 // Table represents a database table
 type Table struct {
 	Name        string       `json:"name"`
+	Schema      string       `json:"schema,omitempty"` // Schema name (e.g., "public", "storage")
 	Columns     []Column     `json:"columns"`
 	Indexes     []Index      `json:"indexes"`
 	ForeignKeys []ForeignKey `json:"foreign_keys,omitempty"`
 	RLSEnabled  bool         `json:"rls_enabled,omitempty"`
+	Policies    []Policy     `json:"policies,omitempty"` // Row Level Security policies
 }
 
 // Column represents a table column
@@ -47,6 +49,16 @@ type ForeignKey struct {
 	ReferencedColumns []string `json:"referenced_columns"`
 	OnDelete          *string  `json:"on_delete,omitempty"`
 	OnUpdate          *string  `json:"on_update,omitempty"`
+}
+
+// Policy represents a Row Level Security (RLS) policy
+type Policy struct {
+	Name       string   `json:"name"`
+	Command    string   `json:"command"`              // SELECT, INSERT, UPDATE, DELETE, ALL
+	Permissive bool     `json:"permissive"`           // true = PERMISSIVE (default), false = RESTRICTIVE
+	Roles      []string `json:"roles"`                // Roles this policy applies to (empty = all roles)
+	Using      *string  `json:"using,omitempty"`      // USING clause (for SELECT, UPDATE, DELETE)
+	WithCheck  *string  `json:"with_check,omitempty"` // WITH CHECK clause (for INSERT, UPDATE)
 }
 
 // Dialect represents the database dialect associated with a schema
