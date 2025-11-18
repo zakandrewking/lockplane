@@ -1,6 +1,15 @@
 # Installation Guide
 
-## Download Pre-built Binary (Recommended)
+## Global npm Installation
+
+```bash
+npm install -g lockplane
+lockplane --version
+```
+
+This keeps lockplane on your PATH while still letting you run `npx lockplane` for ad-hoc use.
+
+## Download Pre-built Binary
 
 1. Download the latest release for your platform from [GitHub Releases](https://github.com/zakandrewking/lockplane/releases/latest)
 2. Extract the archive: `tar -xzf lockplane_*.tar.gz`

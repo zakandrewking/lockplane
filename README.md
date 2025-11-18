@@ -47,24 +47,7 @@ npx lockplane --version
 
 This works on any platform (Linux, macOS, Windows) and always uses the latest version.
 
-### Global Installation
-
-If you prefer a permanent installation:
-
-```bash
-npm install -g lockplane
-npx lockplane --version
-```
-
-### Alternative: Download Pre-built Binary
-
-1. Download the latest release for your platform from [GitHub
-   Releases](https://github.com/zakandrewking/lockplane/releases/latest)
-2. Extract the archive: `tar -xzf lockplane_*.tar.gz`
-3. Move to your PATH: `sudo mv lockplane /usr/local/bin/`
-4. Verify: `npx lockplane --version`
-
-For more options, see the [Installation Guide](docs/installation.md).
+Looking for global installs, binaries, or source builds? See the full [Installation Guide](docs/installation.md).
 
 ## 2. 🤖 Optional: Use with AI Assistants
 
