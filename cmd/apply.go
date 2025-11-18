@@ -171,7 +171,13 @@ func runApply(cmd *cobra.Command, args []string) {
 			log.Fatalf("Failed to create database driver: %v", err)
 		}
 
-		dialect := schema.DriverNameToDialect(driverType)
+		// Use config dialect if available, otherwise detect from driver type
+		var dialect database.Dialect
+		if resolvedTarget != nil && resolvedTarget.Dialect != "" {
+			dialect = database.Dialect(resolvedTarget.Dialect)
+		} else {
+			dialect = schema.DriverNameToDialect(driverType)
+		}
 		opts := executor.BuildSchemaLoadOptions(schemaPath, dialect)
 		_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "📖 Loading desired schema from %s...\n", schemaPath)
 		after, err := executor.LoadSchemaOrIntrospectWithOptions(schemaPath, opts)

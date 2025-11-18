@@ -63,6 +63,10 @@ func (d *Driver) IntrospectSchema(ctx context.Context, db *sql.DB) (*database.Sc
 	return d.Introspector.IntrospectSchema(ctx, db)
 }
 
+func (d *Driver) IntrospectSchemas(ctx context.Context, db *sql.DB, schemas []string) (*database.Schema, error) {
+	return d.Introspector.IntrospectSchemas(ctx, db, schemas)
+}
+
 func (d *Driver) GetTables(ctx context.Context, db *sql.DB) ([]string, error) {
 	return d.Introspector.GetTables(ctx, db)
 }

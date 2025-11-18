@@ -182,6 +182,11 @@ type Driver interface {
 	// SupportsSchemas returns true if the database supports schema namespaces
 	SupportsSchemas() bool
 
+	// IntrospectSchemas introspects multiple schemas (PostgreSQL only)
+	// If schemas is nil or empty, behaves like IntrospectSchema (uses current_schema())
+	// Returns a combined Schema with tables from all specified schemas
+	IntrospectSchemas(ctx context.Context, db *sql.DB, schemas []string) (*Schema, error)
+
 	// CreateSchema creates a schema in the database (no-op if not supported)
 	CreateSchema(ctx context.Context, db *sql.DB, schemaName string) error
 

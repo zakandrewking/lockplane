@@ -17,63 +17,113 @@ func NewIntrospector() *Introspector {
 	return &Introspector{}
 }
 
-// IntrospectSchema reads the entire PostgreSQL database schema
+// IntrospectSchema reads the entire PostgreSQL database schema from current_schema()
 func (i *Introspector) IntrospectSchema(ctx context.Context, db *sql.DB) (*database.Schema, error) {
+	// Default to current_schema() for backwards compatibility
+	return i.IntrospectSchemas(ctx, db, nil)
+}
+
+// IntrospectSchemas reads tables from multiple PostgreSQL schemas
+// If schemas is nil or empty, uses current_schema()
+func (i *Introspector) IntrospectSchemas(ctx context.Context, db *sql.DB, schemas []string) (*database.Schema, error) {
 	schema := &database.Schema{
 		Tables: make([]database.Table, 0),
 	}
 
-	tables, err := i.GetTables(ctx, db)
-	if err != nil {
-		return nil, err
+	// If no schemas specified, use current_schema()
+	if len(schemas) == 0 {
+		currentSchema, err := i.getCurrentSchema(ctx, db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current schema: %w", err)
+		}
+		schemas = []string{currentSchema}
 	}
 
-	for _, tableName := range tables {
-		table := database.Table{Name: tableName}
-
-		columns, err := i.GetColumns(ctx, db, tableName)
+	// Introspect each schema
+	for _, schemaName := range schemas {
+		tables, err := i.GetTablesInSchema(ctx, db, schemaName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get columns for table %s: %w", tableName, err)
+			return nil, fmt.Errorf("failed to get tables in schema %s: %w", schemaName, err)
 		}
-		table.Columns = columns
 
-		indexes, err := i.GetIndexes(ctx, db, tableName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get indexes for table %s: %w", tableName, err)
+		for _, tableName := range tables {
+			table := database.Table{
+				Name:   tableName,
+				Schema: schemaName,
+			}
+
+			columns, err := i.GetColumnsInSchema(ctx, db, schemaName, tableName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get columns for table %s.%s: %w", schemaName, tableName, err)
+			}
+			table.Columns = columns
+
+			indexes, err := i.GetIndexesInSchema(ctx, db, schemaName, tableName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get indexes for table %s.%s: %w", schemaName, tableName, err)
+			}
+			table.Indexes = indexes
+
+			foreignKeys, err := i.GetForeignKeysInSchema(ctx, db, schemaName, tableName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get foreign keys for table %s.%s: %w", schemaName, tableName, err)
+			}
+			table.ForeignKeys = foreignKeys
+
+			// Get RLS status
+			rlsEnabled, err := i.GetRLSEnabledInSchema(ctx, db, schemaName, tableName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get RLS status for table %s.%s: %w", schemaName, tableName, err)
+			}
+			table.RLSEnabled = rlsEnabled
+
+			// Get RLS policies if RLS is enabled
+			if rlsEnabled {
+				policies, err := i.GetPoliciesInSchema(ctx, db, schemaName, tableName)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get policies for table %s.%s: %w", schemaName, tableName, err)
+				}
+				table.Policies = policies
+			}
+
+			schema.Tables = append(schema.Tables, table)
 		}
-		table.Indexes = indexes
-
-		foreignKeys, err := i.GetForeignKeys(ctx, db, tableName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get foreign keys for table %s: %w", tableName, err)
-		}
-		table.ForeignKeys = foreignKeys
-
-		// Get RLS status
-		rlsEnabled, err := i.GetRLSEnabled(ctx, db, tableName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get RLS status for table %s: %w", tableName, err)
-		}
-		table.RLSEnabled = rlsEnabled
-
-		schema.Tables = append(schema.Tables, table)
 	}
 
 	schema.Dialect = database.DialectPostgres
 	return schema, nil
 }
 
-// GetTables returns all table names in the PostgreSQL database
+// getCurrentSchema gets the current PostgreSQL schema
+func (i *Introspector) getCurrentSchema(ctx context.Context, db *sql.DB) (string, error) {
+	var schemaName string
+	err := db.QueryRowContext(ctx, "SELECT current_schema()").Scan(&schemaName)
+	if err != nil {
+		return "", err
+	}
+	return schemaName, nil
+}
+
+// GetTables returns all table names in the current PostgreSQL schema
 func (i *Introspector) GetTables(ctx context.Context, db *sql.DB) ([]string, error) {
+	currentSchema, err := i.getCurrentSchema(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	return i.GetTablesInSchema(ctx, db, currentSchema)
+}
+
+// GetTablesInSchema returns all table names in a specific PostgreSQL schema
+func (i *Introspector) GetTablesInSchema(ctx context.Context, db *sql.DB, schemaName string) ([]string, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT table_name
 		FROM information_schema.tables
-		WHERE table_schema = current_schema()
+		WHERE table_schema = $1
 		AND table_type = 'BASE TABLE'
 		ORDER BY table_name
-	`)
+	`, schemaName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query tables: %w", err)
+		return nil, fmt.Errorf("failed to query tables in schema %s: %w", schemaName, err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -89,8 +139,17 @@ func (i *Introspector) GetTables(ctx context.Context, db *sql.DB) ([]string, err
 	return tableNames, nil
 }
 
-// GetColumns returns all columns for a given PostgreSQL table
+// GetColumns returns all columns for a given PostgreSQL table in current_schema()
 func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName string) ([]database.Column, error) {
+	currentSchema, err := i.getCurrentSchema(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	return i.GetColumnsInSchema(ctx, db, currentSchema, tableName)
+}
+
+// GetColumnsInSchema returns all columns for a given PostgreSQL table in a specific schema
+func (i *Introspector) GetColumnsInSchema(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]database.Column, error) {
 	query := `
 		SELECT
 			c.column_name,
@@ -110,12 +169,12 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 				false
 			) as is_primary_key
 		FROM information_schema.columns c
-		WHERE c.table_schema = current_schema()
-		  AND c.table_name = $1
+		WHERE c.table_schema = $1
+		  AND c.table_name = $2
 		ORDER BY c.ordinal_position
 	`
 
-	rows, err := db.QueryContext(ctx, query, tableName)
+	rows, err := db.QueryContext(ctx, query, schemaName, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -180,9 +239,19 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 	return columns, nil
 }
 
-// GetIndexes returns all indexes for a given PostgreSQL table
+// GetIndexes returns all indexes for a given PostgreSQL table in current_schema()
 // Excludes indexes that are automatically created by PRIMARY KEY or UNIQUE constraints
 func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName string) ([]database.Index, error) {
+	currentSchema, err := i.getCurrentSchema(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	return i.GetIndexesInSchema(ctx, db, currentSchema, tableName)
+}
+
+// GetIndexesInSchema returns all indexes for a given PostgreSQL table in a specific schema
+// Excludes indexes that are automatically created by PRIMARY KEY or UNIQUE constraints
+func (i *Introspector) GetIndexesInSchema(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]database.Index, error) {
 	query := `
 		SELECT
 			i.indexname,
@@ -192,11 +261,11 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 		JOIN pg_class c ON c.relname = i.tablename
 		JOIN pg_index ix ON ix.indexrelid = (
 			SELECT oid FROM pg_class WHERE relname = i.indexname AND relnamespace = (
-				SELECT oid FROM pg_namespace WHERE nspname = current_schema()
+				SELECT oid FROM pg_namespace WHERE nspname = $1
 			)
 		)
-		WHERE i.schemaname = current_schema()
-		  AND i.tablename = $1
+		WHERE i.schemaname = $1
+		  AND i.tablename = $2
 		  AND ix.indisprimary = false
 		  AND NOT EXISTS (
 			SELECT 1
@@ -207,10 +276,10 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 		ORDER BY i.indexname
 	`
 
-	rows, err := db.QueryContext(ctx, query, tableName)
+	rows, err := db.QueryContext(ctx, query, schemaName, tableName)
 	if err != nil {
 		// Add context about which table failed and the query being run
-		return nil, fmt.Errorf("query failed for table %q (schema: current_schema()): %w\nQuery: %s", tableName, err, query)
+		return nil, fmt.Errorf("query failed for table %s.%s: %w\nQuery: %s", schemaName, tableName, err, query)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -233,8 +302,17 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 	return indexes, nil
 }
 
-// GetForeignKeys returns all foreign keys for a given PostgreSQL table
+// GetForeignKeys returns all foreign keys for a given PostgreSQL table in current_schema()
 func (i *Introspector) GetForeignKeys(ctx context.Context, db *sql.DB, tableName string) ([]database.ForeignKey, error) {
+	currentSchema, err := i.getCurrentSchema(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	return i.GetForeignKeysInSchema(ctx, db, currentSchema, tableName)
+}
+
+// GetForeignKeysInSchema returns all foreign keys for a given PostgreSQL table in a specific schema
+func (i *Introspector) GetForeignKeysInSchema(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]database.ForeignKey, error) {
 	query := `
 		SELECT
 			tc.constraint_name,
@@ -254,12 +332,12 @@ func (i *Introspector) GetForeignKeys(ctx context.Context, db *sql.DB, tableName
 			ON rc.constraint_name = tc.constraint_name
 			AND rc.constraint_schema = tc.table_schema
 		WHERE tc.constraint_type = 'FOREIGN KEY'
-			AND tc.table_schema = current_schema()
-			AND tc.table_name = $1
+			AND tc.table_schema = $1
+			AND tc.table_name = $2
 		ORDER BY tc.constraint_name, kcu.ordinal_position
 	`
 
-	rows, err := db.QueryContext(ctx, query, tableName)
+	rows, err := db.QueryContext(ctx, query, schemaName, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -334,23 +412,105 @@ func normalizeDefault(defaultVal string) string {
 	return defaultVal
 }
 
-// GetRLSEnabled checks if Row Level Security is enabled for a table
+// GetRLSEnabled checks if Row Level Security is enabled for a table in current_schema()
 func (i *Introspector) GetRLSEnabled(ctx context.Context, db *sql.DB, tableName string) (bool, error) {
+	currentSchema, err := i.getCurrentSchema(ctx, db)
+	if err != nil {
+		return false, err
+	}
+	return i.GetRLSEnabledInSchema(ctx, db, currentSchema, tableName)
+}
+
+// GetRLSEnabledInSchema checks if Row Level Security is enabled for a table in a specific schema
+func (i *Introspector) GetRLSEnabledInSchema(ctx context.Context, db *sql.DB, schemaName, tableName string) (bool, error) {
 	query := `
 		SELECT relrowsecurity
 		FROM pg_catalog.pg_class c
 		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 		WHERE c.relname = $1
-		  AND n.nspname = current_schema()
+		  AND n.nspname = $2
 		  AND c.relkind = 'r'
 	`
 
 	var rlsEnabled bool
-	err := db.QueryRowContext(ctx, query, tableName).Scan(&rlsEnabled)
+	err := db.QueryRowContext(ctx, query, tableName, schemaName).Scan(&rlsEnabled)
 	if err != nil {
 		// Table might not exist or query failed
 		return false, err
 	}
 
 	return rlsEnabled, nil
+}
+
+// GetPolicies returns all RLS policies for a table in current_schema()
+func (i *Introspector) GetPolicies(ctx context.Context, db *sql.DB, tableName string) ([]database.Policy, error) {
+	currentSchema, err := i.getCurrentSchema(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	return i.GetPoliciesInSchema(ctx, db, currentSchema, tableName)
+}
+
+// GetPoliciesInSchema returns all RLS policies for a table in a specific schema
+func (i *Introspector) GetPoliciesInSchema(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]database.Policy, error) {
+	query := `
+		SELECT
+			pol.polname AS policy_name,
+			CASE pol.polcmd
+				WHEN 'r' THEN 'SELECT'
+				WHEN 'a' THEN 'INSERT'
+				WHEN 'w' THEN 'UPDATE'
+				WHEN 'd' THEN 'DELETE'
+				WHEN '*' THEN 'ALL'
+			END AS command,
+			pol.polpermissive AS permissive,
+			ARRAY(
+				SELECT pg_catalog.quote_ident(rolname)
+				FROM pg_catalog.pg_roles
+				WHERE oid = ANY(pol.polroles)
+			) AS roles,
+			pg_catalog.pg_get_expr(pol.polqual, pol.polrelid) AS using_expr,
+			pg_catalog.pg_get_expr(pol.polwithcheck, pol.polrelid) AS with_check_expr
+		FROM pg_catalog.pg_policy pol
+		JOIN pg_catalog.pg_class c ON c.oid = pol.polrelid
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = $1
+		  AND c.relname = $2
+		ORDER BY pol.polname
+	`
+
+	rows, err := db.QueryContext(ctx, query, schemaName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query policies for table %s.%s: %w", schemaName, tableName, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var policies []database.Policy
+	for rows.Next() {
+		var policy database.Policy
+		var roles []string
+		var usingExpr, withCheckExpr sql.NullString
+
+		if err := rows.Scan(&policy.Name, &policy.Command, &policy.Permissive, &roles, &usingExpr, &withCheckExpr); err != nil {
+			return nil, fmt.Errorf("failed to scan policy row: %w", err)
+		}
+
+		policy.Roles = roles
+
+		if usingExpr.Valid {
+			policy.Using = &usingExpr.String
+		}
+
+		if withCheckExpr.Valid {
+			policy.WithCheck = &withCheckExpr.String
+		}
+
+		policies = append(policies, policy)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating policy rows: %w", err)
+	}
+
+	return policies, nil
 }

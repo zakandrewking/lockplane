@@ -94,8 +94,12 @@ func runPlan(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	// Resolve environments and track them for dialect information
+	var resolvedFrom, resolvedTo *config.ResolvedEnvironment
+
 	if fromInput == "" {
-		resolvedFrom, err := config.ResolveEnvironment(cfg, planFromEnvironment)
+		var err error
+		resolvedFrom, err = config.ResolveEnvironment(cfg, planFromEnvironment)
 		if err != nil {
 			log.Fatalf("Failed to resolve source environment: %v", err)
 		}
@@ -113,9 +117,16 @@ func runPlan(cmd *cobra.Command, args []string) {
 			if planVerbose {
 				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
 			}
+			// Resolve environment to get dialect for schema directory
+			var err error
+			resolvedTo, err = config.ResolveEnvironment(cfg, planToEnvironment)
+			if err == nil {
+				// Successfully resolved, can use dialect from config
+			}
 		} else {
 			// Fall back to environment resolution
-			resolvedTo, err := config.ResolveEnvironment(cfg, planToEnvironment)
+			var err error
+			resolvedTo, err = config.ResolveEnvironment(cfg, planToEnvironment)
 			if err != nil {
 				log.Fatalf("Failed to resolve target environment: %v", err)
 			}
@@ -136,18 +147,29 @@ func runPlan(cmd *cobra.Command, args []string) {
 	var before *database.Schema
 	var after *database.Schema
 
+	// Build dialect fallbacks with precedence: config > connection string detection
 	var fromFallback, toFallback database.Dialect
-	if introspect.IsConnectionString(fromInput) {
+
+	// For "from" source: use config dialect if available, otherwise detect from connection string
+	if resolvedFrom != nil && resolvedFrom.Dialect != "" {
+		fromFallback = database.Dialect(resolvedFrom.Dialect)
+	} else if introspect.IsConnectionString(fromInput) {
 		fromFallback = schema.DriverNameToDialect(executor.DetectDriver(fromInput))
-		if !introspect.IsConnectionString(toInput) {
-			toFallback = fromFallback
-		}
 	}
-	if introspect.IsConnectionString(toInput) {
+
+	// For "to" target: use config dialect if available, otherwise detect from connection string
+	if resolvedTo != nil && resolvedTo.Dialect != "" {
+		toFallback = database.Dialect(resolvedTo.Dialect)
+	} else if introspect.IsConnectionString(toInput) {
 		toFallback = schema.DriverNameToDialect(executor.DetectDriver(toInput))
-		if fromFallback == database.DialectUnknown {
-			fromFallback = toFallback
-		}
+	}
+
+	// Inherit dialect between from/to if one is unknown
+	if toFallback == database.DialectUnknown && fromFallback != database.DialectUnknown {
+		toFallback = fromFallback
+	}
+	if fromFallback == database.DialectUnknown && toFallback != database.DialectUnknown {
+		fromFallback = toFallback
 	}
 
 	var loadErr error

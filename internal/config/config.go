@@ -16,10 +16,13 @@ const (
 
 // EnvironmentConfig describes a single named environment from lockplane.toml.
 type EnvironmentConfig struct {
-	Description       string `toml:"description"`
-	DatabaseURL       string `toml:"database_url"`
-	ShadowDatabaseURL string `toml:"shadow_database_url"`
-	SchemaPath        string `toml:"schema_path"`
+	Description       string   `toml:"description"`
+	DatabaseURL       string   `toml:"database_url"`
+	ShadowDatabaseURL string   `toml:"shadow_database_url"`
+	SchemaPath        string   `toml:"schema_path"`
+	Dialect           string   `toml:"dialect"` // Database dialect: "postgres", "sqlite" (optional, auto-detected if not set)
+	Schemas           []string `toml:"schemas"` // PostgreSQL schemas to manage (optional, defaults to current_schema())
+	ShadowSchema      string   `toml:"shadow_schema"`
 }
 
 // Config represents the lockplane.toml configuration file.

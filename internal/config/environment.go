@@ -20,6 +20,8 @@ type ResolvedEnvironment struct {
 	FromConfig        bool
 	FromDotenv        bool
 	ResolvedConfigDir string
+	Dialect           string   // Database dialect: "postgres" or "sqlite"
+	Schemas           []string // PostgreSQL schemas to manage
 }
 
 // ResolveEnvironment resolves a named environment into concrete connection strings.
@@ -76,6 +78,9 @@ func ResolveEnvironment(config *Config, name string) (*ResolvedEnvironment, erro
 
 	resolved.DatabaseURL = envConfig.DatabaseURL
 	resolved.ShadowDatabaseURL = envConfig.ShadowDatabaseURL
+	resolved.Dialect = envConfig.Dialect
+	resolved.Schemas = envConfig.Schemas
+	resolved.ShadowSchema = envConfig.ShadowSchema
 	if envExists {
 		resolved.FromConfig = true
 	}

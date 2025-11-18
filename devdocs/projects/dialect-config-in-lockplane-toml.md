@@ -1,6 +1,8 @@
 # Dialect Configuration via `lockplane.toml`
 
-**Status**: 🧭 Proposed (2025-11-17)
+**Status**: 🚧 In Progress (2025-11-18)
+
+**Combined with**: Multi-schema support (see `multi-schema-and-policies.md`)
 
 ## Goal
 Move the per-file dialect declaration (currently a comment like `-- dialect: sqlite`) into a first-class option within `lockplane.toml`, making schema dialect selection explicit, tool-friendly, and easier to discover.
@@ -9,31 +11,71 @@ Move the per-file dialect declaration (currently a comment like `-- dialect: sql
 - Comments are invisible to tooling and easy to forget.
 - Having dialect defined in config improves auto-complete, validation, and CLI behavior.
 - Aligns with other Lockplane configuration moving into `lockplane.toml` / `.env`.
+- Essential for multi-schema support (all schemas in a database share the same dialect).
 
-## Open Questions
-1. **Scope:** Should dialect be set per-schema file, per-directory, or globally per environment?
-2. **Backwards compatibility:** How do existing comment-based declarations co-exist? Do we deprecate them or allow both with deterministic precedence?
-3. **CLI defaults:** How do `lockplane plan/apply` behave if dialect isn’t specified?
+## Decisions Made
+1. **Scope:** Dialect is set per-environment (all schemas in one database have the same dialect)
+2. **Backwards compatibility:** Use clear precedence order (see below) - no breaking changes
+3. **CLI defaults:** Auto-detect from connection string if not specified (current behavior)
 
-## Initial Plan
+## Configuration Shape
 
-### Phase 1 – Design (WIP)
-- [ ] Decide on configuration shape (e.g., `schema_defaults.dialect = "sqlite"` or per-environment key).
-- [ ] Define precedence order among CLI flags, `lockplane.toml`, `.env`, and inline comments.
-- [ ] Document migration path for existing users.
+```toml
+[environments.local]
+description = "Local development"
+database_url = "postgresql://postgres:postgres@localhost:5432/mydb"
+shadow_database_url = "postgresql://postgres:postgres@localhost:5432/mydb"
+shadow_schema = "lockplane_shadow"
+dialect = "postgres"              # NEW: Explicit dialect
+schemas = ["public", "storage"]   # NEW: Multi-schema support
+```
 
-### Phase 2 – Implementation
-- [ ] Extend config loader to parse the new option with validation + defaults.
-- [ ] Update schema loader to consume the config value when dialect isn’t specified inline.
-- [ ] Add warning/deprecation notice when both comment and config disagree.
+## Precedence Order (Most to Least Specific)
 
-### Phase 3 – Tooling & Tests
-- [ ] Update tests covering config resolution, schema parsing, and CLI flows.
-- [ ] Ensure `lockplane init` wizard surfaces the new option when relevant.
+1. **CLI flag** (future: `--dialect postgres`)
+2. **Inline file comment** (`-- dialect: sqlite` in schema file)
+3. **Environment config** (`dialect = "postgres"` in `lockplane.toml`)
+4. **Auto-detect** from connection string (current behavior)
 
-### Phase 4 – Documentation
-- [ ] Update README + docs to highlight the new config setting with examples.
-- [ ] Add migration guide snippet for teams moving from inline comments.
+**Rule**: Most specific wins. If conflict exists between layers, show warning.
+
+## Implementation Plan
+
+### Phase 1 – Schema Types ✅ (Done)
+- [x] Add `Policy` type for RLS policies
+- [x] Add `Schema` field to `Table` for multi-schema
+- [x] Create design document
+
+### Phase 2 – Config Changes ✅ (Done)
+- [x] Add `dialect` field to `EnvironmentConfig`
+- [x] Add `schemas` field to `EnvironmentConfig`
+- [x] Add validation for dialect values ("postgres", "sqlite")
+- [x] Update config resolution to use dialect from config
+
+### Phase 3 – Schema Loading ✅ (Done)
+- [x] Update schema loader to respect config dialect
+- [x] Warn if inline comment conflicts with config dialect
+- [x] Use config dialect as fallback before auto-detection
+- [x] Update plan, rollback, and apply commands to use config dialect
+- [x] Add tests for dialect precedence
+
+### Phase 4 – Multi-Schema Introspection ✅ (Done)
+- [x] Update introspection to query multiple schemas
+- [x] Add schema name to introspected tables
+- [x] Added `IntrospectSchemas` method to Driver interface
+- [x] Implemented schema-specific Get methods (GetTablesInSchema, GetColumnsInSchema, etc.)
+- [x] Created `LoadSchemaFromConnectionStringWithSchemas` function
+
+### Phase 5 – Policy Support
+- [ ] Add policy introspection
+- [ ] Add policy DDL generation
+- [ ] Update parser for CREATE POLICY
+
+### Phase 6 – Testing & Documentation
+- [ ] Unit tests for config dialect resolution
+- [ ] Integration tests with multi-schema
+- [ ] Update README and getting started guide
+- [ ] Add examples for Supabase (multi-schema use case)
 
 ## Risks
 - Breaking existing comment-based workflows if precedence isn’t clearly defined.

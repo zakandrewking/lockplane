@@ -132,8 +132,10 @@ func runRollback(cmd *cobra.Command, args []string) {
 
 	// Determine source ("before") schema for rollback generation
 	sourceInput := strings.TrimSpace(rollbackFrom)
+	var resolvedFrom *config.ResolvedEnvironment
 	if sourceInput == "" && rollbackFromEnv != "" {
-		resolvedFrom, err := config.ResolveEnvironment(cfg, rollbackFromEnv)
+		var err error
+		resolvedFrom, err = config.ResolveEnvironment(cfg, rollbackFromEnv)
 		if err != nil {
 			log.Fatalf("Failed to resolve from environment: %v", err)
 		}
@@ -146,7 +148,13 @@ func runRollback(cmd *cobra.Command, args []string) {
 		if rollbackVerbose {
 			_, _ = color.New(color.FgCyan).Fprintf(os.Stderr, "🔍 Loading 'before' schema from: %s\n", sourceInput)
 		}
-		rollbackFallback := schema.DriverNameToDialect(executor.DetectDriver(sourceInput))
+		// Use config dialect if available, otherwise detect from connection string
+		var rollbackFallback database.Dialect
+		if resolvedFrom != nil && resolvedFrom.Dialect != "" {
+			rollbackFallback = database.Dialect(resolvedFrom.Dialect)
+		} else {
+			rollbackFallback = schema.DriverNameToDialect(executor.DetectDriver(sourceInput))
+		}
 		beforeSchema, err = executor.LoadSchemaOrIntrospectWithOptions(sourceInput, executor.BuildSchemaLoadOptions(sourceInput, rollbackFallback))
 		if err != nil {
 			log.Fatalf("Failed to load before schema: %v", err)
@@ -373,9 +381,11 @@ func runPlanRollback(cmd *cobra.Command, args []string) {
 
 	// Resolve before schema
 	fromInput := planRollbackFrom
+	var resolvedFrom *config.ResolvedEnvironment
 	if fromInput == "" {
 		if planRollbackFromEnv != "" {
-			resolvedFrom, err := config.ResolveEnvironment(cfg, planRollbackFromEnv)
+			var err error
+			resolvedFrom, err = config.ResolveEnvironment(cfg, planRollbackFromEnv)
 			if err != nil {
 				log.Fatalf("Failed to resolve from environment: %v", err)
 			}
@@ -396,7 +406,13 @@ func runPlanRollback(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to create driver: %v", err)
 	}
 
-	dialect := schema.DriverNameToDialect(driverType)
+	// Use config dialect if available, otherwise detect from driver type
+	var dialect database.Dialect
+	if resolvedFrom != nil && resolvedFrom.Dialect != "" {
+		dialect = database.Dialect(resolvedFrom.Dialect)
+	} else {
+		dialect = schema.DriverNameToDialect(driverType)
+	}
 	opts := executor.BuildSchemaLoadOptions(fromInput, dialect)
 	if planRollbackVerbose {
 		fmt.Fprintf(os.Stderr, "🔍 Loading before schema from: %s\n", fromInput)

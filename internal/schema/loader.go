@@ -59,15 +59,36 @@ func LoadSQLSchemaWithOptions(path string, opts *SchemaLoadOptions) (*database.S
 
 // LoadSQLSchemaFromBytes loads a SQL schema from a byte slice
 func LoadSQLSchemaFromBytes(data []byte, opts *SchemaLoadOptions) (*database.Schema, error) {
-	dialect := database.DialectUnknown
+	// Precedence order (most to least specific):
+	// 1. CLI flag (future, passed via opts)
+	// 2. Inline file comment (-- dialect: postgres/sqlite)
+	// 3. Environment config (passed via opts.Dialect)
+	// 4. Auto-detect from connection string (not implemented here)
+	// 5. Default to Postgres
+
+	// Check for inline comment first (highest file-level precedence)
+	inlineDialect := detectDialectFromSQL(data)
+
+	// Get config dialect from options (if provided)
+	configDialect := database.DialectUnknown
 	if opts != nil && opts.Dialect != database.DialectUnknown {
-		dialect = opts.Dialect
+		configDialect = opts.Dialect
 	}
-	if dialect == database.DialectUnknown {
-		dialect = detectDialectFromSQL(data)
+
+	// Warn if both are set and they conflict
+	if inlineDialect != database.DialectUnknown && configDialect != database.DialectUnknown && inlineDialect != configDialect {
+		fmt.Fprintf(os.Stderr, "⚠️  Warning: Inline dialect comment (%s) conflicts with config dialect (%s). Using inline dialect.\n",
+			inlineDialect, configDialect)
 	}
-	if dialect == database.DialectUnknown {
-		dialect = database.DialectPostgres
+
+	// Apply precedence: inline > config > default
+	dialect := database.DialectUnknown
+	if inlineDialect != database.DialectUnknown {
+		dialect = inlineDialect
+	} else if configDialect != database.DialectUnknown {
+		dialect = configDialect
+	} else {
+		dialect = database.DialectPostgres // Default
 	}
 
 	// Parse SQL DDL

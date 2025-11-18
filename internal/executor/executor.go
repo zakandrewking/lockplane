@@ -85,6 +85,13 @@ func BuildSchemaLoadOptions(input string, dialect database.Dialect) *schema.Sche
 
 // LoadSchemaFromConnectionString introspects a database and returns its schema.
 func LoadSchemaFromConnectionString(connStr string) (*database.Schema, error) {
+	return LoadSchemaFromConnectionStringWithSchemas(connStr, nil)
+}
+
+// LoadSchemaFromConnectionStringWithSchemas introspects a database and returns its schema.
+// If schemas is provided and non-empty, introspects those specific schemas (PostgreSQL only).
+// If schemas is nil or empty, uses default behavior (current_schema() for PostgreSQL).
+func LoadSchemaFromConnectionStringWithSchemas(connStr string, schemas []string) (*database.Schema, error) {
 	// Detect database driver from connection string
 	driverType := DetectDriver(connStr)
 
@@ -115,7 +122,8 @@ func LoadSchemaFromConnectionString(connStr string) (*database.Schema, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	dbSchema, err := driver.IntrospectSchema(ctx, db)
+	// Use multi-schema introspection if schemas are specified
+	dbSchema, err := driver.IntrospectSchemas(ctx, db, schemas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to introspect schema: %w", err)
 	}
