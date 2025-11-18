@@ -202,6 +202,55 @@ func TestGenerateFiles(t *testing.T) {
 	}
 }
 
+func TestGenerateFilesCustomSchemaPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(wd)
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+
+	envs := []EnvironmentInput{
+		{
+			Name:         "supabase",
+			DatabaseType: "postgres",
+			Host:         "127.0.0.1",
+			Port:         "54322",
+			Database:     "postgres",
+			User:         "postgres",
+			Password:     "postgres",
+			SchemaPath:   "supabase/schema",
+		},
+	}
+
+	result, err := GenerateFiles(envs)
+	if err != nil {
+		t.Fatalf("GenerateFiles returned error: %v", err)
+	}
+
+	if result.SchemaDir != "supabase/schema" {
+		t.Fatalf("expected schema dir supabase/schema, got %q", result.SchemaDir)
+	}
+	if _, err := os.Stat("supabase/schema"); err != nil {
+		t.Fatalf("supabase/schema directory missing: %v", err)
+	}
+
+	configBytes, err := os.ReadFile("lockplane.toml")
+	if err != nil {
+		t.Fatalf("failed to read config: %v", err)
+	}
+	configStr := string(configBytes)
+	if !strings.Contains(configStr, "schema_path = \"supabase/schema\"") {
+		t.Fatalf("config missing supabase schema_path:\n%s", configStr)
+	}
+}
+
 func TestUpdateGitignoreExisting(t *testing.T) {
 	tmpDir := t.TempDir()
 	originalDir, err := os.Getwd()

@@ -134,9 +134,9 @@ func runApply(cmd *cobra.Command, args []string) {
 		}
 		if schemaPath == "" {
 			// Mode 3: Auto-detect schema directory
-			if info, err := os.Stat("schema"); err == nil && info.IsDir() {
-				schemaPath = "schema"
-				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
+			if detectedPath, label := detectDefaultSchemaDir(); detectedPath != "" {
+				schemaPath = detectedPath
+				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: %s\n", label)
 			}
 		}
 

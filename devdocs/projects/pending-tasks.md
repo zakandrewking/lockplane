@@ -78,7 +78,7 @@
 - [ ] Use lightweight test helpers to stub `config.LoadConfig`, `executor.LoadSchema`, etc.
 
 ### 4. 📁 Supabase Schema Directory Support
-**Status**: Pending
+**Status**: ✅ Completed
 
 **Goal**: Support Supabase workflow where schema lives in `supabase/schema/`
 
@@ -88,19 +88,17 @@
 3. User runs `lockplane apply` pointing to `supabase/schema/` to keep it updated
 
 **Tasks**:
-- [ ] Update `lockplane init` to offer Supabase preset
-- [ ] Support `--schema supabase/schema` flag
-- [ ] Add Supabase workflow documentation
+- [x] Update `lockplane init` to offer Supabase preset (`lockplane init --supabase --yes`)
+- [x] Support `--schema supabase/schema` by wiring `--schema-path` through and preferring `supabase/schema/`
+- [x] Add Supabase workflow documentation (README + docs/supabase*.md)
 - [ ] Test with actual Supabase project
-- [ ] Ensure `config.ResolveEnvironment` understands Supabase defaults (shadow DB, database URL, schema path)
-- [ ] Verify `cmd/apply.go` auto-detection checks `supabase/schema/` before falling back to `schema/`
+- [x] Ensure `config.ResolveEnvironment` understands Supabase defaults (shadow DB, database URL, schema path)
+- [x] Verify `cmd/apply.go` auto-detection checks `supabase/schema/` before falling back to `schema/`
 
 **Implementation Outline**:
-- Extend `cmd/init.go` prompt/flags to add "Supabase" template that scaffolds `supabase/schema/` and `.env.local` entries using Supabase CLI defaults.
-- Update `config.LoadConfig` + docs to explain how `schema_path` resolves when Supabase preset is chosen.
-- Teach `cmd/root.go` help text and `printHelp()` (in `main.go`) about the new preset/flag combination.
-- Add Supabase-specific examples to `README.md`, `docs/getting_started.md`, and `docs/supabase.md` covering `lockplane apply --schema supabase/schema --target-environment supabase`.
-- Integration test: run `lockplane plan` against a sample Supabase repo in `examples/supabase/` to ensure schema loading works.
+- Extend `cmd/init.go` with the `--supabase` preset flag (non-interactive flow) and scaffold `.env.supabase` plus `schema_path = "supabase/schema"`.
+- Update docs to explain the preset and new auto-detection behavior.
+- Integration test: **still pending** (run `lockplane plan` against a sample Supabase repo in `examples/supabase/` to ensure schema loading works).
 
 ## Completed Recently
 

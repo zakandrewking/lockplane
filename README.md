@@ -102,6 +102,14 @@ guarantee that your schema is safe to use.
 > SQLite connection strings when running commands. Inline `-- dialect:` comments
 > are ignored.
 
+> **Supabase preset**
+>
+> Working inside a Supabase repo? Run `lockplane init --supabase --yes` to scaffold
+> `supabase/schema/`, generate `.env.supabase` with shadow-schema defaults, and set
+> `schema_path = "supabase/schema"` in `lockplane.toml`. All commands (plan/apply)
+> now auto-detect `supabase/schema/` before falling back to `schema/` when no
+> `--schema` flag is provided.
+
 Let's get started with an example. Create a new directory called `schema/` at
 the root of your project, and create a new file called `users.lp.sql`. Add the
 following SQL to the file:
@@ -303,6 +311,10 @@ schemas = ["public"]
 [environments.local]
 description = "Local development database"
 ```
+
+For Supabase projects, set `schema_path = "supabase/schema"` (or run
+`lockplane init --supabase --yes` to scaffold it automatically) and point your
+environment at the Supabase connection string plus `SHADOW_SCHEMA`.
 
 Next, provide the actual credentials in `.env.local` (ignored by Git by default).
 

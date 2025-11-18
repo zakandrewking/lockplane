@@ -7,7 +7,9 @@ nav_order: 2
 
 # Using Lockplane with an Existing Supabase Project
 
-Add declarative schema control, safety checks, and reversible migrations to your existing Supabase project.
+Add declarative schema control, safety checks, and reversible migrations to your existing Supabase project. Use `lockplane init --supabase --yes` inside the repo to generate the Supabase preset (`supabase/schema/` plus `.env.supabase`) before capturing your production schema.
+
+> **Tip:** With the preset enabled, Lockplane auto-detects `supabase/schema/` whenever `--schema` is not specified.
 
 ## Prerequisites
 

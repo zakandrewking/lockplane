@@ -253,7 +253,7 @@ Lockplane will:
 **Interactive prompt:**
 
 ```
-ℹ️ Auto-detected schema directory: schema/
+ℹ️ Auto-detected schema directory: supabase/schema/
 🔍 Introspecting target database (local)...
 📖 Loading desired schema from schema...
 📋 Migration plan (2 steps):

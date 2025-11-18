@@ -22,14 +22,6 @@ func GenerateFiles(environments []EnvironmentInput) (*InitResult, error) {
 		EnvFiles: []string{},
 	}
 
-	// Create schema directory if it doesn't exist
-	schemaDir := "schema"
-	if err := os.MkdirAll(schemaDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create schema directory: %w", err)
-	}
-	result.SchemaDir = schemaDir
-	result.SchemaDirCreated = true
-
 	// Generate or update lockplane.toml in current directory
 	configPath := "lockplane.toml"
 	fileExists := false
@@ -37,9 +29,23 @@ func GenerateFiles(environments []EnvironmentInput) (*InitResult, error) {
 		fileExists = true
 	}
 
-	if err := generateLockplaneTOML(configPath, environments); err != nil {
+	schemaDir, err := generateLockplaneTOML(configPath, environments)
+	if err != nil {
 		return nil, fmt.Errorf("failed to generate lockplane.toml: %w", err)
 	}
+	if schemaDir == "" {
+		schemaDir = defaultConfigSchemaPath
+	}
+	existed := false
+	if info, err := os.Stat(schemaDir); err == nil && info.IsDir() {
+		existed = true
+	}
+	if err := os.MkdirAll(schemaDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create schema directory %s: %w", schemaDir, err)
+	}
+	result.SchemaDir = schemaDir
+	result.SchemaDirCreated = !existed
+
 	result.ConfigPath = configPath
 	if fileExists {
 		result.ConfigUpdated = true
@@ -141,7 +147,7 @@ func createSQLiteDatabaseFile(filePath string) error {
 	return nil
 }
 
-func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) error {
+func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) (string, error) {
 	cfg := lockplaneConfig{
 		SchemaPath:   defaultConfigSchemaPath,
 		Environments: make(map[string]tomlEnvironment),
@@ -159,10 +165,14 @@ func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) erro
 		}
 	}
 
+	var schemaOverride string
 	// Merge new environments (new ones override existing with same name)
 	for _, env := range newEnvironments {
 		if env.Name == "" {
 			continue
+		}
+		if schemaOverride == "" && env.SchemaPath != "" {
+			schemaOverride = env.SchemaPath
 		}
 		description := env.Description
 		if description == "" {
@@ -182,6 +192,10 @@ func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) erro
 			Description: description,
 			Comment:     fmt.Sprintf("Connection: .env.%s", env.Name),
 		}
+	}
+
+	if schemaOverride != "" {
+		cfg.SchemaPath = schemaOverride
 	}
 
 	// Set default environment if not already set
@@ -204,7 +218,10 @@ func generateLockplaneTOML(path string, newEnvironments []EnvironmentInput) erro
 		cfg.Schemas = []string{"public"}
 	}
 
-	return writeLockplaneConfig(path, cfg)
+	if err := writeLockplaneConfig(path, cfg); err != nil {
+		return "", err
+	}
+	return cfg.SchemaPath, nil
 }
 
 // tomlEnvironment represents an environment in the TOML file

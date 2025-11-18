@@ -112,10 +112,10 @@ func runPlan(cmd *cobra.Command, args []string) {
 
 	if toInput == "" {
 		// Try to auto-detect schema directory first (like apply command does)
-		if info, err := os.Stat("schema"); err == nil && info.IsDir() {
-			toInput = "schema"
+		if detectedPath, label := detectDefaultSchemaDir(); detectedPath != "" {
+			toInput = detectedPath
 			if planVerbose {
-				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
+				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: %s\n", label)
 			}
 			// Resolve environment to get dialect for schema directory
 			if env, err := config.ResolveEnvironment(cfg, planToEnvironment); err == nil {
@@ -694,10 +694,10 @@ func runShadowDBValidation(cfg *config.Config, args []string) {
 
 	// Auto-detect if not provided
 	if schemaDir == "" {
-		if info, err := os.Stat("schema"); err == nil && info.IsDir() {
-			schemaDir = "schema"
+		if detectedPath, label := detectDefaultSchemaDir(); detectedPath != "" {
+			schemaDir = detectedPath
 			if planVerbose {
-				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: schema/\n")
+				fmt.Fprintf(os.Stderr, "ℹ️  Auto-detected schema directory: %s\n", label)
 			}
 		}
 	}

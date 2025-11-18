@@ -7,7 +7,7 @@ has_children: true
 
 # Using Lockplane with Supabase
 
-Supabase projects run on managed PostgreSQL. Lockplane gives you declarative schema control, safety checks, and reversible plans that complement Supabase's migration tooling.
+Supabase projects run on managed PostgreSQL. Lockplane gives you declarative schema control, safety checks, and reversible plans that complement Supabase's migration tooling. Run `lockplane init --supabase --yes` inside your Supabase repo to scaffold `supabase/schema/`, `.env.supabase`, and `schema_path = "supabase/schema"` automatically.
 
 ## Choose Your Guide
 

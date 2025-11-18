@@ -14,6 +14,8 @@ import (
 const (
 	defaultSchemaDir         = "schema"
 	lockplaneConfigFilename  = "lockplane.toml"
+	supabaseSchemaDir        = "supabase/schema"
+	supabaseEnvName          = "supabase"
 	defaultLockplaneTomlBody = `default_environment = "local"
 schema_path = "schema"
 dialect = "postgres"
@@ -58,6 +60,7 @@ func init() {
 func runInit(cmd *cobra.Command, args []string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	yes := fs.Bool("yes", false, "Skip the wizard and use provided flag values")
+	supabasePreset := fs.Bool("supabase", false, "Use Supabase defaults (schema at supabase/schema)")
 
 	// Environment configuration
 	envName := fs.String("env-name", "local", "Environment name")
@@ -151,6 +154,13 @@ func runInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if *supabasePreset {
+		applySupabaseDefaults(envName, description, schemaPath, dbType, host, port, database, user, password, sslMode, shadowDBPort)
+		if !*yes {
+			*yes = true
+		}
+	}
+
 	if *yes {
 		existingPath, err := checkExistingConfig()
 		if err != nil {
@@ -172,6 +182,10 @@ func runInit(cmd *cobra.Command, args []string) {
 			FilePath:     *filePath,
 			URL:          *url,
 			AuthToken:    *authToken,
+		}
+
+		if *supabasePreset {
+			envInput.ShadowSchema = "lockplane_shadow"
 		}
 
 		// For PostgreSQL, handle connection string or individual fields
@@ -252,6 +266,44 @@ func runInit(cmd *cobra.Command, args []string) {
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func applySupabaseDefaults(envName, description, schemaPath, dbType, host, port, database, user, password, sslMode, shadowDBPort *string) {
+	if envName != nil && (*envName == "local" || *envName == "") {
+		*envName = supabaseEnvName
+	}
+	if description != nil && (*description == "Local development database" || *description == "") {
+		*description = "Supabase local database"
+	}
+	if schemaPath != nil && (*schemaPath == "." || *schemaPath == defaultSchemaDir || *schemaPath == "") {
+		*schemaPath = supabaseSchemaDir
+	}
+	if dbType != nil && *dbType != "postgres" {
+		fmt.Fprintf(os.Stderr, "ℹ️  Supabase preset forces --db-type=postgres (was %s)\n", *dbType)
+		*dbType = "postgres"
+	}
+	if host != nil {
+		*host = "127.0.0.1"
+	}
+	if port != nil {
+		*port = "54322"
+	}
+	if database != nil {
+		*database = "postgres"
+	}
+	if user != nil {
+		*user = "postgres"
+	}
+	if password != nil {
+		*password = "postgres"
+	}
+	if sslMode != nil {
+		*sslMode = "disable"
+	}
+	if shadowDBPort != nil {
+		*shadowDBPort = ""
+	}
+	fmt.Fprintf(os.Stderr, "ℹ️  Supabase preset: targeting %s with schema path %s\n", supabaseEnvName, supabaseSchemaDir)
 }
 
 func reportBootstrapResult(out io.Writer, result *bootstrapResult) {

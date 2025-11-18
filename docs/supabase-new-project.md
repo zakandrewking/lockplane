@@ -7,7 +7,9 @@ nav_order: 1
 
 # Using Lockplane with a New Supabase Project
 
-Start your new Supabase project with declarative schema control from day one.
+Start your new Supabase project with declarative schema control from day one. Run `lockplane init --supabase --yes` inside your Supabase repo to scaffold `supabase/schema/` and `.env.supabase` automatically, then keep Supabase migrations in sync by pointing Lockplane at that directory.
+
+> **Tip:** When the preset is in place, commands like `lockplane apply` automatically use `supabase/schema/` if `--schema` is omitted.
 
 ## Prerequisites
 
