@@ -137,6 +137,26 @@ when needed.
 
 For more information on `.lp.sql` files, run `npx lockplane plan --help`.
 
+### Shadow DB Bootstrap Workflow
+
+Need a scratch database for ORMs like SQLAlchemy? Reuse Lockplane's shadow
+environment:
+
+1. Prepare a clean shadow database and capture its URL:
+   ```bash
+   lockplane shadow prepare --target-environment local
+   ```
+2. Point your tooling (e.g., `Base.metadata.create_all(shadow_engine)`) at the
+   returned `shadow_url` to emit the desired schema.
+3. Generate a migration plan directly from the prepared shadow DB:
+   ```bash
+   lockplane shadow diff --target-environment local > plan.json
+   ```
+4. Release the reservation when finished: `lockplane shadow release`.
+
+This flow avoids provisioning a separate "scratch" database while still letting
+you drive schema creation from existing ORMs or code-first tools.
+
 ## 4. 📜 Run your first migration
 
 Now that we have a schema, we can generate a migration plan to apply it to our

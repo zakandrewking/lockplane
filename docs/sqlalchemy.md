@@ -404,6 +404,29 @@ jobs:
 
 If you prefer JSON over SQL DDL, you can introspect from a shadow database:
 
+### New: Shadow Bootstrap Commands
+
+Lockplane now exposes helper commands so you can borrow the shadow database as a
+scratch environment without custom scripts:
+
+```bash
+# 1. Reset the shadow database and grab its connection string
+lockplane shadow prepare --target-environment local > shadow.json
+
+# 2. Read the connection string from shadow.json in your Python tooling
+#    (shadow_url + optional shadow_schema)
+
+# 3. After running Base.metadata.create_all(shadow_engine), diff directly:
+lockplane shadow diff --target-environment local > plan.json
+
+# 4. Release when finished
+lockplane shadow release
+```
+
+You can still manage the flow manually as shown below, but the CLI helpers make
+it easy to plug SQLAlchemy (or any code-first tool) into Lockplane without extra
+infrastructure.
+
 ```python
 # generate_schema.py (JSON approach)
 from sqlalchemy import create_engine

@@ -1,6 +1,6 @@
 # Shadow DB Bootstrap API
 
-**Status**: Draft – proposal to expose a developer-facing API for preparing and borrowing the Lockplane shadow database so external tooling (e.g., SQLAlchemy `create_all()`) can populate schema definitions before running `lockplane plan`.
+**Status**: ✅ Completed (CLI + reservation state landed)
 
 ## Background & Motivation
 - Today: Users must provision an external "scratch" database if they want an ORM or DSL to emit DDL that Lockplane can diff.
@@ -29,7 +29,11 @@
 - Should preparation emit a `lockplane shadow token` to authenticate future actions until release/timeout?
 
 ## Milestones
-1. Spec CLI commands and reservation model.
-2. Implement cleaning + metadata (local state file) + JSON output.
-3. Update `plan` to accept `--from shadow` shorthand.
-4. Document workflow in README/docs/sqlalchemy.md, including `create_all()` example.
+1. ✅ Spec CLI commands (`lockplane shadow prepare|diff|release`) and local reservation file `.lockplane-shadow.json`.
+2. ✅ Implement cleaning + metadata output (JSON by default) via `shadow prepare`.
+3. ✅ Provide `shadow diff` helper that treats the shadow DB as the desired state and generates plan JSON (use `lockplane apply` with the resulting plan).
+4. ✅ Documented workflow in README + docs/sqlalchemy.md.
+
+Open follow-ups:
+- Add CI integration tests against a real Supabase/SQLAlchemy sample (future work).
+- Consider adding `--from shadow` shorthand to `plan` once CLI feedback lands.
