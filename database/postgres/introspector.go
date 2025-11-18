@@ -181,6 +181,7 @@ func (i *Introspector) GetColumns(ctx context.Context, db *sql.DB, tableName str
 }
 
 // GetIndexes returns all indexes for a given PostgreSQL table
+// Excludes indexes that are automatically created by PRIMARY KEY or UNIQUE constraints
 func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName string) ([]database.Index, error) {
 	query := `
 		SELECT
@@ -196,6 +197,13 @@ func (i *Introspector) GetIndexes(ctx context.Context, db *sql.DB, tableName str
 		)
 		WHERE i.schemaname = current_schema()
 		  AND i.tablename = $1
+		  AND ix.indisprimary = false
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM pg_constraint con
+			WHERE con.conindid = ix.indexrelid
+			  AND con.contype IN ('p', 'u')
+		  )
 		ORDER BY i.indexname
 	`
 
