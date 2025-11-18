@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -92,6 +94,14 @@ func TestConnection(connStr string, dbType string) error {
 		driverName = "sqlite"
 		// For SQLite, adjust the connection string format
 		connStr = strings.TrimPrefix(connStr, "sqlite://")
+
+		// Ensure parent directory exists for SQLite databases
+		dir := filepath.Dir(connStr)
+		if dir != "." && dir != "/" {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			}
+		}
 	case "libsql":
 		driverName = "libsql"
 		// libSQL connection strings are used as-is (libsql://...)
