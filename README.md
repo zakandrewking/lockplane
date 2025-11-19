@@ -314,11 +314,26 @@ You can also use the sample at `lockplane.toml.example` as a starting point.
 default_environment = "local"
 schema_path = "."
 dialect = "postgres"
-schemas = ["public"]
+schemas = ["public"]  # Single schema (default)
 
 [environments.local]
 description = "Local development database"
 ```
+
+**Multi-schema configuration** (for PostgreSQL projects managing multiple schemas):
+
+```toml
+default_environment = "local"
+schema_path = "."
+dialect = "postgres"
+schemas = ["public", "storage", "auth"]  # Multiple schemas
+
+[environments.local]
+description = "Local development with multi-schema support"
+```
+
+This tells Lockplane to introspect and manage tables across all specified schemas.
+Useful for Supabase projects where you have `public`, `storage`, `auth`, etc.
 
 For Supabase projects, set `schema_path = "supabase/schema"` (or run
 `lockplane init --supabase --yes` to scaffold it automatically) and point your
@@ -471,7 +486,109 @@ Before handing the project to teammates or automations:
 
 Lockplane always prefers explicit CLI values, so you can temporarily override connections without touching the shared environment files.
 
-## 7. 🔄 Multi-Phase Migrations (Zero-Downtime Changes)
+## 7. 🗂️ Multi-Schema Support & Row Level Security (RLS)
+
+### Managing Multiple PostgreSQL Schemas
+
+Lockplane supports introspecting and managing tables across multiple PostgreSQL schemas (e.g., `public`, `storage`, `auth`). This is especially useful for Supabase projects or applications that organize tables into separate namespaces.
+
+**Configuration:**
+
+```toml
+# lockplane.toml
+default_environment = "local"
+dialect = "postgres"
+schemas = ["public", "storage", "auth"]  # Manage multiple schemas
+
+[environments.local]
+description = "Local development with multi-schema support"
+```
+
+**Schema files with schema-qualified tables:**
+
+```sql
+-- schema/storage_objects.lp.sql
+CREATE TABLE storage.objects (
+  id UUID PRIMARY KEY,
+  bucket_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  owner UUID,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+When you run `lockplane introspect` or `lockplane apply`, Lockplane will:
+- Query all specified schemas
+- Include the schema name in table metadata
+- Generate schema-qualified DDL when needed (e.g., `CREATE TABLE storage.objects ...`)
+
+### Row Level Security (RLS) Policies
+
+Lockplane fully supports PostgreSQL's Row Level Security, including:
+- Introspecting existing policies
+- Generating DDL for policy changes
+- Managing policy lifecycle (create, modify, drop)
+
+**Example: Adding RLS policies to your schema**
+
+```sql
+-- schema/storage_objects.lp.sql
+CREATE TABLE storage.objects (
+  id UUID PRIMARY KEY,
+  bucket_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  owner UUID,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS on the table
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- Create a policy for public read access
+CREATE POLICY "Public Access - Select" ON storage.objects
+    FOR SELECT
+    USING (bucket_id = 'public');
+
+-- Create a policy for owner write access
+CREATE POLICY "Owner Access - All" ON storage.objects
+    FOR ALL
+    USING (auth.uid() = owner);
+```
+
+**What Lockplane introspects:**
+- Policy name
+- Command type (SELECT, INSERT, UPDATE, DELETE, ALL)
+- Policy type (PERMISSIVE or RESTRICTIVE)
+- Roles the policy applies to
+- USING clause (for SELECT, UPDATE, DELETE)
+- WITH CHECK clause (for INSERT, UPDATE)
+
+**Policy changes in migration plans:**
+
+When you modify policies, Lockplane generates the appropriate DDL:
+- `CREATE POLICY` for new policies
+- `DROP POLICY` for removed policies
+- `ALTER TABLE ... ENABLE/DISABLE ROW LEVEL SECURITY` for RLS toggle changes
+
+**Example workflow:**
+
+```bash
+# Introspect current state including policies
+npx lockplane introspect --target-environment local > current.json
+
+# Update your schema files to add/modify policies
+
+# Generate migration plan
+npx lockplane plan --from current.json --to schema/ > plan.json
+
+# Review the plan (includes policy changes)
+cat plan.json
+
+# Apply the changes
+npx lockplane apply --auto-approve --target-environment local --schema schema/
+```
+
+## 8. 🔄 Multi-Phase Migrations (Zero-Downtime Changes)
 
 Some schema changes can't be done safely in a single step. Renaming a column, changing data types, or removing columns requires coordination between database changes and code deployments.
 

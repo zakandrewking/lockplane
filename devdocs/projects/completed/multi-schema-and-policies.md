@@ -1,13 +1,13 @@
 # Multi-Schema Support and RLS Policies
 
 ## Progress Checklist
-- [ ] Phase 1: Add Policy type to schema
-- [ ] Phase 2: Add config support for multiple schemas
-- [ ] Phase 3: Update introspection for multi-schema
-- [ ] Phase 4: Add policy introspection
-- [ ] Phase 5: Add policy DDL generation
-- [ ] Phase 6: Add schema-qualified table support
-- [ ] Phase 7: Testing and documentation
+- [x] Phase 1: Add Policy type to schema (✅ Completed 2025-11-18)
+- [x] Phase 2: Add config support for multiple schemas (✅ Completed 2025-11-18)
+- [x] Phase 3: Update introspection for multi-schema (✅ Completed 2025-11-18)
+- [x] Phase 4: Add policy introspection (✅ Completed 2025-11-18)
+- [x] Phase 5: Add policy DDL generation (✅ Completed 2025-11-18)
+- [x] Phase 6: Add schema-qualified table support (✅ Completed 2025-11-18)
+- [x] Phase 7: Testing and documentation (✅ Completed 2025-11-19)
 
 ## Context
 
