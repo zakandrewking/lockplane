@@ -1,8 +1,9 @@
-package locks
+package locks_test
 
 import (
 	"context"
 	"database/sql"
+	"github.com/lockplane/lockplane/internal/locks"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestMeasureLockDuration_NilDB(t *testing.T) {
 		SQL:         []string{"SELECT 1"},
 	}
 
-	_, err := MeasureLockDuration(context.Background(), nil, step)
+	_, err := planner.MeasureLockDuration(context.Background(), nil, step)
 	if err == nil {
 		t.Error("Expected error for nil database")
 	}
@@ -29,7 +30,7 @@ func TestMeasureLockDuration_NoSQL(t *testing.T) {
 		SQL:         []string{},
 	}
 
-	measurement, err := MeasureLockDuration(context.Background(), &sql.DB{}, step)
+	measurement, err := planner.MeasureLockDuration(context.Background(), &sql.DB{}, step)
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -49,7 +50,7 @@ func TestMeasureLockDuration_EmptySQL(t *testing.T) {
 		SQL:         []string{""},
 	}
 
-	measurement, err := MeasureLockDuration(context.Background(), &sql.DB{}, step)
+	measurement, err := planner.MeasureLockDuration(context.Background(), &sql.DB{}, step)
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -63,66 +64,67 @@ func TestMeasureLockDuration_EmptySQL(t *testing.T) {
 	}
 }
 
-func TestExtractIndexName(t *testing.T) {
-	tests := []struct {
-		name     string
-		sql      string
-		expected string
-	}{
-		{
-			name:     "CREATE INDEX",
-			sql:      "CREATE INDEX idx_users_email ON users(email)",
-			expected: "idx_users_email",
-		},
-		{
-			name:     "CREATE UNIQUE INDEX",
-			sql:      "CREATE UNIQUE INDEX idx_users_email ON users(email)",
-			expected: "idx_users_email",
-		},
-		{
-			name:     "CREATE INDEX CONCURRENTLY",
-			sql:      "CREATE INDEX CONCURRENTLY idx_users_email ON users(email)",
-			expected: "idx_users_email",
-		},
-		{
-			name:     "CREATE UNIQUE INDEX CONCURRENTLY",
-			sql:      "CREATE UNIQUE INDEX CONCURRENTLY idx_users_email ON users(email)",
-			expected: "idx_users_email",
-		},
-		{
-			name:     "Lowercase",
-			sql:      "create index idx_email on users(email)",
-			expected: "idx_email",
-		},
-		{
-			name:     "No index name",
-			sql:      "ALTER TABLE users ADD COLUMN email TEXT",
-			expected: "",
-		},
-		{
-			name:     "Malformed SQL",
-			sql:      "CREATE INDEX",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := extractIndexName(tt.sql)
-			if got != tt.expected {
-				t.Errorf("extractIndexName(%q) = %q, want %q", tt.sql, got, tt.expected)
-			}
-		})
-	}
-}
+// TestExtractIndexName tests extractIndexName function (DEPRECATED - function removed)
+// func TestExtractIndexName(t *testing.T) {
+// 	tests := []struct {
+// 		name     string
+// 		sql      string
+// 		expected string
+// 	}{
+// 		{
+// 			name:     "CREATE INDEX",
+// 			sql:      "CREATE INDEX idx_users_email ON users(email)",
+// 			expected: "idx_users_email",
+// 		},
+// 		{
+// 			name:     "CREATE UNIQUE INDEX",
+// 			sql:      "CREATE UNIQUE INDEX idx_users_email ON users(email)",
+// 			expected: "idx_users_email",
+// 		},
+// 		{
+// 			name:     "CREATE INDEX CONCURRENTLY",
+// 			sql:      "CREATE INDEX CONCURRENTLY idx_users_email ON users(email)",
+// 			expected: "idx_users_email",
+// 		},
+// 		{
+// 			name:     "CREATE UNIQUE INDEX CONCURRENTLY",
+// 			sql:      "CREATE UNIQUE INDEX CONCURRENTLY idx_users_email ON users(email)",
+// 			expected: "idx_users_email",
+// 		},
+// 		{
+// 			name:     "Lowercase",
+// 			sql:      "create index idx_email on users(email)",
+// 			expected: "idx_email",
+// 		},
+// 		{
+// 			name:     "No index name",
+// 			sql:      "ALTER TABLE users ADD COLUMN email TEXT",
+// 			expected: "",
+// 		},
+// 		{
+// 			name:     "Malformed SQL",
+// 			sql:      "CREATE INDEX",
+// 			expected: "",
+// 		},
+// 	}
+//
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			got := extractIndexName(tt.sql)
+// 			if got != tt.expected {
+// 				t.Errorf("extractIndexName(%q) = %q, want %q", tt.sql, got, tt.expected)
+// 			}
+// 		})
+// 	}
+// }
 
 func TestLockMeasurement_Structure(t *testing.T) {
-	// Test that LockMeasurement struct can be created properly
-	measurement := &LockMeasurement{
+	// Test that locks.LockMeasurement struct can be created properly
+	measurement := &locks.LockMeasurement{
 		DurationMS: 100,
 		Success:    true,
 		Error:      "",
-		LockMode:   LockAccessExclusive,
+		LockMode:   locks.LockAccessExclusive,
 		SQL:        "ALTER TABLE users ADD COLUMN email TEXT",
 	}
 
@@ -134,8 +136,8 @@ func TestLockMeasurement_Structure(t *testing.T) {
 		t.Error("Expected Success to be true")
 	}
 
-	if measurement.LockMode != LockAccessExclusive {
-		t.Errorf("LockMode = %v, want %v", measurement.LockMode, LockAccessExclusive)
+	if measurement.LockMode != locks.LockAccessExclusive {
+		t.Errorf("LockMode = %v, want %v", measurement.LockMode, locks.LockAccessExclusive)
 	}
 }
 
@@ -213,7 +215,7 @@ func TestMeasureLockDuration_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			measurement, err := MeasureLockDuration(ctx, db, tt.step)
+			measurement, err := planner.MeasureLockDuration(ctx, db, tt.step)
 
 			if err != nil && tt.shouldSucceed {
 				t.Errorf("Unexpected error: %v", err)
@@ -233,7 +235,7 @@ func TestMeasureLockDuration_Integration(t *testing.T) {
 					t.Errorf("Expected non-negative duration, got %d ms", measurement.DurationMS)
 				}
 
-				if !tt.skipLockCheck && measurement.LockMode == LockAccessShare {
+				if !tt.skipLockCheck && measurement.LockMode == locks.LockAccessShare {
 					t.Error("Expected non-trivial lock mode for DDL operation")
 				}
 			} else {
@@ -256,14 +258,14 @@ func TestMeasureStepLockImpact_Structure(t *testing.T) {
 	}
 
 	// Without DB, just test that it returns impact analysis
-	impact := AnalyzeLockImpact(step)
+	impact := planner.AnalyzeLockImpact(step)
 
 	if impact == nil {
 		t.Fatal("Expected impact analysis, got nil")
 	}
 
-	if impact.LockMode != LockAccessExclusive {
-		t.Errorf("LockMode = %v, want %v", impact.LockMode, LockAccessExclusive)
+	if impact.LockMode != locks.LockAccessExclusive {
+		t.Errorf("locks.LockMode = %v, want %v", impact.LockMode, locks.LockAccessExclusive)
 	}
 
 	if !impact.BlocksReads || !impact.BlocksWrites {
@@ -271,29 +273,29 @@ func TestMeasureStepLockImpact_Structure(t *testing.T) {
 	}
 }
 
-// Test concurrent operation detection
-func TestMeasureConcurrentOperation_IndexName(t *testing.T) {
-	// Test that we can extract index names for cleanup
-	tests := []struct {
-		sql          string
-		expectedName string
-	}{
-		{
-			sql:          "CREATE INDEX CONCURRENTLY idx_test ON users(email)",
-			expectedName: "idx_test",
-		},
-		{
-			sql:          "CREATE UNIQUE INDEX CONCURRENTLY idx_unique_email ON users(email)",
-			expectedName: "idx_unique_email",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.sql, func(t *testing.T) {
-			name := extractIndexName(tt.sql)
-			if name != tt.expectedName {
-				t.Errorf("extractIndexName() = %q, want %q", name, tt.expectedName)
-			}
-		})
-	}
-}
+// Test concurrent operation detection (DEPRECATED - extractIndexName function removed)
+// func TestMeasureConcurrentOperation_IndexName(t *testing.T) {
+// 	// Test that we can extract index names for cleanup
+// 	tests := []struct {
+// 		sql          string
+// 		expectedName string
+// 	}{
+// 		{
+// 			sql:          "CREATE INDEX CONCURRENTLY idx_test ON users(email)",
+// 			expectedName: "idx_test",
+// 		},
+// 		{
+// 			sql:          "CREATE UNIQUE INDEX CONCURRENTLY idx_unique_email ON users(email)",
+// 			expectedName: "idx_unique_email",
+// 		},
+// 	}
+//
+// 	for _, tt := range tests {
+// 		t.Run(tt.sql, func(t *testing.T) {
+// 			name := extractIndexName(tt.sql)
+// 			if name != tt.expectedName {
+// 				t.Errorf("extractIndexName() = %q, want %q", name, tt.expectedName)
+// 			}
+// 		})
+// 	}
+// }

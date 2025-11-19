@@ -2,18 +2,12 @@ package locks
 
 import (
 	"strings"
-
-	"github.com/lockplane/lockplane/internal/planner"
 )
 
-// DetectLockMode analyzes a plan step and returns the lock mode it will acquire
-func DetectLockMode(step planner.PlanStep) LockMode {
-	if len(step.SQL) == 0 {
-		return LockAccessShare // No SQL = no locks
-	}
-
-	// Analyze the first SQL statement to determine operation type
-	sql := strings.TrimSpace(step.SQL[0])
+// DetectLockModeFromSQL analyzes a SQL statement and returns the lock mode it will acquire
+// This version doesn't depend on planner types to avoid circular dependencies
+func DetectLockModeFromSQL(sql string) LockMode {
+	sql = strings.TrimSpace(sql)
 	if sql == "" {
 		return LockAccessShare // Empty SQL = no locks
 	}
@@ -77,36 +71,39 @@ func DetectLockMode(step planner.PlanStep) LockMode {
 	return LockAccessExclusive
 }
 
-// AnalyzeLockImpact returns detailed lock impact information for a plan step
-func AnalyzeLockImpact(step planner.PlanStep) *LockImpact {
-	lockMode := DetectLockMode(step)
-
-	impact := &LockImpact{
-		Operation:    step.Description,
-		LockMode:     lockMode,
-		BlocksReads:  lockMode.BlocksReads(),
-		BlocksWrites: lockMode.BlocksWrites(),
-		Impact:       lockMode.ImpactLevel(),
-		Explanation:  explainLockMode(step, lockMode),
-	}
-
-	return impact
+// IsCreateIndexConcurrentlySQL returns true if the SQL creates an index concurrently
+func IsCreateIndexConcurrentlySQL(sql string) bool {
+	sqlUpper := strings.ToUpper(strings.TrimSpace(sql))
+	return strings.HasPrefix(sqlUpper, "CREATE INDEX CONCURRENTLY") ||
+		strings.HasPrefix(sqlUpper, "CREATE UNIQUE INDEX CONCURRENTLY")
 }
 
-// explainLockMode provides a human-readable explanation of why this lock is needed
-func explainLockMode(step planner.PlanStep, mode LockMode) string {
-	if len(step.SQL) == 0 {
+// IsAddConstraintNotValidSQL returns true if the SQL adds a constraint with NOT VALID
+func IsAddConstraintNotValidSQL(sql string) bool {
+	sqlUpper := strings.ToUpper(strings.TrimSpace(sql))
+	return strings.Contains(sqlUpper, "ADD CONSTRAINT") && strings.Contains(sqlUpper, "NOT VALID")
+}
+
+// IsValidateConstraintSQL returns true if the SQL validates a constraint
+func IsValidateConstraintSQL(sql string) bool {
+	sqlUpper := strings.ToUpper(strings.TrimSpace(sql))
+	return strings.Contains(sqlUpper, "VALIDATE CONSTRAINT")
+}
+
+// ExplainLockModeFromSQL provides a human-readable explanation of why this lock is needed
+func ExplainLockModeFromSQL(sql string, mode LockMode) string {
+	sql = strings.TrimSpace(sql)
+	if sql == "" {
 		return "No SQL operations"
 	}
 
-	sql := strings.TrimSpace(step.SQL[0])
 	sqlUpper := strings.ToUpper(sql)
 
 	switch mode {
 	case LockAccessExclusive:
 		if strings.Contains(sqlUpper, "ALTER TABLE") {
 			if strings.Contains(sqlUpper, "ADD COLUMN") {
-				if containsDefault(sqlUpper) {
+				if strings.Contains(sqlUpper, "DEFAULT") {
 					return "ALTER TABLE ADD COLUMN with DEFAULT requires rewriting the entire table"
 				}
 				return "ALTER TABLE requires exclusive access to modify table structure"
@@ -154,37 +151,4 @@ func explainLockMode(step planner.PlanStep, mode LockMode) string {
 	default:
 		return "Standard locking for this operation type"
 	}
-}
-
-// containsDefault checks if SQL contains DEFAULT clause
-func containsDefault(sql string) bool {
-	return strings.Contains(sql, "DEFAULT")
-}
-
-// IsCreateIndexConcurrently returns true if the step creates an index concurrently
-func IsCreateIndexConcurrently(step planner.PlanStep) bool {
-	if len(step.SQL) == 0 {
-		return false
-	}
-	sqlUpper := strings.ToUpper(step.SQL[0])
-	return strings.HasPrefix(sqlUpper, "CREATE INDEX CONCURRENTLY") ||
-		strings.HasPrefix(sqlUpper, "CREATE UNIQUE INDEX CONCURRENTLY")
-}
-
-// IsAddConstraintNotValid returns true if the step adds a constraint with NOT VALID
-func IsAddConstraintNotValid(step planner.PlanStep) bool {
-	if len(step.SQL) == 0 {
-		return false
-	}
-	sqlUpper := strings.ToUpper(step.SQL[0])
-	return strings.Contains(sqlUpper, "ADD CONSTRAINT") && strings.Contains(sqlUpper, "NOT VALID")
-}
-
-// IsValidateConstraint returns true if the step validates a constraint
-func IsValidateConstraint(step planner.PlanStep) bool {
-	if len(step.SQL) == 0 {
-		return false
-	}
-	sqlUpper := strings.ToUpper(step.SQL[0])
-	return strings.Contains(sqlUpper, "VALIDATE CONSTRAINT")
 }

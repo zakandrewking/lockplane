@@ -1,6 +1,7 @@
-package locks
+package locks_test
 
 import (
+	"github.com/lockplane/lockplane/internal/locks"
 	"strings"
 	"testing"
 
@@ -51,7 +52,7 @@ func TestGenerateSaferRewrite_CreateIndex(t *testing.T) {
 				SQL:         []string{tt.sql},
 			}
 
-			rewrite := GenerateSaferRewrite(step)
+			rewrite := planner.GenerateSaferRewrite(step)
 
 			if tt.shouldRewrite {
 				if rewrite == nil {
@@ -66,8 +67,8 @@ func TestGenerateSaferRewrite_CreateIndex(t *testing.T) {
 					t.Errorf("SQL = %q, want %q", rewrite.SQL[0], tt.expectedSQL)
 				}
 
-				if rewrite.LockMode != LockShareUpdateExclusive {
-					t.Errorf("LockMode = %v, want %v", rewrite.LockMode, LockShareUpdateExclusive)
+				if rewrite.LockMode != locks.LockShareUpdateExclusive {
+					t.Errorf("locks.LockMode = %v, want %v", rewrite.LockMode, locks.LockShareUpdateExclusive)
 				}
 
 				if !strings.Contains(rewrite.Description, "CONCURRENTLY") {
@@ -134,7 +135,7 @@ func TestGenerateSaferRewrite_AddConstraint(t *testing.T) {
 				SQL:         []string{tt.sql},
 			}
 
-			rewrite := GenerateSaferRewrite(step)
+			rewrite := planner.GenerateSaferRewrite(step)
 
 			if tt.shouldRewrite {
 				if rewrite == nil {
@@ -155,8 +156,8 @@ func TestGenerateSaferRewrite_AddConstraint(t *testing.T) {
 					t.Errorf("Phase 2 SQL should contain %q, got: %s", tt.expectedPhase2Contains, rewrite.SQL[1])
 				}
 
-				if rewrite.LockMode != LockShareUpdateExclusive {
-					t.Errorf("LockMode = %v, want %v", rewrite.LockMode, LockShareUpdateExclusive)
+				if rewrite.LockMode != locks.LockShareUpdateExclusive {
+					t.Errorf("locks.LockMode = %v, want %v", rewrite.LockMode, locks.LockShareUpdateExclusive)
 				}
 
 				if !rewrite.RequiresMultipleSteps {
@@ -210,7 +211,7 @@ func TestGenerateSaferRewrite_AlterColumnType(t *testing.T) {
 				SQL:         []string{tt.sql},
 			}
 
-			rewrite := GenerateSaferRewrite(step)
+			rewrite := planner.GenerateSaferRewrite(step)
 
 			if tt.shouldSuggest {
 				if rewrite == nil {
@@ -265,7 +266,7 @@ func TestGenerateSaferRewrite_NoRewrite(t *testing.T) {
 				SQL:         []string{tt.sql},
 			}
 
-			rewrite := GenerateSaferRewrite(step)
+			rewrite := planner.GenerateSaferRewrite(step)
 			if rewrite != nil {
 				t.Errorf("Expected no rewrite for %q but got: %+v", tt.name, rewrite)
 			}
@@ -314,7 +315,7 @@ func TestInjectLockTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := InjectLockTimeout(tt.sql, tt.timeoutSeconds)
+			result := locks.InjectLockTimeout(tt.sql, tt.timeoutSeconds)
 
 			for _, expected := range tt.expectedContains {
 				if !strings.Contains(result, expected) {
@@ -346,9 +347,9 @@ func TestExtractTableName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
-			got := extractTableName(tt.sql)
+			got := locks.ExtractTableName(tt.sql)
 			if got != tt.expected {
-				t.Errorf("extractTableName(%q) = %q, want %q", tt.sql, got, tt.expected)
+				t.Errorf("locks.ExtractTableName(%q) = %q, want %q", tt.sql, got, tt.expected)
 			}
 		})
 	}
@@ -379,9 +380,9 @@ func TestExtractConstraintName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
-			got := extractConstraintName(tt.sql)
+			got := locks.ExtractConstraintName(tt.sql)
 			if got != tt.expected {
-				t.Errorf("extractConstraintName(%q) = %q, want %q", tt.sql, got, tt.expected)
+				t.Errorf("locks.ExtractConstraintName(%q) = %q, want %q", tt.sql, got, tt.expected)
 			}
 		})
 	}
@@ -402,9 +403,9 @@ func TestExtractColumnNameFromAlter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
-			got := extractColumnNameFromAlter(tt.sql)
+			got := locks.ExtractColumnNameFromAlter(tt.sql)
 			if got != tt.expected {
-				t.Errorf("extractColumnNameFromAlter(%q) = %q, want %q", tt.sql, got, tt.expected)
+				t.Errorf("locks.ExtractColumnNameFromAlter(%q) = %q, want %q", tt.sql, got, tt.expected)
 			}
 		})
 	}
@@ -413,13 +414,13 @@ func TestExtractColumnNameFromAlter(t *testing.T) {
 func TestShouldRewrite(t *testing.T) {
 	tests := []struct {
 		name     string
-		impact   *LockImpact
+		impact   *locks.LockImpact
 		expected bool
 	}{
 		{
 			name: "High impact should rewrite",
-			impact: &LockImpact{
-				Impact:              ImpactHigh,
+			impact: &locks.LockImpact{
+				Impact:              locks.ImpactHigh,
 				EstimatedDurationMS: 100,
 				BlocksWrites:        true,
 			},
@@ -427,8 +428,8 @@ func TestShouldRewrite(t *testing.T) {
 		},
 		{
 			name: "Long duration should rewrite",
-			impact: &LockImpact{
-				Impact:              ImpactLow,
+			impact: &locks.LockImpact{
+				Impact:              locks.ImpactLow,
 				EstimatedDurationMS: 2000,
 				BlocksWrites:        false,
 			},
@@ -436,8 +437,8 @@ func TestShouldRewrite(t *testing.T) {
 		},
 		{
 			name: "Blocks writes should rewrite",
-			impact: &LockImpact{
-				Impact:              ImpactMedium,
+			impact: &locks.LockImpact{
+				Impact:              locks.ImpactMedium,
 				EstimatedDurationMS: 500,
 				BlocksWrites:        true,
 			},
@@ -445,8 +446,8 @@ func TestShouldRewrite(t *testing.T) {
 		},
 		{
 			name: "Low impact and fast should not rewrite",
-			impact: &LockImpact{
-				Impact:              ImpactLow,
+			impact: &locks.LockImpact{
+				Impact:              locks.ImpactLow,
 				EstimatedDurationMS: 100,
 				BlocksWrites:        false,
 			},
@@ -454,8 +455,8 @@ func TestShouldRewrite(t *testing.T) {
 		},
 		{
 			name: "None impact and fast should not rewrite",
-			impact: &LockImpact{
-				Impact:              ImpactNone,
+			impact: &locks.LockImpact{
+				Impact:              locks.ImpactNone,
 				EstimatedDurationMS: 100,
 				BlocksWrites:        false,
 			},
@@ -465,9 +466,9 @@ func TestShouldRewrite(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ShouldRewrite(tt.impact)
+			got := locks.ShouldRewrite(tt.impact)
 			if got != tt.expected {
-				t.Errorf("ShouldRewrite() = %v, want %v", got, tt.expected)
+				t.Errorf("locks.ShouldRewrite() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

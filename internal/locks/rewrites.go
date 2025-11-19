@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/lockplane/lockplane/internal/planner"
 )
 
 // SaferRewrite represents a lock-safe alternative to a DDL operation
@@ -32,14 +30,10 @@ type SaferRewrite struct {
 	Notes string
 }
 
-// GenerateSaferRewrite attempts to generate a lock-safe rewrite for a plan step
+// GenerateSaferRewriteSQL attempts to generate a lock-safe rewrite for a SQL statement
 // Returns nil if no safer alternative exists
-func GenerateSaferRewrite(step planner.PlanStep) *SaferRewrite {
-	if len(step.SQL) == 0 {
-		return nil
-	}
-
-	sql := strings.TrimSpace(step.SQL[0])
+func GenerateSaferRewriteSQL(sql string, description string) *SaferRewrite {
+	sql = strings.TrimSpace(sql)
 	if sql == "" {
 		return nil
 	}
@@ -52,7 +46,7 @@ func GenerateSaferRewrite(step planner.PlanStep) *SaferRewrite {
 	}
 
 	// Pattern 2: ADD CONSTRAINT → ADD CONSTRAINT NOT VALID + VALIDATE
-	if rewrite := rewriteAddConstraint(sql, sqlUpper, step.Description); rewrite != nil {
+	if rewrite := rewriteAddConstraint(sql, sqlUpper, description); rewrite != nil {
 		return rewrite
 	}
 
@@ -117,8 +111,8 @@ func rewriteAddConstraint(sql, sqlUpper, description string) *SaferRewrite {
 	}
 
 	// Extract table name and constraint details
-	tableName := extractTableName(sql)
-	constraintName := extractConstraintName(sql)
+	tableName := ExtractTableName(sql)
+	constraintName := ExtractConstraintName(sql)
 
 	if tableName == "" {
 		return nil // Can't rewrite without table name
@@ -161,8 +155,8 @@ func suggestMultiPhaseForAlterType(sql, sqlUpper string) *SaferRewrite {
 	}
 
 	// Extract table and column names
-	tableName := extractTableName(sql)
-	columnName := extractColumnNameFromAlter(sql)
+	tableName := ExtractTableName(sql)
+	columnName := ExtractColumnNameFromAlter(sql)
 
 	if tableName == "" || columnName == "" {
 		return nil
@@ -201,7 +195,7 @@ func InjectLockTimeout(sql string, timeoutSeconds int) string {
 }
 
 // extractTableName attempts to extract table name from ALTER TABLE statement
-func extractTableName(sql string) string {
+func ExtractTableName(sql string) string {
 	// Pattern: ALTER TABLE table_name ...
 	re := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_]*)`)
 	matches := re.FindStringSubmatch(sql)
@@ -212,7 +206,7 @@ func extractTableName(sql string) string {
 }
 
 // extractConstraintName attempts to extract constraint name from ADD CONSTRAINT
-func extractConstraintName(sql string) string {
+func ExtractConstraintName(sql string) string {
 	// Pattern: ADD CONSTRAINT constraint_name ...
 	// Must not match CHECK, UNIQUE, FOREIGN, PRIMARY as those are keywords not names
 	re := regexp.MustCompile(`(?i)ADD\s+CONSTRAINT\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+`)
@@ -227,7 +221,7 @@ func extractConstraintName(sql string) string {
 	}
 
 	// If no explicit name, generate one based on table name
-	tableName := extractTableName(sql)
+	tableName := ExtractTableName(sql)
 	if tableName != "" {
 		// Simple default constraint name
 		if strings.Contains(strings.ToUpper(sql), "CHECK") {
@@ -245,7 +239,7 @@ func extractConstraintName(sql string) string {
 }
 
 // extractColumnNameFromAlter attempts to extract column name from ALTER COLUMN
-func extractColumnNameFromAlter(sql string) string {
+func ExtractColumnNameFromAlter(sql string) string {
 	// Pattern: ALTER COLUMN column_name TYPE ...
 	re := regexp.MustCompile(`(?i)ALTER\s+COLUMN\s+([a-zA-Z_][a-zA-Z0-9_]*)`)
 	matches := re.FindStringSubmatch(sql)
@@ -264,4 +258,12 @@ func ShouldRewrite(impact *LockImpact) bool {
 	return impact.IsHighImpact() ||
 		impact.EstimatedDurationMS > 1000 ||
 		impact.BlocksWrites
+}
+
+// ShouldRewriteSQL returns true if the SQL statement should be rewritten for lock safety
+func ShouldRewriteSQL(sql string) bool {
+	lockMode := DetectLockModeFromSQL(sql)
+	// Rewrite if medium or high impact
+	impact := lockMode.ImpactLevel()
+	return impact >= ImpactMedium
 }

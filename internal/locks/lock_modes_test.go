@@ -1,20 +1,24 @@
-package locks
+package locks_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/lockplane/lockplane/internal/locks"
+)
 
 func TestLockMode_String(t *testing.T) {
 	tests := []struct {
-		mode     LockMode
+		mode     locks.LockMode
 		expected string
 	}{
-		{LockAccessShare, "ACCESS SHARE"},
-		{LockRowShare, "ROW SHARE"},
-		{LockRowExclusive, "ROW EXCLUSIVE"},
-		{LockShareUpdateExclusive, "SHARE UPDATE EXCLUSIVE"},
-		{LockShare, "SHARE"},
-		{LockShareRowExclusive, "SHARE ROW EXCLUSIVE"},
-		{LockExclusive, "EXCLUSIVE"},
-		{LockAccessExclusive, "ACCESS EXCLUSIVE"},
+		{locks.LockAccessShare, "ACCESS SHARE"},
+		{locks.LockRowShare, "ROW SHARE"},
+		{locks.LockRowExclusive, "ROW EXCLUSIVE"},
+		{locks.LockShareUpdateExclusive, "SHARE UPDATE EXCLUSIVE"},
+		{locks.LockShare, "SHARE"},
+		{locks.LockShareRowExclusive, "SHARE ROW EXCLUSIVE"},
+		{locks.LockExclusive, "EXCLUSIVE"},
+		{locks.LockAccessExclusive, "ACCESS EXCLUSIVE"},
 	}
 
 	for _, tt := range tests {
@@ -28,17 +32,17 @@ func TestLockMode_String(t *testing.T) {
 
 func TestLockMode_BlocksReads(t *testing.T) {
 	tests := []struct {
-		mode     LockMode
+		mode     locks.LockMode
 		expected bool
 	}{
-		{LockAccessShare, false},
-		{LockRowShare, false},
-		{LockRowExclusive, false},
-		{LockShareUpdateExclusive, false},
-		{LockShare, false},
-		{LockShareRowExclusive, false},
-		{LockExclusive, false},
-		{LockAccessExclusive, true}, // Only ACCESS EXCLUSIVE blocks reads
+		{locks.LockAccessShare, false},
+		{locks.LockRowShare, false},
+		{locks.LockRowExclusive, false},
+		{locks.LockShareUpdateExclusive, false},
+		{locks.LockShare, false},
+		{locks.LockShareRowExclusive, false},
+		{locks.LockExclusive, false},
+		{locks.LockAccessExclusive, true}, // Only ACCESS EXCLUSIVE blocks reads
 	}
 
 	for _, tt := range tests {
@@ -52,17 +56,17 @@ func TestLockMode_BlocksReads(t *testing.T) {
 
 func TestLockMode_BlocksWrites(t *testing.T) {
 	tests := []struct {
-		mode     LockMode
+		mode     locks.LockMode
 		expected bool
 	}{
-		{LockAccessShare, false},
-		{LockRowShare, false},
-		{LockRowExclusive, false},
-		{LockShareUpdateExclusive, false},
-		{LockShare, true}, // SHARE and above block writes
-		{LockShareRowExclusive, true},
-		{LockExclusive, true},
-		{LockAccessExclusive, true},
+		{locks.LockAccessShare, false},
+		{locks.LockRowShare, false},
+		{locks.LockRowExclusive, false},
+		{locks.LockShareUpdateExclusive, false},
+		{locks.LockShare, true}, // SHARE and above block writes
+		{locks.LockShareRowExclusive, true},
+		{locks.LockExclusive, true},
+		{locks.LockAccessExclusive, true},
 	}
 
 	for _, tt := range tests {
@@ -76,17 +80,17 @@ func TestLockMode_BlocksWrites(t *testing.T) {
 
 func TestLockMode_ImpactLevel(t *testing.T) {
 	tests := []struct {
-		mode     LockMode
-		expected ImpactLevel
+		mode     locks.LockMode
+		expected locks.ImpactLevel
 	}{
-		{LockAccessShare, ImpactNone},
-		{LockRowShare, ImpactNone},
-		{LockRowExclusive, ImpactNone},
-		{LockShareUpdateExclusive, ImpactLow},
-		{LockShare, ImpactMedium},
-		{LockShareRowExclusive, ImpactHigh},
-		{LockExclusive, ImpactHigh},
-		{LockAccessExclusive, ImpactHigh},
+		{locks.LockAccessShare, locks.ImpactNone},
+		{locks.LockRowShare, locks.ImpactNone},
+		{locks.LockRowExclusive, locks.ImpactNone},
+		{locks.LockShareUpdateExclusive, locks.ImpactLow},
+		{locks.LockShare, locks.ImpactMedium},
+		{locks.LockShareRowExclusive, locks.ImpactHigh},
+		{locks.LockExclusive, locks.ImpactHigh},
+		{locks.LockAccessExclusive, locks.ImpactHigh},
 	}
 
 	for _, tt := range tests {
@@ -100,19 +104,19 @@ func TestLockMode_ImpactLevel(t *testing.T) {
 
 func TestImpactLevel_String(t *testing.T) {
 	tests := []struct {
-		impact   ImpactLevel
+		impact   locks.ImpactLevel
 		expected string
 	}{
-		{ImpactNone, "NONE"},
-		{ImpactLow, "LOW"},
-		{ImpactMedium, "MEDIUM"},
-		{ImpactHigh, "HIGH"},
+		{locks.ImpactNone, "NONE"},
+		{locks.ImpactLow, "LOW"},
+		{locks.ImpactMedium, "MEDIUM"},
+		{locks.ImpactHigh, "HIGH"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
 			if got := tt.impact.String(); got != tt.expected {
-				t.Errorf("ImpactLevel.String() = %v, want %v", got, tt.expected)
+				t.Errorf("locks.ImpactLevel.String() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -120,20 +124,20 @@ func TestImpactLevel_String(t *testing.T) {
 
 func TestImpactLevel_Emoji(t *testing.T) {
 	tests := []struct {
-		impact ImpactLevel
+		impact locks.ImpactLevel
 		emoji  string
 	}{
-		{ImpactNone, "✓"},
-		{ImpactLow, "⚡"},
-		{ImpactMedium, "⚠️"},
-		{ImpactHigh, "🔴"},
+		{locks.ImpactNone, "✓"},
+		{locks.ImpactLow, "⚡"},
+		{locks.ImpactMedium, "⚠️"},
+		{locks.ImpactHigh, "🔴"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.impact.String(), func(t *testing.T) {
 			got := tt.impact.Emoji()
 			if got != tt.emoji {
-				t.Errorf("ImpactLevel.Emoji() = %v, want %v", got, tt.emoji)
+				t.Errorf("locks.ImpactLevel.Emoji() = %v, want %v", got, tt.emoji)
 			}
 		})
 	}
@@ -142,20 +146,20 @@ func TestImpactLevel_Emoji(t *testing.T) {
 func TestLockImpact_IsHighImpact(t *testing.T) {
 	tests := []struct {
 		name     string
-		impact   ImpactLevel
+		impact   locks.ImpactLevel
 		expected bool
 	}{
-		{"None impact", ImpactNone, false},
-		{"Low impact", ImpactLow, false},
-		{"Medium impact", ImpactMedium, true},
-		{"High impact", ImpactHigh, true},
+		{"None impact", locks.ImpactNone, false},
+		{"Low impact", locks.ImpactLow, false},
+		{"Medium impact", locks.ImpactMedium, true},
+		{"High impact", locks.ImpactHigh, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			li := &LockImpact{Impact: tt.impact}
+			li := &locks.LockImpact{Impact: tt.impact}
 			if got := li.IsHighImpact(); got != tt.expected {
-				t.Errorf("LockImpact.IsHighImpact() = %v, want %v", got, tt.expected)
+				t.Errorf("locks.LockImpact.IsHighImpact() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -164,26 +168,26 @@ func TestLockImpact_IsHighImpact(t *testing.T) {
 func TestLockImpact_RequiresSaferAlternative(t *testing.T) {
 	tests := []struct {
 		name                string
-		impact              ImpactLevel
+		impact              locks.ImpactLevel
 		estimatedDurationMS int64
 		expected            bool
 	}{
-		{"Low impact, fast", ImpactLow, 100, false},
-		{"Low impact, slow", ImpactLow, 2000, true},
-		{"Medium impact, fast", ImpactMedium, 100, true},
-		{"Medium impact, slow", ImpactMedium, 2000, true},
-		{"High impact, fast", ImpactHigh, 100, true},
-		{"None impact, very slow", ImpactNone, 5000, true},
+		{"Low impact, fast", locks.ImpactLow, 100, false},
+		{"Low impact, slow", locks.ImpactLow, 2000, true},
+		{"Medium impact, fast", locks.ImpactMedium, 100, true},
+		{"Medium impact, slow", locks.ImpactMedium, 2000, true},
+		{"High impact, fast", locks.ImpactHigh, 100, true},
+		{"None impact, very slow", locks.ImpactNone, 5000, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			li := &LockImpact{
+			li := &locks.LockImpact{
 				Impact:              tt.impact,
 				EstimatedDurationMS: tt.estimatedDurationMS,
 			}
 			if got := li.RequiresSaferAlternative(); got != tt.expected {
-				t.Errorf("LockImpact.RequiresSaferAlternative() = %v, want %v", got, tt.expected)
+				t.Errorf("locks.LockImpact.RequiresSaferAlternative() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
