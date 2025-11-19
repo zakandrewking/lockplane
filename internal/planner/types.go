@@ -14,6 +14,12 @@ type PlanStep struct {
 	// Source location metadata (optional, for error reporting)
 	SourceFile string `json:"source_file,omitempty"` // Original file where this step was defined
 	SourceLine int    `json:"source_line,omitempty"` // Line number in the source file
+	// Lock analysis metadata (optional, for impact reporting)
+	LockMode     string `json:"lock_mode,omitempty"`     // PostgreSQL lock mode (e.g., "ACCESS EXCLUSIVE")
+	LockImpact   string `json:"lock_impact,omitempty"`   // Human-readable impact description
+	BlocksReads  bool   `json:"blocks_reads,omitempty"`  // Whether this blocks SELECT queries
+	BlocksWrites bool   `json:"blocks_writes,omitempty"` // Whether this blocks INSERT/UPDATE/DELETE
+	Rewritable   bool   `json:"rewritable,omitempty"`    // Whether this can be rewritten to be lock-safe
 }
 
 // ExecutionResult tracks the outcome of executing a plan
