@@ -11,41 +11,39 @@
 - [x] Show clean "lockplane init cancelled" message
 - [x] Committed: 652df1a
 
-### 2. 🏗️ RLS (Row Level Security) Support
-**Status**: In Progress (blocker: validation rejects statements)
+### 2. ✅ RLS (Row Level Security) Support
+**Status**: ✅ **Completed** (2025-11-19)
 
-**Problem**:
-- `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` is blocked during `apply` (classified as dangerous)
-- `plan --validate` allows it (no error), so CLI behaviour is inconsistent
-- Need to sync validation between `plan --validate`, `plan`, and `apply` pipelines
+**What Was Implemented**:
 
-**Recent Findings**:
-- `internal/schema/diff.go` detects RLS changes, but `TableDiff.IsEmpty()` ignores `RLSChanged`, so pure RLS diffs are dropped before planning.
-- `internal/planner/planner.go:214-230` and `internal/planner/rollback.go:63-95` already know how to emit/undo the SQL when the diff survives.
-- `apply` safety reporting ultimately uses `internal/validation/validation.go` which currently has no validator for `ENABLE/DISABLE ROW LEVEL SECURITY`, so arbitrary statements default to `SafetyLevelDangerous`.
+✅ **RLS Toggle Support** (ENABLE/DISABLE ROW LEVEL SECURITY):
+- Schema diff detection respects RLS changes (`internal/schema/diff.go:221`)
+- Validation with `AlterRLSValidator` (safe + reversible)
+- Planner emits RLS enable/disable steps
+- Rollback generates reverse operations
+- Comprehensive test coverage (8 test functions)
 
-**Implementation Checklist**:
-- 🔁 Schema diff detection
-  - [x] Update `TableDiff.IsEmpty()` to respect `RLSChanged`
-  - [x] Add unit test showing RLS-only diffs are preserved
-- ✅ Validation & safety surfacing
-  - [x] Introduce `AlterRLSValidator` (safe + reversible classification)
-  - [x] Wire validator into `ValidateSchemaDiff{,WithSchema}`
-  - [x] Add validation tests for enable/disable cases
-  - [x] Ensure `cmd/plan` safety report surfaces the new result
-- 📋 Planner / rollback coverage
-  - [x] Add regression test verifying planner emits RLS steps when schema toggles
-  - [x] Add rollback test confirming reverse statements
-- 🚦 Apply / CLI experience
-- [x] Ensure `lockplane apply` no longer blocks ENABLE/DISABLE statements (safety gates see ✅)
-  - [ ] Add end-to-end CLI test (after DB harness) toggling RLS via plan+apply
+✅ **RLS Policy Management** (NEW - completed with multi-schema support):
+- Policy introspection from `pg_policy` system catalog
+- Policy DDL generation (`CREATE POLICY`, `DROP POLICY`)
+- Schema-qualified policy support (`storage.objects`)
+- Policy metadata: name, command, roles, USING, WITH CHECK
+- Full integration with multi-schema introspection
 
-**Files to investigate** (with anchors):
-- `internal/schema/diff.go:212-226` – `TableDiff.IsEmpty` update.
-- `internal/planner/planner.go:214-230` – Step emission.
-- `internal/planner/rollback.go:63-95`, `361-388` – Reverse operation helpers.
-- `internal/validation/validation.go` – add validator + include in dispatcher.
-- `cmd/apply.go` / `cmd/plan.go` – ensure CLI messaging reflects new safety level.
+**Test Coverage**:
+- `TestDiffSchemas_DetectsRLSChange` - Diff detection
+- `TestAlterRLSValidator_Enable/Disable` - Validation
+- `TestValidateSchemaDiff_RLSChange` - Integration
+- `TestGeneratePlan_RLSEnable/Disable` - Planner
+- `TestGenerateRollback_EnableRLS/DisableRLS` - Rollback
+
+**Deferred**:
+- [ ] End-to-end CLI test - Requires database test harness (not yet implemented)
+
+**Documentation**:
+- README.md section 7: Multi-Schema Support & RLS
+- docs/supabase.md: RLS policy examples
+- Design doc: `devdocs/projects/completed/multi-schema-and-policies.md`
 
 ### 3. ✅ Add Tests for cmd/ Files
 **Status**: Completed
