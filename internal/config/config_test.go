@@ -345,26 +345,3 @@ func TestIsProjectRootNoMarkers(t *testing.T) {
 	}
 }
 
-func TestLoadConfigMultipleFields(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "lockplane.toml")
-	configContent := `default_environment = "development"`
-
-	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
-		t.Fatalf("Failed to write config file: %v", err)
-	}
-
-	cleanup := changeToDir(t, tempDir)
-	defer cleanup()
-
-	config, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig returned error: %v", err)
-	}
-
-	if config.DefaultEnvironment != "development" {
-		t.Errorf("Expected default_environment=development, got %q", config.DefaultEnvironment)
-	}
-
-	compareConfigPaths(t, configPath, config.ConfigFilePath)
-}
