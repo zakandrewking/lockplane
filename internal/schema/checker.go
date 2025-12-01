@@ -1,5 +1,5 @@
 package schema
 
-func CheckSchema() (reportJson string, err error) {
+func CheckSchema(path string) (reportJson string, err error) {
 	return "", nil
 }
