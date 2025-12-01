@@ -18,7 +18,7 @@ func ParseSQLSchemaWithDialect(sql string, dialect database.Dialect) (*database.
 }
 
 // parsePostgresSQLSchema parses SQL DDL via pg_query for PostgreSQL schemas.
-func parsePostgresSQLSchema(sql string) (*database.Schema, error) {
+func parsePostgresSQLSchema(_ string) (*database.Schema, error) {
 	return nil, nil
 	// // Parse the SQL
 	// tree, err := pg_query.Parse(sql)

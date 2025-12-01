@@ -71,5 +71,8 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	// fmt.Println(string(jsonBytes))
 	fmt.Printf("Found %v tables\n", len(schema.Tables))
 
+	// get scheme dir
+	// dir, err := config.GetSchemaDir()
 	// load schema files
+	// schema, err := schema.LoadSchema(dir)
 }
