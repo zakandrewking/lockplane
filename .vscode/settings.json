@@ -1,0 +1,43 @@
+{
+  "workbench.colorCustomizations": {
+    "statusBar.background": "#6151ba",
+    "statusBar.noFolderBackground": "#282828",
+    "statusBar.debuggingBackground": "#6151ba",
+    "statusBar.foreground": "#ffffff",
+    "statusBar.noFolderForeground": "#ffffff",
+    "statusBar.debuggingForeground": "#ffffff",
+    "workspaceInStatusBar.text": "#ffffff",
+    "editorOverviewRuler.border": "#0000",
+    "editorOverviewRuler.findMatchForeground": "#09060600",
+    "editorOverviewRuler.rangeHighlightForeground": "#0000",
+    "editorOverviewRuler.selectionHighlightForeground": "#0000",
+    "editorOverviewRuler.wordHighlightForeground": "#0000",
+    "editorOverviewRuler.wordHighlightStrongForeground": "#0000",
+    "editorOverviewRuler.modifiedForeground": "#0000",
+    "editorOverviewRuler.addedForeground": "#0000",
+    "editorOverviewRuler.deletedForeground": "#0000",
+    "editorOverviewRuler.errorForeground": "#0000",
+    "editorOverviewRuler.warningForeground": "#0000",
+    "editorOverviewRuler.infoForeground": "#0000",
+    "editorOverviewRuler.bracketMatchForeground": "#0000",
+    "[Gruvbox Light Medium]": {
+      "statusBar.background": "#fbf1c6",
+      "statusBar.noFolderBackground": "#fbf1c6",
+      "statusBar.debuggingBackground": "#fbf1c6",
+      "statusBar.foreground": "#000000",
+      "statusBar.noFolderForeground": "#000000",
+      "statusBar.debuggingForeground": "#000000",
+      "workspaceInStatusBar.text": "#000000"
+    },
+    "titleBar.activeBackground": "#6151ba",
+    "titleBar.activeForeground": "#000000",
+    "titleBar.inactiveBackground": "#6151ba",
+    "titleBar.inactiveForeground": "#000000",
+    "titleBar.border": "#6151ba",
+    "activityBar.background": "#6151ba",
+    "activityBar.foreground": "#000000",
+    "tab.activeBorder": "#6151ba",
+    "iLoveWorkSpaceColors": true,
+    "iLoveWorkSpaceRandom": false
+  }
+}
