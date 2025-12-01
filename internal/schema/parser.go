@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lockplane/lockplane/internal/database"
-	// pg_query "github.com/pganalyze/pg_query_go/v6"
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
 // ParseSQLSchemaWithDialect parses SQL DDL for the requested dialect.
@@ -18,13 +18,13 @@ func ParseSQLSchemaWithDialect(sql string, dialect database.Dialect) (*database.
 }
 
 // parsePostgresSQLSchema parses SQL DDL via pg_query for PostgreSQL schemas.
-func parsePostgresSQLSchema(_ string) (*database.Schema, error) {
+func parsePostgresSQLSchema(sql string) (*database.Schema, error) {
+	// Parse the SQL
+	_, err := pg_query.Parse(sql)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SQL: %w", err)
+	}
 	return nil, nil
-	// // Parse the SQL
-	// tree, err := pg_query.Parse(sql)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to parse SQL: %w", err)
-	// }
 
 	// schema := &database.Schema{
 	// 	Tables:  []database.Table{},
