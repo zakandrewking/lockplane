@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lockplane/lockplane/internal/database"
+	"github.com/lockplane/lockplane/internal/database/connection"
 )
 
 // Driver implements database.Driver for PostgreSQL
@@ -24,7 +24,7 @@ func (d *Driver) Name() string {
 }
 
 // TestConnection attempts to connect to the database
-func (d *Driver) TestConnection(cfg database.ConnectionConfig) error {
+func (d *Driver) TestConnection(cfg connection.ConnectionConfig) error {
 	db, err := sql.Open("postgres", cfg.PostgresUrl)
 	if err != nil {
 		return fmt.Errorf("failed to open connection: %w", err)

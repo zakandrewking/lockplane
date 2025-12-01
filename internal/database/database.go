@@ -1,9 +1,11 @@
 package database
 
-type ConnectionConfig struct {
-	DatabaseType string // TODO make enum?
-	PostgresUrl  string
-}
+import (
+	"fmt"
+
+	"github.com/lockplane/lockplane/internal/database/connection"
+	"github.com/lockplane/lockplane/internal/database/postgres"
+)
 
 // Driver represents a database driver with introspection and SQL generation
 type Driver interface {
@@ -12,5 +14,16 @@ type Driver interface {
 
 	// TestConnection attempts to connect to the database
 	// TODO when to pass as pointer?
-	TestConnection(cfg ConnectionConfig) error
+	TestConnection(cfg connection.ConnectionConfig) error
+}
+
+// NewDriver creates a new database driver based on the driver name.
+// TODO share enum with ConnectionConfig
+func NewDriver(databaseType string) (Driver, error) {
+	switch databaseType {
+	case "postgres":
+		return postgres.NewDriver(), nil
+	default:
+		return nil, fmt.Errorf("unsupported database driver: %s", databaseType)
+	}
 }
