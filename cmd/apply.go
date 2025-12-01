@@ -6,6 +6,7 @@ import (
 
 	"github.com/lockplane/lockplane/internal/config"
 	"github.com/lockplane/lockplane/internal/database"
+	"github.com/lockplane/lockplane/internal/executor"
 	"github.com/spf13/cobra"
 )
 
@@ -33,13 +34,23 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 		return
 	}
 
+	// create database driver
+	// TODO move TestConnection into the driver, since we may have different sql
+	// connection approaches
+	driver, err := executor.NewDriver("postgres")
+	if err != nil {
+		log.Fatalf("Failed to create database driver: %v", err)
+	}
+
 	// test db connection
-	var PostgresURL = cfg.Environments["local"].PostgresURL
+	var postgresURL = cfg.Environments["local"].PostgresURL
 	// TODO %s not allowed? what's %v?
-	fmt.Printf("Testing connection to %v\n", PostgresURL)
-	database.TestConnection(database.ConnectionConfig{
-		DatabaseType: "postgres",
-		PostgresUrl:  PostgresURL,
+	fmt.Printf("Testing connection to %v\n", postgresURL)
+	driver.TestConnection(database.ConnectionConfig{
+		PostgresUrl: postgresURL,
 	})
 	fmt.Println("Test successful")
+
+	// introspect
+	fmt.Println("Introspecting")
 }
