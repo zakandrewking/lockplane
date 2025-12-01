@@ -1,0 +1,89 @@
+{
+  "name": "lockplane",
+  "displayName": "Lockplane",
+  "description": "Schema validation for Lockplane .lp.sql files",
+  "version": "0.2.0",
+  "publisher": "lockplane",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lockplane/lockplane"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "lockplane",
+    "sql",
+    "postgres",
+    "postgresql",
+    "schema",
+    "database",
+    "validation"
+  ],
+  "activationEvents": [
+    "onLanguage:sql",
+    "workspaceContains:**/*.lp.sql"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "sql",
+        "extensions": [
+          ".lp.sql"
+        ],
+        "aliases": [
+          "Lockplane SQL"
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Lockplane",
+      "properties": {
+        "lockplane.checkSchemaOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check schema files on save"
+        },
+        "lockplane.checkSchemaOnType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check schema files as you type"
+        },
+        "lockplane.checkSchemaDelay": {
+          "type": "number",
+          "default": 500,
+          "description": "Delay in milliseconds before checking schema on type"
+        },
+        "lockplane.cliPath": {
+          "type": "string",
+          "default": "lockplane",
+          "description": "Path to lockplane CLI executable"
+        },
+        "lockplane.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Lockplane schema checks"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
