@@ -575,8 +575,8 @@ func TestParseUnsupportedDialect(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for unsupported dialect, got nil")
 	}
-	if err.Error() != "Unsupported dialect mysql" {
-		t.Errorf("Expected error message 'Unsupported dialect mysql', got %q", err.Error())
+	if err.Error() != "unsupported dialect mysql" {
+		t.Errorf("Expected error message 'unsupported dialect mysql', got %q", err.Error())
 	}
 }
 
