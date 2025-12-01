@@ -6,11 +6,6 @@ import (
 	"github.com/lockplane/lockplane/internal/database"
 )
 
-// Helper function to get a pointer to a string
-func strPtr(s string) *string {
-	return &s
-}
-
 func TestParseBasicCreateTable(t *testing.T) {
 	sql := `CREATE TABLE users (id INTEGER);`
 
