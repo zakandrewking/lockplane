@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -86,16 +87,10 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]database.T
 	// TODO make?
 	var tables = make([]database.Table, 0)
 	for _, tableName := range tableNames {
-		table := database.Table{
-			Name:   tableName,
-			Schema: schemaName,
+		columns, err := GetColumns(ctx, db, schemaName, tableName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get columns for table %s.%s: %w", schemaName, tableName, err)
 		}
-
-		// columns, err := i.GetColumnsInSchema(ctx, db, schemaName, tableName)
-		// if err != nil {
-		// 	return nil, fmt.Errorf("failed to get columns for table %s.%s: %w", schemaName, tableName, err)
-		// }
-		// table.Columns = columns
 
 		// indexes, err := i.GetIndexesInSchema(ctx, db, schemaName, tableName)
 		// if err != nil {
@@ -125,8 +120,65 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]database.T
 		// 	table.Policies = policies
 		// }
 
+		table := database.Table{
+			Name:    tableName,
+			Schema:  schemaName,
+			Columns: columns,
+		}
+
 		tables = append(tables, table)
 	}
 
 	return tables, nil
+}
+
+// returns all columns for a given PostgreSQL table in a specific schema
+func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName string) ([]database.Column, error) {
+	query := `
+		SELECT
+			c.column_name,
+			c.data_type,
+			c.is_nullable,
+			c.column_default,
+			COALESCE(
+				(SELECT true
+				 FROM information_schema.table_constraints tc
+				 JOIN information_schema.key_column_usage kcu
+				   ON tc.constraint_name = kcu.constraint_name
+				   AND tc.table_schema = kcu.table_schema
+				 WHERE tc.table_name = c.table_name
+				   AND tc.table_schema = c.table_schema
+				   AND tc.constraint_type = 'PRIMARY KEY'
+				   AND kcu.column_name = c.column_name),
+				false
+			) as is_primary_key
+		FROM information_schema.columns c
+		WHERE c.table_schema = $1
+		  AND c.table_name = $2
+		ORDER BY c.ordinal_position
+	`
+
+	rows, err := db.QueryContext(ctx, query, schemaName, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var columns []database.Column
+	for rows.Next() {
+		var col database.Column
+		var nullable string
+		var defaultVal sql.NullString
+
+		if err := rows.Scan(&col.Name, &col.Type, &nullable, &defaultVal, &col.IsPrimaryKey); err != nil {
+			return nil, err
+		}
+
+		col.Type = strings.TrimSpace(col.Type)
+		col.Nullable = nullable == "YES"
+
+		columns = append(columns, col)
+	}
+
+	return columns, nil
 }
