@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -39,7 +38,7 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	// create database driver
 	// TODO move TestConnection into the driver, since we may have different sql
 	// connection approaches
-	driver, err := driver.NewDriver("postgres")
+	driver, err := driver.NewDriver(database.DatabaseTypePostgres)
 	if err != nil {
 		log.Fatalf("Failed to create database driver: %v", err)
 	}
@@ -65,9 +64,12 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	if err != nil {
 		log.Fatalf("Failed to introspect schema: %v", err)
 	}
-	jsonBytes, err := json.MarshalIndent(schema, "", "  ")
-	if err != nil {
-		log.Fatalf("Failed to marshal schema to JSON: %v", err)
-	}
-	fmt.Println(string(jsonBytes))
+	// jsonBytes, err := json.MarshalIndent(schema, "", "  ")
+	// if err != nil {
+	// 	log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	// }
+	// fmt.Println(string(jsonBytes))
+	fmt.Printf("Found %v tables\n", len(schema.Tables))
+
+	// load schema files
 }

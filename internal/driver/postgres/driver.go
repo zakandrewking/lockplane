@@ -54,7 +54,8 @@ func (d *Driver) IntrospectSchema(ctx context.Context, db *sql.DB, schemaName st
 	}
 
 	schema := &database.Schema{
-		Tables: tables,
+		Tables:  tables,
+		Dialect: database.DialectPostgres,
 	}
 
 	return schema, nil

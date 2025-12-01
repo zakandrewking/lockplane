@@ -24,9 +24,9 @@ type Driver interface {
 
 // NewDriver creates a new database driver based on the driver name.
 // TODO share enum with ConnectionConfig
-func NewDriver(databaseType string) (Driver, error) {
+func NewDriver(databaseType database.DatabaseType) (Driver, error) {
 	switch databaseType {
-	case "postgres":
+	case database.DatabaseTypePostgres:
 		return postgres.NewDriver(), nil
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", databaseType)

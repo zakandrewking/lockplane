@@ -97,6 +97,9 @@ func TestIntrospector_GetColumns(t *testing.T) {
 	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
+	// TODO test a bunch of different types, defaults, etc (SERIAL) see
+	// lockplane-vibe/devdocs/unsupported-features.md
+
 	// Create a test table with various column types
 	_, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS test_introspect_columns (
@@ -106,6 +109,7 @@ func TestIntrospector_GetColumns(t *testing.T) {
 			created_at timestamp DEFAULT now()
 		)
 	`)
+
 	if err != nil {
 		t.Fatalf("Failed to create test table: %v", err)
 	}
