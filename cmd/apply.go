@@ -25,6 +25,7 @@ func runApply(cmd *cobra.Command, args []string) {
 	// load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
+		config.PrintLoadConfigErrorDetails(err, nil)
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	if cfg.ConfigFilePath == "" {
@@ -36,8 +37,6 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	}
 
 	// create database driver
-	// TODO move TestConnection into the driver, since we may have different sql
-	// connection approaches
 	driver, err := driver.NewDriver(database.DatabaseTypePostgres)
 	if err != nil {
 		log.Fatalf("Failed to create database driver: %v", err)
@@ -45,7 +44,6 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 
 	// open db connection
 	var postgresURL = cfg.Environments["local"].PostgresURL
-	// TODO %s not allowed? what's %v?
 	fmt.Printf("Opening connection to %v\n", postgresURL)
 	db, err := driver.OpenConnection(database.ConnectionConfig{
 		PostgresUrl: postgresURL,

@@ -1,8 +1,11 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"testing"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -15,6 +18,22 @@ type EnvironmentConfig struct {
 type Config struct {
 	Environments   map[string]EnvironmentConfig `toml:"environments"`
 	ConfigFilePath string                       `toml:"-"`
+}
+
+// Useful to provide better error details from LoadConfig
+func PrintLoadConfigErrorDetails(err error, t *testing.T) {
+	var derr *toml.DecodeError
+	if errors.As(err, &derr) {
+		if t != nil {
+			t.Log(derr.String())
+			row, col := derr.Position()
+			t.Logf("Error occurred at row %d, column %d", row, col)
+		} else {
+			fmt.Println(derr.String())
+			row, col := derr.Position()
+			fmt.Printf("Error occurred at row %d, column %d\n", row, col)
+		}
+	}
 }
 
 func LoadConfig() (*Config, error) {

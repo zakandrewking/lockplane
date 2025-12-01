@@ -7,9 +7,7 @@ import (
 	"testing"
 )
 
-// TODO declare immutable?
-// TODO same as := without var?
-var exampleConfig = `[environments.local]
+const exampleConfig = `[environments.local]
 postgres_url = "test"`
 
 // compareConfigPaths compares two paths, resolving symlinks
@@ -68,7 +66,7 @@ func TestLoadConfigInCurrentDirectory(t *testing.T) {
 
 	config, err := LoadConfig()
 	if err != nil {
-		// TODO print traceback?
+		PrintLoadConfigErrorDetails(err, t)
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
@@ -100,6 +98,7 @@ func TestLoadConfigInParentDirectory(t *testing.T) {
 
 	config, err := LoadConfig()
 	if err != nil {
+		PrintLoadConfigErrorDetails(err, t)
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
@@ -118,6 +117,7 @@ func TestLoadConfigNoFileReturnsEmpty(t *testing.T) {
 
 	config, err := LoadConfig()
 	if err != nil {
+		PrintLoadConfigErrorDetails(err, t)
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
@@ -172,6 +172,7 @@ postgres_url = "git-project"`
 
 	config, err := LoadConfig()
 	if err != nil {
+		PrintLoadConfigErrorDetails(err, t)
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
@@ -215,6 +216,7 @@ func TestLoadConfigStopsAtGoModRoot(t *testing.T) {
 
 	config, err := LoadConfig()
 	if err != nil {
+		PrintLoadConfigErrorDetails(err, t)
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
@@ -251,6 +253,7 @@ func TestLoadConfigStopsAtPackageJsonRoot(t *testing.T) {
 
 	config, err := LoadConfig()
 	if err != nil {
+		PrintLoadConfigErrorDetails(err, t)
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
@@ -275,6 +278,7 @@ func TestLoadConfigInvalidTOML(t *testing.T) {
 
 	_, err := LoadConfig()
 	if err == nil {
+		PrintLoadConfigErrorDetails(err, t)
 		t.Fatal("Expected error for invalid TOML, got nil")
 	}
 	if !strings.Contains(err.Error(), "toml") {
@@ -295,6 +299,7 @@ func TestLoadConfigEmptyFile(t *testing.T) {
 
 	config, err := LoadConfig()
 	if err != nil {
+		PrintLoadConfigErrorDetails(err, t)
 		t.Fatalf("LoadConfig returned error for empty file: %v", err)
 	}
 
