@@ -37,6 +37,6 @@ type DatabaseType string
 const DatabaseTypePostgres DatabaseType = "postgres"
 
 type ConnectionConfig struct {
-	DatabaseType DatabaseType // TODO make enum?
+	DatabaseType DatabaseType
 	PostgresUrl  string
 }

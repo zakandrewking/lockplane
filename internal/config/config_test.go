@@ -70,9 +70,12 @@ func TestLoadConfigInCurrentDirectory(t *testing.T) {
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
-	// TODO how does go deal with missing map keys?
-	if config.Environments["local"].PostgresURL != "test" {
-		t.Errorf("Expected postgres_url=test, got %q", config.Environments["local"].PostgresURL)
+	if local, ok := config.Environments["local"]; ok {
+		if local.PostgresURL != "test" {
+			t.Errorf("Expected postgres_url=test, got %q", local.PostgresURL)
+		}
+	} else {
+		t.Errorf("Expected local environment, got %q", local)
 	}
 
 	compareConfigPaths(t, configPath, config.ConfigFilePath)
@@ -102,8 +105,12 @@ func TestLoadConfigInParentDirectory(t *testing.T) {
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
-	if config.Environments["local"].PostgresURL != "test" {
-		t.Errorf("Expected postgres_url=test, got %q", config.Environments["local"].PostgresURL)
+	if local, ok := config.Environments["local"]; ok {
+		if local.PostgresURL != "test" {
+			t.Errorf("Expected postgres_url=test, got %q", local.PostgresURL)
+		}
+	} else {
+		t.Errorf("Expected local environment, got %q", config.Environments)
 	}
 
 	compareConfigPaths(t, configPath, config.ConfigFilePath)
@@ -177,8 +184,12 @@ postgres_url = "git-project"`
 	}
 
 	// Should find the git-project config, not the parent config
-	if config.Environments["local"].PostgresURL != "git-project" {
-		t.Errorf("Expected postgres_url=git-project, got %q", config.Environments["local"].PostgresURL)
+	if local, ok := config.Environments["local"]; ok {
+		if local.PostgresURL != "git-project" {
+			t.Errorf("Expected postgres_url=git-project, got %q", local.PostgresURL)
+		}
+	} else {
+		t.Errorf("Expected local environment, got %q", config.Environments)
 	}
 
 	compareConfigPaths(t, gitConfigPath, config.ConfigFilePath)

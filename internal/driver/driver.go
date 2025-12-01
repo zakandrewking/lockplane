@@ -15,7 +15,6 @@ type Driver interface {
 	Name() string
 
 	// TestConnection attempts to connect to the database
-	// TODO when to pass as pointer?
 	OpenConnection(cfg database.ConnectionConfig) (*sql.DB, error)
 
 	// IntrospectSchema reads the entire database schema
@@ -23,7 +22,6 @@ type Driver interface {
 }
 
 // NewDriver creates a new database driver based on the driver name.
-// TODO share enum with ConnectionConfig
 func NewDriver(databaseType database.DatabaseType) (Driver, error) {
 	switch databaseType {
 	case database.DatabaseTypePostgres:

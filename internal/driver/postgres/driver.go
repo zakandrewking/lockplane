@@ -38,8 +38,7 @@ func (d *Driver) OpenConnection(cfg database.ConnectionConfig) (*sql.DB, error) 
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		// TODO defer necessary?
-		defer func() { _ = db.Close() }()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -85,8 +84,7 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]database.T
 	}
 
 	// Introspect each schema
-	// TODO make?
-	var tables = make([]database.Table, 0)
+	tables := []database.Table{}
 	for _, tableName := range tableNames {
 		columns, err := GetColumns(ctx, db, schemaName, tableName)
 		if err != nil {

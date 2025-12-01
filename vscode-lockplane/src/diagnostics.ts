@@ -6,7 +6,7 @@ const diagnosticCollection =
   vscode.languages.createDiagnosticCollection("lockplane");
 
 /**
- * Update diagnostics for a document based on validation results
+ * Update diagnostics for a document based on results
  */
 export function updateDiagnostics(
   document: vscode.TextDocument,

@@ -39,7 +39,6 @@ func TestDriver_Name(t *testing.T) {
 
 func TestDriver_GetTables(t *testing.T) {
 	db, _ := getTestDb(t)
-	// TODO FILO right?
 	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()

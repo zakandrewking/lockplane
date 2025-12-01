@@ -43,7 +43,12 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	}
 
 	// open db connection
-	var postgresURL = cfg.Environments["local"].PostgresURL
+	var postgresURL string
+	if local, ok := cfg.Environments["local"]; !ok {
+		log.Fatalf("Environment 'local' not found in config")
+	} else {
+		postgresURL = local.PostgresURL
+	}
 	fmt.Printf("Opening connection to %v\n", postgresURL)
 	db, err := driver.OpenConnection(database.ConnectionConfig{
 		PostgresUrl: postgresURL,
@@ -56,7 +61,6 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 
 	// introspect
 	fmt.Println("Introspecting")
-	// TODO why?
 	ctx := context.Background()
 	schema, err := driver.IntrospectSchema(ctx, db, "public")
 	if err != nil {
