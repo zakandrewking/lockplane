@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+// TODO declare immutable?
+// TODO same as := without var?
+var exampleConfig = `[environments.local]
+postgres_url = "test"`
+
 // compareConfigPaths compares two paths, resolving symlinks
 func compareConfigPaths(t *testing.T, expected, actual string) {
 	t.Helper()
@@ -52,7 +57,7 @@ func changeToDir(t *testing.T, dir string) func() {
 func TestLoadConfigInCurrentDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "lockplane.toml")
-	configContent := `default_environment = "production"`
+	configContent := exampleConfig
 
 	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -63,11 +68,13 @@ func TestLoadConfigInCurrentDirectory(t *testing.T) {
 
 	config, err := LoadConfig()
 	if err != nil {
+		// TODO print traceback?
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
-	if config.DefaultEnvironment != "production" {
-		t.Errorf("Expected default_environment=production, got %q", config.DefaultEnvironment)
+	// TODO how does go deal with missing map keys?
+	if config.Environments["local"].PostgresURL != "test" {
+		t.Errorf("Expected postgres_url=test, got %q", config.Environments["local"].PostgresURL)
 	}
 
 	compareConfigPaths(t, configPath, config.ConfigFilePath)
@@ -76,7 +83,7 @@ func TestLoadConfigInCurrentDirectory(t *testing.T) {
 func TestLoadConfigInParentDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "lockplane.toml")
-	configContent := `default_environment = "staging"`
+	configContent := exampleConfig
 
 	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -96,8 +103,8 @@ func TestLoadConfigInParentDirectory(t *testing.T) {
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
-	if config.DefaultEnvironment != "staging" {
-		t.Errorf("Expected default_environment=staging, got %q", config.DefaultEnvironment)
+	if config.Environments["local"].PostgresURL != "test" {
+		t.Errorf("Expected postgres_url=test, got %q", config.Environments["local"].PostgresURL)
 	}
 
 	compareConfigPaths(t, configPath, config.ConfigFilePath)
@@ -114,8 +121,8 @@ func TestLoadConfigNoFileReturnsEmpty(t *testing.T) {
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
-	if config.DefaultEnvironment != "" {
-		t.Errorf("Expected empty default_environment, got %q", config.DefaultEnvironment)
+	if config.Environments != nil {
+		t.Errorf("Expected empty environments, got %q", config.Environments)
 	}
 
 	if config.ConfigFilePath != "" {
@@ -125,6 +132,10 @@ func TestLoadConfigNoFileReturnsEmpty(t *testing.T) {
 
 func TestLoadConfigStopsAtGitRoot(t *testing.T) {
 	tempDir := t.TempDir()
+	parentConfig := `[environments.local]
+postgres_url = "parent"`
+	gitProjectConfig := `[environments.local]
+postgres_url = "git-project"`
 
 	// Create a parent directory with lockplane.toml
 	parentDir := filepath.Join(tempDir, "parent")
@@ -132,7 +143,7 @@ func TestLoadConfigStopsAtGitRoot(t *testing.T) {
 		t.Fatalf("Failed to create parent directory: %v", err)
 	}
 	parentConfigPath := filepath.Join(parentDir, "lockplane.toml")
-	if err := os.WriteFile(parentConfigPath, []byte(`default_environment = "parent"`), 0o600); err != nil {
+	if err := os.WriteFile(parentConfigPath, []byte(parentConfig), 0o600); err != nil {
 		t.Fatalf("Failed to write parent config: %v", err)
 	}
 
@@ -146,7 +157,7 @@ func TestLoadConfigStopsAtGitRoot(t *testing.T) {
 		t.Fatalf("Failed to create .git directory: %v", err)
 	}
 	gitConfigPath := filepath.Join(gitProjectDir, "lockplane.toml")
-	if err := os.WriteFile(gitConfigPath, []byte(`default_environment = "git-project"`), 0o600); err != nil {
+	if err := os.WriteFile(gitConfigPath, []byte(gitProjectConfig), 0o600); err != nil {
 		t.Fatalf("Failed to write git project config: %v", err)
 	}
 
@@ -165,8 +176,8 @@ func TestLoadConfigStopsAtGitRoot(t *testing.T) {
 	}
 
 	// Should find the git-project config, not the parent config
-	if config.DefaultEnvironment != "git-project" {
-		t.Errorf("Expected default_environment=git-project, got %q", config.DefaultEnvironment)
+	if config.Environments["local"].PostgresURL != "git-project" {
+		t.Errorf("Expected postgres_url=git-project, got %q", config.Environments["local"].PostgresURL)
 	}
 
 	compareConfigPaths(t, gitConfigPath, config.ConfigFilePath)
@@ -208,8 +219,8 @@ func TestLoadConfigStopsAtGoModRoot(t *testing.T) {
 	}
 
 	// Should stop at go.mod boundary and return empty config
-	if config.DefaultEnvironment != "" {
-		t.Errorf("Expected empty default_environment, got %q", config.DefaultEnvironment)
+	if config.Environments != nil {
+		t.Errorf("Expected empty environments, got %q", config.Environments)
 	}
 
 	if config.ConfigFilePath != "" {
@@ -244,15 +255,16 @@ func TestLoadConfigStopsAtPackageJsonRoot(t *testing.T) {
 	}
 
 	// Should stop at package.json boundary and return empty config
-	if config.DefaultEnvironment != "" {
-		t.Errorf("Expected empty default_environment, got %q", config.DefaultEnvironment)
+
+	if config.Environments != nil {
+		t.Errorf("Expected empty environments, got %q", config.Environments)
 	}
 }
 
 func TestLoadConfigInvalidTOML(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "lockplane.toml")
-	invalidContent := `default_environment = "test" invalid syntax`
+	invalidContent := `test = "test" invalid syntax`
 
 	if err := os.WriteFile(configPath, []byte(invalidContent), 0o600); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -286,8 +298,8 @@ func TestLoadConfigEmptyFile(t *testing.T) {
 		t.Fatalf("LoadConfig returned error for empty file: %v", err)
 	}
 
-	if config.DefaultEnvironment != "" {
-		t.Errorf("Expected empty default_environment, got %q", config.DefaultEnvironment)
+	if config.Environments != nil {
+		t.Errorf("Expected empty environments, got %q", config.Environments)
 	}
 
 	compareConfigPaths(t, configPath, config.ConfigFilePath)
@@ -344,4 +356,3 @@ func TestIsProjectRootNoMarkers(t *testing.T) {
 		t.Error("Expected isProjectRoot to return false for directory without project markers")
 	}
 }
-

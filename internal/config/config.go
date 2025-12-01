@@ -7,9 +7,14 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+// EnvironmentConfig describes a single named environment from lockplane.toml.
+type EnvironmentConfig struct {
+	PostgresURL string `toml:"postgres_url"`
+}
+
 type Config struct {
-	DefaultEnvironment string `toml:"default_environment"`
-	ConfigFilePath     string `toml:"-"`
+	Environments   map[string]EnvironmentConfig `toml:"environments"`
+	ConfigFilePath string                       `toml:"-"`
 }
 
 func LoadConfig() (*Config, error) {

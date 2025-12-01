@@ -14,11 +14,10 @@ The config file is a TOML file named `lockplane.toml` in the root of the project
 
 ```toml
 [environments.local]
-database_url = "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"
 ```
 
-At this time, only a single environment called `local` is supported, and
-`?sslmode=disable` is required if ssl mode is not enabled.
+At this time, only a single environment called `local` is supported.
 
 ## 3. Create a schema file
 

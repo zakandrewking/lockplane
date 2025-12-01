@@ -27,7 +27,8 @@ func runApply(cmd *cobra.Command, args []string) {
 		fmt.Println(`lockplane.toml not found. Create one that looks like:
 
 [environments.local]
-database_url = "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable"`)
+postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 		return
 	}
+	fmt.Printf("postgres_url = %s\n", cfg.Environments["local"].PostgresURL)
 }
