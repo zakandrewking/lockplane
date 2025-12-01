@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/lockplane/lockplane/internal/config"
 	"github.com/lockplane/lockplane/internal/database"
-	"github.com/lockplane/lockplane/internal/database/connection"
+	"github.com/lockplane/lockplane/internal/driver"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +39,7 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	// create database driver
 	// TODO move TestConnection into the driver, since we may have different sql
 	// connection approaches
-	driver, err := database.NewDriver("postgres")
+	driver, err := driver.NewDriver("postgres")
 	if err != nil {
 		log.Fatalf("Failed to create database driver: %v", err)
 	}
@@ -46,7 +48,7 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	var postgresURL = cfg.Environments["local"].PostgresURL
 	// TODO %s not allowed? what's %v?
 	fmt.Printf("Opening connection to %v\n", postgresURL)
-	db, err := driver.OpenConnection(connection.ConnectionConfig{
+	db, err := driver.OpenConnection(database.ConnectionConfig{
 		PostgresUrl: postgresURL,
 	})
 	if err != nil {
@@ -57,14 +59,15 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 
 	// introspect
 	fmt.Println("Introspecting")
-	// ctx := context.Background()
-	// schema, err := driver.IntrospectSchema(ctx, db)
-	// if err != nil {
-	// 	log.Fatalf("Failed to introspect schema: %v", err)
-	// }
-	// jsonBytes, err := json.MarshalIndent(schema, "", "  ")
-	// if err != nil {
-	// 	log.Fatalf("Failed to marshal schema to JSON: %v", err)
-	// }
-	// fmt.Println(string(jsonBytes))
+	// TODO why?
+	ctx := context.Background()
+	schema, err := driver.IntrospectSchema(ctx, db)
+	if err != nil {
+		log.Fatalf("Failed to introspect schema: %v", err)
+	}
+	jsonBytes, err := json.MarshalIndent(schema, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	}
+	fmt.Println(string(jsonBytes))
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"github.com/lockplane/lockplane/internal/database/connection"
+	"github.com/lockplane/lockplane/internal/database"
 )
 
 // Driver implements database.Driver for PostgreSQL
@@ -25,7 +25,7 @@ func (d *Driver) Name() string {
 }
 
 // Open a connection to the database, and run a ping to test it
-func (d *Driver) OpenConnection(cfg connection.ConnectionConfig) (*sql.DB, error) {
+func (d *Driver) OpenConnection(cfg database.ConnectionConfig) (*sql.DB, error) {
 	// TODO enable ssl
 	var finalUrl = cfg.PostgresUrl + "?sslmode=disable"
 	db, err := sql.Open("postgres", finalUrl)
@@ -43,4 +43,9 @@ func (d *Driver) OpenConnection(cfg connection.ConnectionConfig) (*sql.DB, error
 	}
 
 	return db, nil
+}
+
+// Read the entire database schema
+func (d *Driver) IntrospectSchema(ctx context.Context, db *sql.DB) (*database.Schema, error) {
+	return nil, nil
 }
