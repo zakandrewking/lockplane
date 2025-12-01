@@ -111,5 +111,5 @@ func GetSchemaDir() (string, error) {
 	if info, err := os.Stat(schemaDir); err == nil && info.IsDir() {
 		return schemaDir, nil
 	}
-	return "", fmt.Errorf("Schema directory not found. Try creating schema/ in the same directory as lockplane.toml.")
+	return "", fmt.Errorf("schema directory not found; try creating schema/ in the same directory as lockplane.toml")
 }

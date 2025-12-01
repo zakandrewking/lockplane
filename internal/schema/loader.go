@@ -22,7 +22,7 @@ func LoadSchema(path string) (*database.Schema, error) {
 		return loadSQLSchema(path)
 	}
 
-	return nil, fmt.Errorf("Did not find .lp.sql file(s)")
+	return nil, fmt.Errorf("did not find .lp.sql file(s)")
 }
 
 func loadSchemaFromDir(dir string) (*database.Schema, error) {

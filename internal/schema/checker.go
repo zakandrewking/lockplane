@@ -8,7 +8,7 @@ func CheckSchema(path string) (reportJson string, err error) {
 	// step 1, no db, parse the sql
 	_, err = LoadSchema(path)
 	if err != nil {
-		return "", fmt.Errorf("Could not load schema: %v", err)
+		return "", fmt.Errorf("could not load schema: %v", err)
 	}
 
 	// step 2, enrich the parser output

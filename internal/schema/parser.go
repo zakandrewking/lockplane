@@ -14,7 +14,7 @@ func ParseSQLSchemaWithDialect(sql string, dialect database.Dialect) (*database.
 	case database.DialectPostgres:
 		return parsePostgresSQLSchema(sql)
 	default:
-		return nil, fmt.Errorf("Unsupported dialect %v", dialect)
+		return nil, fmt.Errorf("unsupported dialect %v", dialect)
 	}
 }
 
