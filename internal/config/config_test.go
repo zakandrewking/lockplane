@@ -125,24 +125,15 @@ func TestLoadConfigInParentDirectory(t *testing.T) {
 	compareConfigPaths(t, configPath, config.ConfigFilePath)
 }
 
-func TestLoadConfigNoFileReturnsEmpty(t *testing.T) {
+func TestLoadConfigNoFileReturnsError(t *testing.T) {
 	tempDir := t.TempDir()
 
 	cleanup := changeToDir(t, tempDir)
 	defer cleanup()
 
-	config, err := LoadConfig()
-	if err != nil {
-		PrintLoadConfigErrorDetails(err, t)
-		t.Fatalf("LoadConfig returned error: %v", err)
-	}
-
-	if config.Environments != nil {
-		t.Errorf("Expected empty environments, got %q", config.Environments)
-	}
-
-	if config.ConfigFilePath != "" {
-		t.Errorf("Expected empty ConfigFilePath, got %q", config.ConfigFilePath)
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatalf("LoadConfig returned nil error, expected error")
 	}
 }
 
@@ -234,19 +225,9 @@ func TestLoadConfigStopsAtGoModRoot(t *testing.T) {
 	cleanup := changeToDir(t, subDir)
 	defer cleanup()
 
-	config, err := LoadConfig()
-	if err != nil {
-		PrintLoadConfigErrorDetails(err, t)
-		t.Fatalf("LoadConfig returned error: %v", err)
-	}
-
-	// Should stop at go.mod boundary and return empty config
-	if config.Environments != nil {
-		t.Errorf("Expected empty environments, got %q", config.Environments)
-	}
-
-	if config.ConfigFilePath != "" {
-		t.Errorf("Expected empty ConfigFilePath, got %q", config.ConfigFilePath)
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatalf("LoadConfig returned nil error, expected error")
 	}
 }
 
@@ -271,16 +252,9 @@ func TestLoadConfigStopsAtPackageJsonRoot(t *testing.T) {
 	cleanup := changeToDir(t, subDir)
 	defer cleanup()
 
-	config, err := LoadConfig()
-	if err != nil {
-		PrintLoadConfigErrorDetails(err, t)
-		t.Fatalf("LoadConfig returned error: %v", err)
-	}
-
-	// Should stop at package.json boundary and return empty config
-
-	if config.Environments != nil {
-		t.Errorf("Expected empty environments, got %q", config.Environments)
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatalf("LoadConfig returned nil error, expected error")
 	}
 }
 
