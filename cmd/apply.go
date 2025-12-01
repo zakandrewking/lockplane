@@ -61,7 +61,7 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	fmt.Println("Introspecting")
 	// TODO why?
 	ctx := context.Background()
-	schema, err := driver.IntrospectSchema(ctx, db)
+	schema, err := driver.IntrospectSchema(ctx, db, "public")
 	if err != nil {
 		log.Fatalf("Failed to introspect schema: %v", err)
 	}

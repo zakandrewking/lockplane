@@ -19,7 +19,7 @@ type Driver interface {
 	OpenConnection(cfg database.ConnectionConfig) (*sql.DB, error)
 
 	// IntrospectSchema reads the entire database schema
-	IntrospectSchema(ctx context.Context, db *sql.DB) (*database.Schema, error)
+	IntrospectSchema(ctx context.Context, db *sql.DB, schemaName string) (*database.Schema, error)
 }
 
 // NewDriver creates a new database driver based on the driver name.
