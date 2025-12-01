@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/lockplane/lockplane/internal/config"
 	"github.com/lockplane/lockplane/internal/database"
 	"github.com/lockplane/lockplane/internal/driver"
+	"github.com/lockplane/lockplane/internal/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -62,7 +64,7 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	// introspect
 	fmt.Println("Introspecting")
 	ctx := context.Background()
-	schema, err := driver.IntrospectSchema(ctx, db, "public")
+	introspectedSchema, err := driver.IntrospectSchema(ctx, db, "public")
 	if err != nil {
 		log.Fatalf("Failed to introspect schema: %v", err)
 	}
@@ -71,10 +73,21 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	// 	log.Fatalf("Failed to marshal schema to JSON: %v", err)
 	// }
 	// fmt.Println(string(jsonBytes))
-	fmt.Printf("Found %v tables\n", len(schema.Tables))
+	fmt.Printf("Found %v tables\n", len(introspectedSchema.Tables))
 
 	// get scheme dir
-	// dir, err := config.GetSchemaDir()
+	dir, err := config.GetSchemaDir()
+	if err != nil {
+		log.Fatalf("Failed to get schema directory: %v", err)
+	}
 	// load schema files
-	// schema, err := schema.LoadSchema(dir)
+	loadedSchema, err := schema.LoadSchema(dir)
+	if err != nil {
+		log.Fatalf("Failed to load schema: %v", err)
+	}
+	loadedJsonBytes, err := json.MarshalIndent(loadedSchema, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	}
+	fmt.Println(string(loadedJsonBytes))
 }

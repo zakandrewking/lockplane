@@ -10,6 +10,15 @@ import (
 const exampleConfig = `[environments.local]
 postgres_url = "test"`
 
+func mustEvalSymlinks(t *testing.T, p string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		t.Fatalf("failed to EvalSymlinks(%q): %v", p, err)
+	}
+	return resolved
+}
+
 // compareConfigPaths compares two paths, resolving symlinks
 func compareConfigPaths(t *testing.T, expected, actual string) {
 	t.Helper()
@@ -370,5 +379,35 @@ func TestIsProjectRootNoMarkers(t *testing.T) {
 
 	if isProjectRoot(tempDir) {
 		t.Error("Expected isProjectRoot to return false for directory without project markers")
+	}
+}
+
+func TestGetSchemaDir(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "lockplane.toml")
+	configContent := exampleConfig
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
+
+	cleanup := changeToDir(t, tempDir)
+	defer cleanup()
+
+	schemaDir := filepath.Join(tempDir, "schema")
+	if err := os.MkdirAll(schemaDir, 0o700); err != nil {
+		t.Fatalf("Failed to create schema directory: %v", err)
+	}
+
+	foundSchemaDir, err := GetSchemaDir()
+	if err != nil {
+		t.Fatalf("Failed to get schema directory: %v", err)
+	}
+
+	expected := mustEvalSymlinks(t, schemaDir)
+	actual := mustEvalSymlinks(t, foundSchemaDir)
+
+	if expected != actual {
+		t.Errorf("Expected schema directory %q, got %q", expected, actual)
 	}
 }

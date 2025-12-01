@@ -37,9 +37,29 @@ func PrintLoadConfigErrorDetails(err error, t *testing.T) {
 }
 
 func LoadConfig() (*Config, error) {
-	startDir, err := os.Getwd()
+	configPath, err := getConfigPath()
 	if err != nil {
 		return nil, err
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	if err := toml.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	config.ConfigFilePath = configPath
+	return &config, nil
+}
+
+func getConfigPath() (string, error) {
+	startDir, err := os.Getwd()
+	if err != nil {
+		return "", err
 	}
 
 	dir := startDir
@@ -47,18 +67,7 @@ func LoadConfig() (*Config, error) {
 		// Check if lockplane.toml exists in current directory
 		configPath := filepath.Join(dir, "lockplane.toml")
 		if _, err := os.Stat(configPath); err == nil {
-			data, err := os.ReadFile(configPath)
-			if err != nil {
-				return nil, err
-			}
-
-			var config Config
-			if err := toml.Unmarshal(data, &config); err != nil {
-				return nil, err
-			}
-
-			config.ConfigFilePath = configPath
-			return &config, nil
+			return configPath, nil
 		}
 
 		// Check if we've reached a project boundary
@@ -75,7 +84,7 @@ func LoadConfig() (*Config, error) {
 		dir = parent
 	}
 
-	return &Config{}, nil
+	return "", fmt.Errorf("lockplane.toml not found")
 }
 
 // isProjectRoot checks if the directory is a project root based on common markers
@@ -90,4 +99,17 @@ func isProjectRoot(dir string) bool {
 		return true
 	}
 	return false
+}
+
+func GetSchemaDir() (string, error) {
+	configPath, err := getConfigPath()
+	if err != nil {
+		return "", err
+	}
+	configDir := filepath.Dir(configPath)
+	schemaDir := filepath.Join(configDir, "schema")
+	if info, err := os.Stat(schemaDir); err == nil && info.IsDir() {
+		return schemaDir, nil
+	}
+	return "", fmt.Errorf("Schema directory not found. Try creating schema/ in the same directory as lockplane.toml.")
 }

@@ -87,12 +87,10 @@ func loadSQLSchema(path string) (*database.Schema, error) {
 
 // LoadSQLSchemaFromBytes loads a SQL schema from a byte slice
 func loadSQLSchemaFromBytes(data []byte) (*database.Schema, error) {
-	return nil, nil
+	schema, err := ParseSQLSchemaWithDialect(string(data), database.DialectPostgres)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SQL DDL: %w", err)
+	}
 
-	// schema, err := parser.ParseSQLSchemaWithDialect(string(data), database.DialectPostgres)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to parse SQL DDL: %w", err)
-	// }
-
-	// return schema, nil
+	return schema, nil
 }
