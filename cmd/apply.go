@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/lockplane/lockplane/internal/config"
+	"github.com/lockplane/lockplane/internal/database"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,7 @@ var applyCmd = &cobra.Command{
 }
 
 func runApply(cmd *cobra.Command, args []string) {
+	// load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -30,5 +32,14 @@ func runApply(cmd *cobra.Command, args []string) {
 postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 		return
 	}
-	fmt.Printf("postgres_url = %s\n", cfg.Environments["local"].PostgresURL)
+
+	// test db connection
+	var PostgresURL = cfg.Environments["local"].PostgresURL
+	// TODO %s not allowed? what's %v?
+	fmt.Printf("Testing connection to %v\n", PostgresURL)
+	database.TestConnection(database.ConnectionConfig{
+		DatabaseType: "postgres",
+		PostgresUrl:  PostgresURL,
+	})
+	fmt.Println("Test successful")
 }
