@@ -47,7 +47,7 @@ func (d *Driver) OpenConnection(cfg database.ConnectionConfig) (*sql.DB, error) 
 
 // Read the entire database schema
 func (d *Driver) IntrospectSchema(ctx context.Context, db *sql.DB, schemaName string) (*database.Schema, error) {
-	tables, err := getTablesInSchema(ctx, db, schemaName)
+	tables, err := GetTables(ctx, db, schemaName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tables in schema %s: %w", schemaName, err)
 	}
@@ -60,7 +60,7 @@ func (d *Driver) IntrospectSchema(ctx context.Context, db *sql.DB, schemaName st
 }
 
 // return all table names in a specific PostgreSQL schema
-func getTablesInSchema(ctx context.Context, db *sql.DB, schemaName string) ([]database.Table, error) {
+func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]database.Table, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT table_name
 		FROM information_schema.tables
