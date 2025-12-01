@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	_ "github.com/lib/pq"
 	"github.com/lockplane/lockplane/internal/database/connection"
 )
 
@@ -23,20 +24,23 @@ func (d *Driver) Name() string {
 	return "postgres"
 }
 
-// TestConnection attempts to connect to the database
-func (d *Driver) TestConnection(cfg connection.ConnectionConfig) error {
-	db, err := sql.Open("postgres", cfg.PostgresUrl)
+// Open a connection to the database, and run a ping to test it
+func (d *Driver) OpenConnection(cfg connection.ConnectionConfig) (*sql.DB, error) {
+	// TODO enable ssl
+	var finalUrl = cfg.PostgresUrl + "?sslmode=disable"
+	db, err := sql.Open("postgres", finalUrl)
 	if err != nil {
-		return fmt.Errorf("failed to open connection: %w", err)
+		return nil, fmt.Errorf("failed to open connection: %w", err)
 	}
-	defer func() { _ = db.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
+		// TODO defer necessary?
+		defer func() { _ = db.Close() }()
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return nil
+	return db, nil
 }

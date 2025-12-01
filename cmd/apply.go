@@ -42,15 +42,29 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 		log.Fatalf("Failed to create database driver: %v", err)
 	}
 
-	// test db connection
+	// open db connection
 	var postgresURL = cfg.Environments["local"].PostgresURL
 	// TODO %s not allowed? what's %v?
-	fmt.Printf("Testing connection to %v\n", postgresURL)
-	driver.TestConnection(connection.ConnectionConfig{
+	fmt.Printf("Opening connection to %v\n", postgresURL)
+	db, err := driver.OpenConnection(connection.ConnectionConfig{
 		PostgresUrl: postgresURL,
 	})
-	fmt.Println("Test successful")
+	if err != nil {
+		log.Fatalf("Failed to open database connection: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	fmt.Println("Connection successful")
 
 	// introspect
 	fmt.Println("Introspecting")
+	// ctx := context.Background()
+	// schema, err := driver.IntrospectSchema(ctx, db)
+	// if err != nil {
+	// 	log.Fatalf("Failed to introspect schema: %v", err)
+	// }
+	// jsonBytes, err := json.MarshalIndent(schema, "", "  ")
+	// if err != nil {
+	// 	log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	// }
+	// fmt.Println(string(jsonBytes))
 }

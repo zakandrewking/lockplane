@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/lockplane/lockplane/internal/database/connection"
@@ -14,7 +15,7 @@ type Driver interface {
 
 	// TestConnection attempts to connect to the database
 	// TODO when to pass as pointer?
-	TestConnection(cfg connection.ConnectionConfig) error
+	OpenConnection(cfg connection.ConnectionConfig) (*sql.DB, error)
 }
 
 // NewDriver creates a new database driver based on the driver name.
