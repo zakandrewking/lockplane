@@ -81,13 +81,23 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 		log.Fatalf("Failed to get schema directory: %v", err)
 	}
 	// load schema files
+	fmt.Println("loading schema")
 	loadedSchema, err := schema.LoadSchema(dir)
 	if err != nil {
 		log.Fatalf("Failed to load schema: %v", err)
 	}
-	loadedJsonBytes, err := json.MarshalIndent(loadedSchema, "", "  ")
+	// loadedJsonBytes, err := json.MarshalIndent(loadedSchema, "", "  ")
+	// if err != nil {
+	// 	log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	// }
+	// fmt.Println(string(loadedJsonBytes))
+	fmt.Printf("Found %v tables\n", len(loadedSchema.Tables))
+
+	// diff
+	diff := schema.DiffSchemas(loadedSchema, introspectedSchema)
+	diffJsonBytes, err := json.MarshalIndent(diff, "", "  ")
 	if err != nil {
 		log.Fatalf("Failed to marshal schema to JSON: %v", err)
 	}
-	fmt.Println(string(loadedJsonBytes))
+	fmt.Println(string(diffJsonBytes))
 }

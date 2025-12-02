@@ -54,6 +54,8 @@ Feature | SQL Parsing | DB Introspection
 -- | -- | --
 CREATE TABLE | ✅ | ✅
 Column types: SMALLINT, INTEGER, BIGINT, SMALLSERIAL, SERIAL, BIGSERIAL TIMESTAMP, VARCHAR, CHAR, REAL, DOUBLE PRECISION, TIMESTAMP [WITH TIME ZONE], TIME [WITH TIME ZONE], TEXT, NUMERIC, DECIMAL, BYTEA, JSON, JSONB | ✅ | ✅
+Indices | ❌ | ❌
+Foreign keys | ❌ | ❌
 DEFAULT: literals (numeric, string, boolean, NULL), SQL value functions (NOW(), CURRENT_TIMESTAMP, CURRENT_DATE, CURRENT_TIME, LOCALTIME, LOCALTIMESTAMP, CURRENT_USER, SESSION_USER) | ✅ | ✅
 DEFAULT: expressions (arithmetic, type casts), UUID functions (gen_random_uuid(), uuid_generate_v4(), uuidv7()), sequence functions (nextval()), array/JSON literals, GENERATED, IDENTITY | ❌ | ❌
 Enable RLS   | ❌ | ❌
