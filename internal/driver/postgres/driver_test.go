@@ -16,6 +16,11 @@ var defaultSchema = "public"
 func getTestDb(t *testing.T) (*sql.DB, *Driver) {
 	t.Helper()
 
+	// Skip integration tests when running with -short flag
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	// see DEVELOPMENT.md
 	dbUrl := os.Getenv("POSTGRES_URL")
 
@@ -892,5 +897,214 @@ func TestGetRLSEnabledIntegrationWithGetTables(t *testing.T) {
 	}
 	if table2.RLSEnabled {
 		t.Error("Expected test_rls_table2 to have RLS disabled")
+	}
+}
+
+func TestApplyMigration_Success(t *testing.T) {
+	db, driver := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tableName := "test_apply_migration_success"
+
+	// Ensure table doesn't exist
+	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName)
+
+	// Apply migration to create table
+	migration := `CREATE TABLE ` + tableName + ` (
+		id INTEGER PRIMARY KEY,
+		name TEXT NOT NULL,
+		age INTEGER DEFAULT 0
+	)`
+
+	err := driver.ApplyMigration(ctx, db, migration)
+	if err != nil {
+		t.Fatalf("ApplyMigration failed: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE "+tableName) }()
+
+	// Verify table was created
+	var exists bool
+	err = db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables
+			WHERE table_schema = $1
+			AND table_name = $2
+		)
+	`, defaultSchema, tableName).Scan(&exists)
+
+	if err != nil {
+		t.Fatalf("Failed to check table existence: %v", err)
+	}
+
+	if !exists {
+		t.Error("Expected table to exist after migration")
+	}
+
+	// Verify table structure
+	columns, err := GetColumns(ctx, db, defaultSchema, tableName)
+	if err != nil {
+		t.Fatalf("GetColumns failed: %v", err)
+	}
+
+	if len(columns) != 3 {
+		t.Errorf("Expected 3 columns, got %d", len(columns))
+	}
+}
+
+func TestApplyMigration_Rollback(t *testing.T) {
+	db, driver := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tableName := "test_apply_migration_rollback"
+
+	// Ensure table doesn't exist
+	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName)
+
+	// Apply migration with intentional error (invalid SQL)
+	migration := `CREATE TABLE ` + tableName + ` (
+		id INTEGER PRIMARY KEY,
+		name TEXT NOT NULL
+	);
+	INSERT INTO nonexistent_table VALUES (1);`
+
+	err := driver.ApplyMigration(ctx, db, migration)
+	if err == nil {
+		t.Fatal("Expected ApplyMigration to fail with invalid SQL")
+	}
+
+	if !strings.Contains(err.Error(), "failed to execute migration") {
+		t.Errorf("Expected error message to contain 'failed to execute migration', got: %v", err)
+	}
+
+	// Verify table was NOT created (transaction rolled back)
+	var exists bool
+	err = db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables
+			WHERE table_schema = $1
+			AND table_name = $2
+		)
+	`, defaultSchema, tableName).Scan(&exists)
+
+	if err != nil {
+		t.Fatalf("Failed to check table existence: %v", err)
+	}
+
+	if exists {
+		t.Error("Expected table to NOT exist after failed migration (should have rolled back)")
+		// Clean up
+		_, _ = db.ExecContext(ctx, "DROP TABLE "+tableName)
+	}
+}
+
+func TestApplyMigration_MultipleStatements(t *testing.T) {
+	db, driver := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	table1 := "test_apply_migration_multi1"
+	table2 := "test_apply_migration_multi2"
+
+	// Ensure tables don't exist
+	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table1)
+	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table2)
+
+	// Apply migration with multiple CREATE TABLE statements
+	migration := `
+		CREATE TABLE ` + table1 + ` (
+			id INTEGER PRIMARY KEY,
+			name TEXT NOT NULL
+		);
+
+		CREATE TABLE ` + table2 + ` (
+			id INTEGER PRIMARY KEY,
+			email TEXT NOT NULL
+		);
+	`
+
+	err := driver.ApplyMigration(ctx, db, migration)
+	if err != nil {
+		t.Fatalf("ApplyMigration failed: %v", err)
+	}
+	defer func() {
+		_, _ = db.ExecContext(ctx, "DROP TABLE "+table1)
+		_, _ = db.ExecContext(ctx, "DROP TABLE "+table2)
+	}()
+
+	// Verify both tables were created
+	for _, tableName := range []string{table1, table2} {
+		var exists bool
+		err = db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT FROM information_schema.tables
+				WHERE table_schema = $1
+				AND table_name = $2
+			)
+		`, defaultSchema, tableName).Scan(&exists)
+
+		if err != nil {
+			t.Fatalf("Failed to check table existence: %v", err)
+		}
+
+		if !exists {
+			t.Errorf("Expected table %q to exist after migration", tableName)
+		}
+	}
+}
+
+func TestApplyMigration_AlterTable(t *testing.T) {
+	db, driver := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tableName := "test_apply_migration_alter"
+
+	// Create initial table
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE `+tableName+` (
+			id INTEGER PRIMARY KEY,
+			name TEXT NOT NULL
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create initial table: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE "+tableName) }()
+
+	// Apply migration to alter table
+	migration := `ALTER TABLE ` + tableName + ` ADD COLUMN email TEXT NOT NULL DEFAULT 'user@example.com'`
+
+	err = driver.ApplyMigration(ctx, db, migration)
+	if err != nil {
+		t.Fatalf("ApplyMigration failed: %v", err)
+	}
+
+	// Verify column was added
+	columns, err := GetColumns(ctx, db, defaultSchema, tableName)
+	if err != nil {
+		t.Fatalf("GetColumns failed: %v", err)
+	}
+
+	if len(columns) != 3 {
+		t.Errorf("Expected 3 columns after ALTER, got %d", len(columns))
+	}
+
+	emailCol := findColumn(columns, "email")
+	if emailCol == nil {
+		t.Error("Expected to find 'email' column after ALTER")
+	}
+}
+
+func TestApplyMigration_EmptyMigration(t *testing.T) {
+	db, driver := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	// Apply empty migration (should succeed)
+	err := driver.ApplyMigration(ctx, db, "")
+	if err != nil {
+		t.Errorf("Expected empty migration to succeed, got error: %v", err)
 	}
 }

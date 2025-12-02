@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
+	"github.com/fatih/color"
 	"github.com/lockplane/lockplane/internal/config"
 	"github.com/lockplane/lockplane/internal/database"
 	"github.com/lockplane/lockplane/internal/driver"
@@ -81,13 +82,45 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 		log.Fatalf("Failed to get schema directory: %v", err)
 	}
 	// load schema files
+	fmt.Println("loading schema")
 	loadedSchema, err := schema.LoadSchema(dir)
 	if err != nil {
 		log.Fatalf("Failed to load schema: %v", err)
 	}
-	loadedJsonBytes, err := json.MarshalIndent(loadedSchema, "", "  ")
-	if err != nil {
-		log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	// loadedJsonBytes, err := json.MarshalIndent(loadedSchema, "", "  ")
+	// if err != nil {
+	// 	log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	// }
+	// fmt.Println(string(loadedJsonBytes))
+	fmt.Printf("Found %v tables\n", len(loadedSchema.Tables))
+
+	// diff
+	diff := schema.DiffSchemas(introspectedSchema, loadedSchema)
+
+	// Check if there are any changes
+	if diff.IsEmpty() {
+		_, _ = color.New(color.FgGreen).Fprintf(os.Stderr, "\n✓ No changes detected - database already matches desired schema\n")
+		os.Exit(0)
 	}
-	fmt.Println(string(loadedJsonBytes))
+
+	// diffJsonBytes, err := json.MarshalIndent(diff, "", "  ")
+	// if err != nil {
+	// 	log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	// }
+	// fmt.Println(string(diffJsonBytes))
+	fmt.Printf("Found %v added tables, %v modified tables, %v removed tables\n", len(diff.AddedTables), len(diff.ModifiedTables), len(diff.RemovedTables))
+
+	// generate sql
+	fmt.Println("Generating migration")
+	sql := driver.GenerateMigration(diff)
+	fmt.Println("Migration generated:")
+	fmt.Printf("\n--\n\n%v\n\n--\n\n", sql)
+
+	// apply
+	fmt.Println("Applying migration")
+	err = driver.ApplyMigration(ctx, db, sql)
+	if err != nil {
+		log.Fatalf("Failed to apply migration: %v", err)
+	}
+	fmt.Println("Migration applied successfully!")
 }

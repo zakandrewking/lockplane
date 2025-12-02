@@ -1,6 +1,9 @@
 # Lockplane Development
 
 ```bash
+# add pre-commit hooks
+uv run pre-commit install
+
 # install
 go install .
 

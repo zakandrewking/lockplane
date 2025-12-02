@@ -695,8 +695,8 @@ func TestParseMoneyType(t *testing.T) {
 
 func TestParseDefaultBooleanLiteral(t *testing.T) {
 	tests := []struct {
-		name         string
-		sql          string
+		name            string
+		sql             string
 		expectedDefault string
 	}{
 		{"TRUE", "CREATE TABLE t (col BOOLEAN DEFAULT TRUE);", "true"},
