@@ -111,14 +111,16 @@ postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
 	fmt.Printf("Found %v added tables, %v modified tables, %v removed tables\n", len(diff.AddedTables), len(diff.ModifiedTables), len(diff.RemovedTables))
 
 	// generate sql
-	fmt.Println("Generating migration:")
+	fmt.Println("Generating migration")
 	sql := driver.GenerateMigration(diff)
-	fmt.Println("\n" + sql)
+	fmt.Println("Migration generated:")
+	fmt.Printf("\n--\n\n%v\n\n--\n\n", sql)
 
 	// apply
-	// err = driver.ApplyMigration(sql)
-	// if err != nil {
-	// 	log.Fatalf("Failed to apply migration: %v", err)
-	// }
-	// fmt.Println("Migration applied successfully")
+	fmt.Println("Applying migration")
+	err = driver.ApplyMigration(ctx, db, sql)
+	if err != nil {
+		log.Fatalf("Failed to apply migration: %v", err)
+	}
+	fmt.Println("Migration applied successfully!")
 }
