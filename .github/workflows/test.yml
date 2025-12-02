@@ -86,7 +86,7 @@ jobs:
         env:
           POSTGRES_URL: "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
         run: |
-          go test -v -race -coverprofile=coverage-postgres.txt -covermode=atomic ./...
+          go test -v -race -coverprofile=coverage-postgres.txt -covermode=atomic ./internal/driver/postgres
 
       - name: Upload PostgreSQL coverage
         uses: codecov/codecov-action@v5

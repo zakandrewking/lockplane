@@ -16,6 +16,11 @@ var defaultSchema = "public"
 func getTestDb(t *testing.T) (*sql.DB, *Driver) {
 	t.Helper()
 
+	// Skip integration tests when running with -short flag
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	// see DEVELOPMENT.md
 	dbUrl := os.Getenv("POSTGRES_URL")
 
