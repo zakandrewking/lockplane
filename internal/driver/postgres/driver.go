@@ -9,15 +9,19 @@ import (
 
 	_ "github.com/lib/pq"
 	"github.com/lockplane/lockplane/internal/database"
+	"github.com/lockplane/lockplane/internal/schema"
 )
 
 // Driver implements database.Driver for PostgreSQL
 type Driver struct {
+	*Generator
 }
 
 // NewDriver creates a new PostgreSQL driver
 func NewDriver() *Driver {
-	return &Driver{}
+	return &Driver{
+		Generator: NewGenerator(),
+	}
 }
 
 // Name returns the database driver name
@@ -184,4 +188,35 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 	}
 
 	return columns, nil
+}
+
+func (d *Driver) GenerateMigration(diff *schema.SchemaDiff) string {
+	return d.Generator.GenerateMigration(diff)
+}
+
+func (d *Driver) ApplyMigration(ctx context.Context, db *sql.DB, migration string) error {
+	// Execute plan in a transaction
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, migration)
+	if err != nil {
+		err = tx.Rollback()
+		if err != nil {
+			return fmt.Errorf("failed to execute migration and failed to rollback transaction: %w", err)
+		}
+		return fmt.Errorf("failed to execute migration (rolled back transaction): %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		err = tx.Rollback()
+		if err != nil {
+			return fmt.Errorf("failed to commit transaction and failed to rollback transaction: %w", err)
+		}
+		return fmt.Errorf("failed to commit transaction (rolled back transaction): %w", err)
+	}
+
+	return nil
 }
