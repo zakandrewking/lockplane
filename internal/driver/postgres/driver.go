@@ -176,6 +176,10 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 		col.Type = strings.TrimSpace(col.Type)
 		col.Nullable = nullable == "YES"
 
+		if defaultVal.Valid {
+			col.Default = &defaultVal.String
+		}
+
 		columns = append(columns, col)
 	}
 
