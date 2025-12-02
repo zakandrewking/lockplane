@@ -1,5 +1,8 @@
 # Lockplane
 
+[![Test](https://github.com/lockplane/lockplane/actions/workflows/test.yml/badge.svg)](https://github.com/lockplane/lockplane/actions/workflows/test.yml)
+[![codecov](https://codecov.io/github/lockplane/lockplane/graph/badge.svg?token=JP0QINP1G1)](https://codecov.io/github/lockplane/lockplane)
+
 Easy postgres schema management.
 
 ## 1. Install
@@ -54,9 +57,10 @@ Feature | SQL Parsing | DB Introspection
 -- | -- | --
 CREATE TABLE | ✅ | ✅
 Column types: SMALLINT, INTEGER, BIGINT, SMALLSERIAL, SERIAL, BIGSERIAL TIMESTAMP, VARCHAR, CHAR, REAL, DOUBLE PRECISION, TIMESTAMP [WITH TIME ZONE], TIME [WITH TIME ZONE], TEXT, NUMERIC, DECIMAL, BYTEA, JSON, JSONB | ✅ | ✅
-Enable RLS   | ❌ | ❌
+Enable/Disable RLS   | ❌ | ❌
 
-## ALTER COLUMN Migration Patterns
+
+## TODO: ALTER COLUMN Migration Patterns
 
 PostgreSQL has several scenarios where `ALTER COLUMN` requires special handling beyond a simple type change. Understanding these cases is critical for safe migrations.
 

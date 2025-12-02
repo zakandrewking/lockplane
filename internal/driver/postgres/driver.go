@@ -9,15 +9,19 @@ import (
 
 	_ "github.com/lib/pq"
 	"github.com/lockplane/lockplane/internal/database"
+	"github.com/lockplane/lockplane/internal/schema"
 )
 
 // Driver implements database.Driver for PostgreSQL
 type Driver struct {
+	*Generator
 }
 
 // NewDriver creates a new PostgreSQL driver
 func NewDriver() *Driver {
-	return &Driver{}
+	return &Driver{
+		Generator: NewGenerator(),
+	}
 }
 
 // Name returns the database driver name
@@ -176,8 +180,41 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 		col.Type = strings.TrimSpace(col.Type)
 		col.Nullable = nullable == "YES"
 
+		if defaultVal.Valid {
+			col.Default = &defaultVal.String
+		}
+
 		columns = append(columns, col)
 	}
 
 	return columns, nil
+}
+
+func (d *Driver) GenerateMigration(diff *schema.SchemaDiff) string {
+	return d.Generator.GenerateMigration(diff)
+}
+
+func (d *Driver) ApplyMigration(ctx context.Context, db *sql.DB, migration string) error {
+	// Execute plan in a transaction
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, migration)
+	if err != nil {
+		// Rollback and preserve the original error
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("failed to execute migration: %w (rollback error: %v)", err, rbErr)
+		}
+		return fmt.Errorf("failed to execute migration: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		// Cannot rollback after commit attempt - transaction is already complete
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }

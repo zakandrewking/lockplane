@@ -174,14 +174,12 @@ func formatTypeName(typeName *pg_query.TypeName) string {
 		if len(mods) > 0 {
 			modStr := strings.Join(mods, ",")
 			typeStr = fmt.Sprintf("%s(%s)", typeStr, modStr)
-			rawBase = fmt.Sprintf("%s(%s)", rawBase, modStr)
 		}
 	}
 
 	// Add array notation if needed
 	if len(typeName.ArrayBounds) > 0 {
 		typeStr += "[]"
-		rawBase += "[]"
 	}
 
 	return typeStr
