@@ -782,3 +782,115 @@ func TestIntrospector_ComplexRealWorldTable(t *testing.T) {
 		t.Error("Expected created_at to have default value")
 	}
 }
+
+func TestGetRLSEnabled(t *testing.T) {
+	db, _ := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	// Create a test table without RLS
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE test_rls_disabled (
+			id integer PRIMARY KEY
+		)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create test table: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE test_rls_disabled") }()
+
+	// Test that RLS is disabled by default
+	rlsEnabled, err := GetRLSEnabled(ctx, db, defaultSchema, "test_rls_disabled")
+	if err != nil {
+		t.Fatalf("GetRLSEnabled failed: %v", err)
+	}
+	if rlsEnabled {
+		t.Error("Expected RLS to be disabled by default, but it was enabled")
+	}
+
+	// Enable RLS on the table
+	_, err = db.ExecContext(ctx, "ALTER TABLE test_rls_disabled ENABLE ROW LEVEL SECURITY")
+	if err != nil {
+		t.Fatalf("Failed to enable RLS: %v", err)
+	}
+
+	// Test that RLS is now enabled
+	rlsEnabled, err = GetRLSEnabled(ctx, db, defaultSchema, "test_rls_disabled")
+	if err != nil {
+		t.Fatalf("GetRLSEnabled failed: %v", err)
+	}
+	if !rlsEnabled {
+		t.Error("Expected RLS to be enabled, but it was disabled")
+	}
+
+	// Disable RLS on the table
+	_, err = db.ExecContext(ctx, "ALTER TABLE test_rls_disabled DISABLE ROW LEVEL SECURITY")
+	if err != nil {
+		t.Fatalf("Failed to disable RLS: %v", err)
+	}
+
+	// Test that RLS is now disabled again
+	rlsEnabled, err = GetRLSEnabled(ctx, db, defaultSchema, "test_rls_disabled")
+	if err != nil {
+		t.Fatalf("GetRLSEnabled failed: %v", err)
+	}
+	if rlsEnabled {
+		t.Error("Expected RLS to be disabled, but it was enabled")
+	}
+}
+
+func TestGetRLSEnabledIntegrationWithGetTables(t *testing.T) {
+	db, _ := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	// Create two test tables
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE test_rls_table1 (id integer PRIMARY KEY);
+		CREATE TABLE test_rls_table2 (id integer PRIMARY KEY);
+	`)
+	if err != nil {
+		t.Fatalf("Failed to create test tables: %v", err)
+	}
+	defer func() {
+		_, _ = db.ExecContext(ctx, "DROP TABLE test_rls_table1")
+		_, _ = db.ExecContext(ctx, "DROP TABLE test_rls_table2")
+	}()
+
+	// Enable RLS on table1 only
+	_, err = db.ExecContext(ctx, "ALTER TABLE test_rls_table1 ENABLE ROW LEVEL SECURITY")
+	if err != nil {
+		t.Fatalf("Failed to enable RLS: %v", err)
+	}
+
+	// Get tables and verify RLS status
+	tables, err := GetTables(ctx, db, defaultSchema)
+	if err != nil {
+		t.Fatalf("GetTables failed: %v", err)
+	}
+
+	// Find our test tables
+	var table1, table2 *database.Table
+	for i := range tables {
+		if tables[i].Name == "test_rls_table1" {
+			table1 = &tables[i]
+		} else if tables[i].Name == "test_rls_table2" {
+			table2 = &tables[i]
+		}
+	}
+
+	if table1 == nil {
+		t.Fatal("Expected to find test_rls_table1 in results")
+	}
+	if table2 == nil {
+		t.Fatal("Expected to find test_rls_table2 in results")
+	}
+
+	// Verify RLS status
+	if !table1.RLSEnabled {
+		t.Error("Expected test_rls_table1 to have RLS enabled")
+	}
+	if table2.RLSEnabled {
+		t.Error("Expected test_rls_table2 to have RLS disabled")
+	}
+}
