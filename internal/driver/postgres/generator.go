@@ -20,8 +20,21 @@ func (g *Generator) GenerateMigration(diff *schema.SchemaDiff) string {
 	migration := ""
 	for _, table := range diff.AddedTables {
 		migration += g.CreateTable(table) + "\n\n"
+		// Add RLS if enabled for new table
+		if table.RLSEnabled {
+			migration += fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY;\n\n", table.Name)
+		}
 	}
 	for _, tableDiff := range diff.ModifiedTables {
+		// Handle RLS changes
+		if tableDiff.RLSChanged {
+			if tableDiff.RLSEnabled {
+				migration += fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY;\n\n", tableDiff.TableName)
+			} else {
+				migration += fmt.Sprintf("ALTER TABLE %s DISABLE ROW LEVEL SECURITY;\n\n", tableDiff.TableName)
+			}
+		}
+		// Handle column changes
 		for _, columnDiff := range tableDiff.ModifiedColumns {
 			migration += g.ModifyColumn(tableDiff.TableName, columnDiff) + "\n\n"
 		}

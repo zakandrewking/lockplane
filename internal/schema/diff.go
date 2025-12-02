@@ -15,6 +15,8 @@ type TableDiff struct {
 	AddedColumns    []database.Column `json:"added_columns,omitempty"`
 	RemovedColumns  []database.Column `json:"removed_columns,omitempty"`
 	ModifiedColumns []ColumnDiff      `json:"modified_columns,omitempty"`
+	RLSChanged      bool              `json:"rls_changed,omitempty"`
+	RLSEnabled      bool              `json:"rls_enabled,omitempty"`
 }
 
 // ColumnDiff represents changes to a single column
@@ -102,6 +104,12 @@ func diffTables(current, desired *database.Table) *TableDiff {
 		if _, exists := desiredCols[name]; !exists {
 			diff.RemovedColumns = append(diff.RemovedColumns, *currentCol)
 		}
+	}
+
+	// Check for RLS changes
+	if current.RLSEnabled != desired.RLSEnabled {
+		diff.RLSChanged = true
+		diff.RLSEnabled = desired.RLSEnabled
 	}
 
 	return diff

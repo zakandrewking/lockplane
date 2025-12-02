@@ -546,3 +546,123 @@ func TestGenerator_GenerateMigration_Empty(t *testing.T) {
 		t.Errorf("Expected empty string for empty diff, got: %q", sql)
 	}
 }
+func TestGenerator_GenerateMigration_EnableRLS(t *testing.T) {
+	gen := NewGenerator()
+
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName:  "users",
+				RLSChanged: true,
+				RLSEnabled: true,
+			},
+		},
+	}
+
+	sql := gen.GenerateMigration(diff)
+
+	expected := "ALTER TABLE users ENABLE ROW LEVEL SECURITY;"
+	if sql != expected {
+		t.Errorf("Expected:\n%s\n\nGot:\n%s", expected, sql)
+	}
+}
+
+func TestGenerator_GenerateMigration_DisableRLS(t *testing.T) {
+	gen := NewGenerator()
+
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName:  "users",
+				RLSChanged: true,
+				RLSEnabled: false,
+			},
+		},
+	}
+
+	sql := gen.GenerateMigration(diff)
+
+	expected := "ALTER TABLE users DISABLE ROW LEVEL SECURITY;"
+	if sql != expected {
+		t.Errorf("Expected:\n%s\n\nGot:\n%s", expected, sql)
+	}
+}
+
+func TestGenerator_GenerateMigration_CreateTableWithRLS(t *testing.T) {
+	gen := NewGenerator()
+
+	diff := &schema.SchemaDiff{
+		AddedTables: []database.Table{
+			{
+				Name:       "users",
+				RLSEnabled: true,
+				Columns: []database.Column{
+					{Name: "id", Type: "integer", IsPrimaryKey: true},
+					{Name: "email", Type: "text", Nullable: false},
+				},
+			},
+		},
+	}
+
+	sql := gen.GenerateMigration(diff)
+
+	if !strings.Contains(sql, "CREATE TABLE users") {
+		t.Error("Expected CREATE TABLE statement")
+	}
+	if !strings.Contains(sql, "ALTER TABLE users ENABLE ROW LEVEL SECURITY") {
+		t.Error("Expected ENABLE RLS statement")
+	}
+}
+
+func TestGenerator_GenerateMigration_CreateTableWithoutRLS(t *testing.T) {
+	gen := NewGenerator()
+
+	diff := &schema.SchemaDiff{
+		AddedTables: []database.Table{
+			{
+				Name:       "users",
+				RLSEnabled: false,
+				Columns: []database.Column{
+					{Name: "id", Type: "integer", IsPrimaryKey: true},
+				},
+			},
+		},
+	}
+
+	sql := gen.GenerateMigration(diff)
+
+	if !strings.Contains(sql, "CREATE TABLE users") {
+		t.Error("Expected CREATE TABLE statement")
+	}
+	if strings.Contains(sql, "ROW LEVEL SECURITY") {
+		t.Error("Did not expect RLS statement for table without RLS")
+	}
+}
+
+func TestGenerator_GenerateMigration_MultipleTablesWithRLS(t *testing.T) {
+	gen := NewGenerator()
+
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName:  "users",
+				RLSChanged: true,
+				RLSEnabled: true,
+			},
+			{
+				TableName:  "posts",
+				RLSChanged: true,
+				RLSEnabled: false,
+			},
+		},
+	}
+
+	sql := gen.GenerateMigration(diff)
+
+	if !strings.Contains(sql, "ALTER TABLE users ENABLE ROW LEVEL SECURITY") {
+		t.Error("Expected ENABLE RLS for users table")
+	}
+	if !strings.Contains(sql, "ALTER TABLE posts DISABLE ROW LEVEL SECURITY") {
+		t.Error("Expected DISABLE RLS for posts table")
+	}
+}
