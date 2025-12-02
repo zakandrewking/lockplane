@@ -750,3 +750,80 @@ func TestDiffSchemas_ComplexScenario(t *testing.T) {
 		t.Errorf("Expected 'age' to have nullable change, got %v", changes)
 	}
 }
+func TestDiffTables_RLSEnabled(t *testing.T) {
+	current := &database.Table{
+		Name:       "users",
+		RLSEnabled: false,
+		Columns: []database.Column{
+			{Name: "id", Type: "integer"},
+		},
+	}
+
+	desired := &database.Table{
+		Name:       "users",
+		RLSEnabled: true,
+		Columns: []database.Column{
+			{Name: "id", Type: "integer"},
+		},
+	}
+
+	diff := diffTables(current, desired)
+
+	if !diff.RLSChanged {
+		t.Error("Expected RLSChanged to be true")
+	}
+	if !diff.RLSEnabled {
+		t.Error("Expected RLSEnabled to be true")
+	}
+}
+
+func TestDiffTables_RLSDisabled(t *testing.T) {
+	current := &database.Table{
+		Name:       "users",
+		RLSEnabled: true,
+		Columns: []database.Column{
+			{Name: "id", Type: "integer"},
+		},
+	}
+
+	desired := &database.Table{
+		Name:       "users",
+		RLSEnabled: false,
+		Columns: []database.Column{
+			{Name: "id", Type: "integer"},
+		},
+	}
+
+	diff := diffTables(current, desired)
+
+	if !diff.RLSChanged {
+		t.Error("Expected RLSChanged to be true")
+	}
+	if diff.RLSEnabled {
+		t.Error("Expected RLSEnabled to be false")
+	}
+}
+
+func TestDiffTables_RLSUnchanged(t *testing.T) {
+	current := &database.Table{
+		Name:       "users",
+		RLSEnabled: true,
+		Columns: []database.Column{
+			{Name: "id", Type: "integer"},
+		},
+	}
+
+	desired := &database.Table{
+		Name:       "users",
+		RLSEnabled: true,
+		Columns: []database.Column{
+			{Name: "id", Type: "integer"},
+		},
+	}
+
+	diff := diffTables(current, desired)
+
+	if diff.RLSChanged {
+		t.Error("Expected RLSChanged to be false when RLS status is unchanged")
+	}
+}

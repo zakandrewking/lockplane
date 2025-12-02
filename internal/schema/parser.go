@@ -45,22 +45,19 @@ func parsePostgresSQLSchema(sql string) (*database.Schema, error) {
 			}
 			schema.Tables = append(schema.Tables, *table)
 
+		case *pg_query.Node_AlterTableStmt:
+			// Handle ALTER TABLE for RLS and other commands
+			err := parseAlterTable(schema, node.AlterTableStmt)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse ALTER TABLE: %w", err)
+			}
+
 			// 	case *pg_query.Node_IndexStmt:
 			// 		// Handle CREATE INDEX separately (will add to existing table)
 			// 		err := parseCreateIndex(schema, node.IndexStmt)
 			// 		if err != nil {
 			// 			return nil, fmt.Errorf("failed to parse CREATE INDEX: %w", err)
 			// 		}
-
-			// 	case *pg_query.Node_AlterTableStmt:
-			// 		// ALTER TABLE warnings are now handled by the validation layer (cmd/plan.go)
-			// 		// which provides structured diagnostics with file/line/column info
-			// 		err := parseAlterTable(schema, node.AlterTableStmt)
-			// 		if err != nil {
-			// 			return nil, fmt.Errorf("failed to parse ALTER TABLE: %w", err)
-			// 		}
-
-			// 		// We can add more statement types later (ALTER TABLE, etc.)
 		}
 	}
 
@@ -346,4 +343,48 @@ func formatExpr(node *pg_query.Node) string {
 
 	// For anything else, return a placeholder
 	return "UNDEFINED_EXPRESSION"
+}
+
+// parseAlterTable handles ALTER TABLE statements, currently focusing on RLS
+func parseAlterTable(schema *database.Schema, stmt *pg_query.AlterTableStmt) error {
+	if stmt.Relation == nil {
+		return fmt.Errorf("ALTER TABLE missing relation")
+	}
+
+	tableName := stmt.Relation.Relname
+
+	// Find the table in the schema
+	var tableIndex = -1
+	for i, table := range schema.Tables {
+		if table.Name == tableName {
+			tableIndex = i
+			break
+		}
+	}
+
+	// If table doesn't exist yet, we can't apply ALTER TABLE to it
+	if tableIndex == -1 {
+		// This is OK - ALTER TABLE might come after CREATE TABLE in the same schema
+		// or might reference a table that already exists in the database
+		// For now, we'll skip it
+		return nil
+	}
+
+	// Process each command in the ALTER TABLE statement
+	for _, cmd := range stmt.Cmds {
+		if cmd.Node == nil {
+			continue
+		}
+
+		if alterCmd, ok := cmd.Node.(*pg_query.Node_AlterTableCmd); ok {
+			switch alterCmd.AlterTableCmd.Subtype {
+			case pg_query.AlterTableType_AT_EnableRowSecurity:
+				schema.Tables[tableIndex].RLSEnabled = true
+			case pg_query.AlterTableType_AT_DisableRowSecurity:
+				schema.Tables[tableIndex].RLSEnabled = false
+			}
+		}
+	}
+
+	return nil
 }
