@@ -203,19 +203,17 @@ func (d *Driver) ApplyMigration(ctx context.Context, db *sql.DB, migration strin
 
 	_, err = tx.ExecContext(ctx, migration)
 	if err != nil {
-		err = tx.Rollback()
-		if err != nil {
-			return fmt.Errorf("failed to execute migration and failed to rollback transaction: %w", err)
+		// Rollback and preserve the original error
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("failed to execute migration: %w (rollback error: %v)", err, rbErr)
 		}
-		return fmt.Errorf("failed to execute migration (rolled back transaction): %w", err)
+		return fmt.Errorf("failed to execute migration: %w", err)
 	}
 
+	// Commit the transaction
 	if err := tx.Commit(); err != nil {
-		err = tx.Rollback()
-		if err != nil {
-			return fmt.Errorf("failed to commit transaction and failed to rollback transaction: %w", err)
-		}
-		return fmt.Errorf("failed to commit transaction (rolled back transaction): %w", err)
+		// Cannot rollback after commit attempt - transaction is already complete
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil

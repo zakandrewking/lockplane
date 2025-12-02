@@ -155,7 +155,7 @@ func TestGenerator_CreateTable_SingleColumn(t *testing.T) {
 	}
 
 	sql := gen.CreateTable(table)
-	expected := "CREATE TABLE simple (\n  id integer NOT NULL PRIMARY KEY\n)"
+	expected := "CREATE TABLE simple (\n  id integer NOT NULL PRIMARY KEY\n);"
 
 	if sql != expected {
 		t.Errorf("Expected:\n%s\n\nGot:\n%s", expected, sql)
@@ -173,12 +173,12 @@ func TestGenerator_DropTable(t *testing.T) {
 		{
 			name:     "simple table",
 			table:    database.Table{Name: "users"},
-			expected: "DROP TABLE users CASCADE",
+			expected: "DROP TABLE users CASCADE;",
 		},
 		{
 			name:     "table with underscores",
 			table:    database.Table{Name: "user_sessions"},
-			expected: "DROP TABLE user_sessions CASCADE",
+			expected: "DROP TABLE user_sessions CASCADE;",
 		},
 	}
 
@@ -205,25 +205,25 @@ func TestGenerator_AddColumn(t *testing.T) {
 			name:      "add simple column",
 			tableName: "users",
 			column:    database.Column{Name: "nickname", Type: "text", Nullable: true},
-			expected:  "ALTER TABLE users ADD COLUMN nickname text",
+			expected:  "ALTER TABLE users ADD COLUMN nickname text;",
 		},
 		{
 			name:      "add not null column",
 			tableName: "users",
 			column:    database.Column{Name: "email", Type: "text", Nullable: false},
-			expected:  "ALTER TABLE users ADD COLUMN email text NOT NULL",
+			expected:  "ALTER TABLE users ADD COLUMN email text NOT NULL;",
 		},
 		{
 			name:      "add column with default",
 			tableName: "users",
 			column:    database.Column{Name: "status", Type: "text", Nullable: false, Default: strPtr("'active'")},
-			expected:  "ALTER TABLE users ADD COLUMN status text NOT NULL DEFAULT 'active'",
+			expected:  "ALTER TABLE users ADD COLUMN status text NOT NULL DEFAULT 'active';",
 		},
 		{
 			name:      "add timestamp with default",
 			tableName: "posts",
 			column:    database.Column{Name: "created_at", Type: "timestamp without time zone", Nullable: false, Default: strPtr("CURRENT_TIMESTAMP")},
-			expected:  "ALTER TABLE posts ADD COLUMN created_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP",
+			expected:  "ALTER TABLE posts ADD COLUMN created_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP;",
 		},
 	}
 
@@ -250,13 +250,13 @@ func TestGenerator_DropColumn(t *testing.T) {
 			name:      "drop simple column",
 			tableName: "users",
 			column:    database.Column{Name: "nickname"},
-			expected:  "ALTER TABLE users DROP COLUMN nickname",
+			expected:  "ALTER TABLE users DROP COLUMN nickname;",
 		},
 		{
 			name:      "drop column from different table",
 			tableName: "posts",
 			column:    database.Column{Name: "deprecated_field"},
-			expected:  "ALTER TABLE posts DROP COLUMN deprecated_field",
+			expected:  "ALTER TABLE posts DROP COLUMN deprecated_field;",
 		},
 	}
 
@@ -281,7 +281,7 @@ func TestGenerator_ModifyColumn_TypeChange(t *testing.T) {
 	}
 
 	result := gen.ModifyColumn("users", diff)
-	expected := "ALTER TABLE users ALTER COLUMN age TYPE bigint"
+	expected := "ALTER TABLE users ALTER COLUMN age TYPE bigint;"
 
 	if result != expected {
 		t.Errorf("Expected:\n%s\n\nGot:\n%s", expected, result)
@@ -304,7 +304,7 @@ func TestGenerator_ModifyColumn_NullableChange(t *testing.T) {
 				New:        database.Column{Name: "email", Type: "text", Nullable: false},
 				Changes:    []string{"nullable"},
 			},
-			expected: "ALTER TABLE users ALTER COLUMN email SET NOT NULL",
+			expected: "ALTER TABLE users ALTER COLUMN email SET NOT NULL;",
 		},
 		{
 			name: "drop not null",
@@ -314,7 +314,7 @@ func TestGenerator_ModifyColumn_NullableChange(t *testing.T) {
 				New:        database.Column{Name: "middle_name", Type: "text", Nullable: true},
 				Changes:    []string{"nullable"},
 			},
-			expected: "ALTER TABLE users ALTER COLUMN middle_name DROP NOT NULL",
+			expected: "ALTER TABLE users ALTER COLUMN middle_name DROP NOT NULL;",
 		},
 	}
 
@@ -344,7 +344,7 @@ func TestGenerator_ModifyColumn_DefaultChange(t *testing.T) {
 				New:        database.Column{Name: "status", Type: "text", Default: strPtr("'active'")},
 				Changes:    []string{"default"},
 			},
-			expected: "ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active'",
+			expected: "ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active';",
 		},
 		{
 			name: "drop default",
@@ -354,7 +354,7 @@ func TestGenerator_ModifyColumn_DefaultChange(t *testing.T) {
 				New:        database.Column{Name: "counter", Type: "integer", Default: nil},
 				Changes:    []string{"default"},
 			},
-			expected: "ALTER TABLE users ALTER COLUMN counter DROP DEFAULT",
+			expected: "ALTER TABLE users ALTER COLUMN counter DROP DEFAULT;",
 		},
 		{
 			name: "change default value",
@@ -364,7 +364,7 @@ func TestGenerator_ModifyColumn_DefaultChange(t *testing.T) {
 				New:        database.Column{Name: "priority", Type: "integer", Default: strPtr("10")},
 				Changes:    []string{"default"},
 			},
-			expected: "ALTER TABLE users ALTER COLUMN priority SET DEFAULT 10",
+			expected: "ALTER TABLE users ALTER COLUMN priority SET DEFAULT 10;",
 		},
 	}
 
@@ -391,13 +391,13 @@ func TestGenerator_ModifyColumn_MultipleChanges(t *testing.T) {
 	result := gen.ModifyColumn("users", diff)
 
 	// Check all three ALTER statements are present
-	if !strings.Contains(result, "ALTER TABLE users ALTER COLUMN age TYPE bigint") {
+	if !strings.Contains(result, "ALTER TABLE users ALTER COLUMN age TYPE bigint;") {
 		t.Error("Expected type change statement")
 	}
-	if !strings.Contains(result, "ALTER TABLE users ALTER COLUMN age SET NOT NULL") {
+	if !strings.Contains(result, "ALTER TABLE users ALTER COLUMN age SET NOT NULL;") {
 		t.Error("Expected set not null statement")
 	}
-	if !strings.Contains(result, "ALTER TABLE users ALTER COLUMN age SET DEFAULT 0") {
+	if !strings.Contains(result, "ALTER TABLE users ALTER COLUMN age SET DEFAULT 0;") {
 		t.Error("Expected set default statement")
 	}
 }
@@ -440,7 +440,7 @@ func TestGenerator_GenerateMigration_DropTable(t *testing.T) {
 	}
 
 	sql := gen.GenerateMigration(diff)
-	expected := "DROP TABLE old_table CASCADE"
+	expected := "DROP TABLE old_table CASCADE;"
 
 	if sql != expected {
 		t.Errorf("Expected:\n%s\n\nGot:\n%s", expected, sql)
@@ -467,7 +467,7 @@ func TestGenerator_GenerateMigration_ModifyTable(t *testing.T) {
 	}
 
 	sql := gen.GenerateMigration(diff)
-	expected := "ALTER TABLE users ALTER COLUMN age TYPE bigint"
+	expected := "ALTER TABLE users ALTER COLUMN age TYPE bigint;"
 
 	if sql != expected {
 		t.Errorf("Expected:\n%s\n\nGot:\n%s", expected, sql)
@@ -519,18 +519,18 @@ func TestGenerator_GenerateMigration_Complex(t *testing.T) {
 	}
 
 	// Check modified columns
-	if !strings.Contains(sql, "ALTER TABLE users ALTER COLUMN age TYPE bigint") {
+	if !strings.Contains(sql, "ALTER TABLE users ALTER COLUMN age TYPE bigint;") {
 		t.Error("Expected age type change")
 	}
-	if !strings.Contains(sql, "ALTER TABLE users ALTER COLUMN age SET NOT NULL") {
+	if !strings.Contains(sql, "ALTER TABLE users ALTER COLUMN age SET NOT NULL;") {
 		t.Error("Expected age set not null")
 	}
-	if !strings.Contains(sql, "ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active'") {
+	if !strings.Contains(sql, "ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active';") {
 		t.Error("Expected status default change")
 	}
 
 	// Check removed table
-	if !strings.Contains(sql, "DROP TABLE deprecated_table CASCADE") {
+	if !strings.Contains(sql, "DROP TABLE deprecated_table CASCADE;") {
 		t.Error("Expected DROP TABLE deprecated_table")
 	}
 }

@@ -48,14 +48,14 @@ func (g *Generator) CreateTable(table database.Table) string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(")")
+	sb.WriteString(");")
 
 	return sb.String()
 }
 
 // DropTable generates PostgreSQL SQL to drop a table
 func (g *Generator) DropTable(table database.Table) string {
-	return fmt.Sprintf("DROP TABLE %s CASCADE", table.Name)
+	return fmt.Sprintf("DROP TABLE %s CASCADE;", table.Name)
 }
 
 func (g *Generator) FormatColumnDefinition(col database.Column) string {
@@ -83,11 +83,11 @@ func (g *Generator) FormatColumnDefinition(col database.Column) string {
 }
 
 func (g *Generator) AddColumn(tableName string, col database.Column) string {
-	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", tableName, g.FormatColumnDefinition(col))
+	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s;", tableName, g.FormatColumnDefinition(col))
 }
 
 func (g *Generator) DropColumn(tableName string, col database.Column) string {
-	return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", tableName, col.Name)
+	return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s;", tableName, col.Name)
 }
 
 // contains checks if a string is in a slice
@@ -105,17 +105,17 @@ func (g *Generator) ModifyColumn(tableName string, diff schema.ColumnDiff) strin
 
 	// Handle type changes
 	if contains(diff.Changes, "type") {
-		sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s\n\n",
+		sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s;\n\n",
 			tableName, diff.ColumnName, diff.New.Type)
 	}
 
 	// Handle nullability changes
 	if contains(diff.Changes, "nullable") {
 		if diff.New.Nullable {
-			sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL\n\n",
+			sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL;\n\n",
 				tableName, diff.ColumnName)
 		} else {
-			sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET NOT NULL\n\n",
+			sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET NOT NULL;\n\n",
 				tableName, diff.ColumnName)
 		}
 	}
@@ -123,10 +123,10 @@ func (g *Generator) ModifyColumn(tableName string, diff schema.ColumnDiff) strin
 	// Handle default value changes
 	if contains(diff.Changes, "default") {
 		if diff.New.Default == nil {
-			sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT\n\n",
+			sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT;\n\n",
 				tableName, diff.ColumnName)
 		} else {
-			sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s\n\n",
+			sql += fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s;\n\n",
 				tableName, diff.ColumnName, *diff.New.Default)
 		}
 	}
