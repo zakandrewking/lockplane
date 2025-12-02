@@ -84,7 +84,7 @@ jobs:
 
       - name: Run PostgreSQL integration tests
         env:
-          POSTGRES_URL: "postgres://lockplane:lockplane@localhost:5432/lockplane?sslmode=disable"
+          POSTGRES_URL: "postgres://lockplane:lockplane@localhost:5432/lockplane"
         run: |
           go test -v -race -coverprofile=coverage-postgres.txt -covermode=atomic ./...
 
