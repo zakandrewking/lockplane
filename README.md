@@ -47,3 +47,11 @@ npx lockplane check-schema
 # TODO
 npx lockplane apply
 ```
+
+## Postgres Feature Support
+
+Feature | SQL Parsing | DB Introspection
+-- | -- | --
+CREATE TABLE | ✅ | ✅
+Column types: SMALLINT, INTEGER, BIGINT, SMALLSERIAL, SERIAL, BIGSERIAL TIMESTAMP, VARCHAR, CHAR, REAL, DOUBLE PRECISION, TIMESTAMP [WITH TIME ZONE], TIME [WITH TIME ZONE], TEXT, NUMERIC, DECIMAL, BYTEA, JSON, JSONB | ✅ | ✅
+Enable RLS   | ❌ | ❌

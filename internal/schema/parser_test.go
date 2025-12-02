@@ -234,8 +234,10 @@ func TestParseTimestampTypeNormalization(t *testing.T) {
 		sql          string
 		expectedType string
 	}{
+		{"TIMESTAMP", "CREATE TABLE t (col TIMESTAMP);", "timestamp"},
 		{"TIMESTAMPTZ", "CREATE TABLE t (col TIMESTAMPTZ);", "timestamp with time zone"},
 		{"TIMESTAMP_WITH_TIME_ZONE", "CREATE TABLE t (col TIMESTAMP WITH TIME ZONE);", "timestamp with time zone"},
+		{"TIME", "CREATE TABLE t (col TIME);", "time"},
 		{"TIMETZ", "CREATE TABLE t (col TIMETZ);", "time with time zone"},
 		{"TIME_WITH_TIME_ZONE", "CREATE TABLE t (col TIME WITH TIME ZONE);", "time with time zone"},
 	}
@@ -632,6 +634,109 @@ func TestParseBytesTypes(t *testing.T) {
 	col := schema.Tables[0].Columns[0]
 	if col.Type != "bytea" {
 		t.Errorf("Expected type 'bytea', got %q", col.Type)
+	}
+}
+
+func TestParseJSONType(t *testing.T) {
+	sql := `CREATE TABLE documents (data JSON);`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	col := schema.Tables[0].Columns[0]
+	if col.Type != "json" {
+		t.Errorf("Expected type 'json', got %q", col.Type)
+	}
+}
+
+func TestParseDateType(t *testing.T) {
+	sql := `CREATE TABLE events (event_date DATE);`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	col := schema.Tables[0].Columns[0]
+	if col.Type != "date" {
+		t.Errorf("Expected type 'date', got %q", col.Type)
+	}
+}
+
+func TestParseIntervalType(t *testing.T) {
+	sql := `CREATE TABLE schedules (duration INTERVAL);`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	col := schema.Tables[0].Columns[0]
+	if col.Type != "interval" {
+		t.Errorf("Expected type 'interval', got %q", col.Type)
+	}
+}
+
+func TestParseMoneyType(t *testing.T) {
+	sql := `CREATE TABLE transactions (amount MONEY);`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	col := schema.Tables[0].Columns[0]
+	if col.Type != "money" {
+		t.Errorf("Expected type 'money', got %q", col.Type)
+	}
+}
+
+func TestParseDefaultBooleanLiteral(t *testing.T) {
+	tests := []struct {
+		name         string
+		sql          string
+		expectedDefault string
+	}{
+		{"TRUE", "CREATE TABLE t (col BOOLEAN DEFAULT TRUE);", "true"},
+		{"FALSE", "CREATE TABLE t (col BOOLEAN DEFAULT FALSE);", "false"},
+		{"true", "CREATE TABLE t (col BOOLEAN DEFAULT true);", "true"},
+		{"false", "CREATE TABLE t (col BOOLEAN DEFAULT false);", "false"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema, err := ParseSQLSchemaWithDialect(tt.sql, database.DialectPostgres)
+			if err != nil {
+				t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+			}
+
+			col := schema.Tables[0].Columns[0]
+			if col.Default == nil {
+				t.Fatal("Expected column to have default value")
+			}
+			if *col.Default != tt.expectedDefault {
+				t.Errorf("Expected default value %q, got %q", tt.expectedDefault, *col.Default)
+			}
+		})
+	}
+}
+
+func TestParseDefaultNullLiteral(t *testing.T) {
+	sql := `CREATE TABLE users (middle_name TEXT DEFAULT NULL);`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	col := schema.Tables[0].Columns[0]
+	if col.Default == nil {
+		t.Fatal("Expected column to have default value")
+	}
+	if *col.Default != "NULL" {
+		t.Errorf("Expected default value 'NULL', got %q", *col.Default)
 	}
 }
 

@@ -275,6 +275,12 @@ func formatExpr(node *pg_query.Node) string {
 		if bsval := expr.AConst.GetBsval(); bsval != nil {
 			return bsval.Bsval
 		}
+		if boolval := expr.AConst.GetBoolval(); boolval != nil {
+			return fmt.Sprintf("%t", boolval.Boolval)
+		}
+		if nullval := expr.AConst.GetIsnull(); nullval {
+			return "NULL"
+		}
 
 	case *pg_query.Node_FuncCall:
 		// Handle function calls like NOW(), CURRENT_TIMESTAMP, datetime('now'), etc.
