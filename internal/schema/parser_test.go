@@ -800,3 +800,87 @@ func TestParseComplexRealWorldTable(t *testing.T) {
 		t.Errorf("created_at default incorrect: %v", createdAt.Default)
 	}
 }
+
+func TestParseEnableRLS(t *testing.T) {
+	sql := `
+		CREATE TABLE users (id INTEGER);
+		ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+	`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	if len(schema.Tables) != 1 {
+		t.Fatalf("Expected 1 table, got %d", len(schema.Tables))
+	}
+
+	table := schema.Tables[0]
+	if !table.RLSEnabled {
+		t.Error("Expected RLS to be enabled, but it was not")
+	}
+}
+
+func TestParseDisableRLS(t *testing.T) {
+	sql := `
+		CREATE TABLE users (id INTEGER);
+		ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+		ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+	`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	if len(schema.Tables) != 1 {
+		t.Fatalf("Expected 1 table, got %d", len(schema.Tables))
+	}
+
+	table := schema.Tables[0]
+	if table.RLSEnabled {
+		t.Error("Expected RLS to be disabled, but it was enabled")
+	}
+}
+
+func TestParseRLSDefaultDisabled(t *testing.T) {
+	sql := `CREATE TABLE users (id INTEGER);`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	table := schema.Tables[0]
+	if table.RLSEnabled {
+		t.Error("Expected RLS to be disabled by default, but it was enabled")
+	}
+}
+
+func TestParseRLSMultipleTables(t *testing.T) {
+	sql := `
+		CREATE TABLE users (id INTEGER);
+		CREATE TABLE posts (id INTEGER);
+		ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+	`
+
+	schema, err := ParseSQLSchemaWithDialect(sql, database.DialectPostgres)
+	if err != nil {
+		t.Fatalf("ParseSQLSchemaWithDialect failed: %v", err)
+	}
+
+	if len(schema.Tables) != 2 {
+		t.Fatalf("Expected 2 tables, got %d", len(schema.Tables))
+	}
+
+	users := schema.Tables[0]
+	if !users.RLSEnabled {
+		t.Error("Expected users table to have RLS enabled")
+	}
+
+	posts := schema.Tables[1]
+	if posts.RLSEnabled {
+		t.Error("Expected posts table to have RLS disabled")
+	}
+}

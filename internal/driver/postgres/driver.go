@@ -103,16 +103,15 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]database.T
 		// }
 		// table.ForeignKeys = foreignKeys
 
-		// // Get RLS status
-		// rlsEnabled, err := i.GetRLSEnabledInSchema(ctx, db, schemaName, tableName)
-		// if err != nil {
-		// 	return nil, fmt.Errorf("failed to get RLS status for table %s.%s: %w", schemaName, tableName, err)
-		// }
-		// table.RLSEnabled = rlsEnabled
+		// Get RLS status
+		rlsEnabled, err := GetRLSEnabled(ctx, db, schemaName, tableName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get RLS status for table %s.%s: %w", schemaName, tableName, err)
+		}
 
 		// // Get RLS policies if RLS is enabled
 		// if rlsEnabled {
-		// 	policies, err := i.GetPoliciesInSchema(ctx, db, schemaName, tableName)
+		// 	policies, err := GetPolicies(ctx, db, schemaName, tableName)
 		// 	if err != nil {
 		// 		return nil, fmt.Errorf("failed to get policies for table %s.%s: %w", schemaName, tableName, err)
 		// 	}
@@ -120,9 +119,10 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]database.T
 		// }
 
 		table := database.Table{
-			Name:    tableName,
-			Schema:  schemaName,
-			Columns: columns,
+			Name:       tableName,
+			Schema:     schemaName,
+			Columns:    columns,
+			RLSEnabled: rlsEnabled,
 		}
 
 		tables = append(tables, table)
@@ -176,8 +176,31 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 		col.Type = strings.TrimSpace(col.Type)
 		col.Nullable = nullable == "YES"
 
+		if defaultVal.Valid {
+			col.Default = &defaultVal.String
+		}
+
 		columns = append(columns, col)
 	}
 
 	return columns, nil
+}
+
+// GetRLSEnabled checks if Row Level Security is enabled for a table
+func GetRLSEnabled(ctx context.Context, db *sql.DB, schemaName string, tableName string) (bool, error) {
+	query := `
+		SELECT relrowsecurity
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = $1
+		  AND c.relname = $2
+	`
+
+	var rlsEnabled bool
+	err := db.QueryRowContext(ctx, query, schemaName, tableName).Scan(&rlsEnabled)
+	if err != nil {
+		return false, fmt.Errorf("failed to query RLS status: %w", err)
+	}
+
+	return rlsEnabled, nil
 }
