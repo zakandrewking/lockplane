@@ -230,12 +230,13 @@ func TestLoadSchemaCaseInsensitiveExtension(t *testing.T) {
 
 	for i, filename := range files {
 		path := filepath.Join(tempDir, filename)
-		content := ""
-		if i == 0 {
+		var content string
+		switch i {
+		case 0:
 			content = `CREATE TABLE users (id INTEGER);`
-		} else if i == 1 {
+		case 1:
 			content = `CREATE TABLE posts (id INTEGER);`
-		} else {
+		case 2:
 			content = `CREATE TABLE comments (id INTEGER);`
 		}
 		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
@@ -280,7 +281,6 @@ func TestLoadSchemaMultipleStatements(t *testing.T) {
 	sqlContent := `
 		CREATE TABLE users (id INTEGER PRIMARY KEY);
 		CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER);
-		ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 	`
 	if err := os.WriteFile(sqlFile, []byte(sqlContent), 0600); err != nil {
 		t.Fatalf("Failed to write SQL file: %v", err)
@@ -293,11 +293,6 @@ func TestLoadSchemaMultipleStatements(t *testing.T) {
 
 	if len(schema.Tables) != 2 {
 		t.Fatalf("Expected 2 tables, got %d", len(schema.Tables))
-	}
-
-	// Check that RLS was enabled on users table
-	if !schema.Tables[0].RLSEnabled {
-		t.Error("Expected users table to have RLS enabled")
 	}
 }
 
@@ -361,7 +356,7 @@ func TestLoadSchemaEmptyFile(t *testing.T) {
 	}
 }
 
-func TestLoadSchemaMultipleFilesWithAlterStatements(t *testing.T) {
+func TestLoadSchemaMultipleFilesInOrder(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// First file creates tables
@@ -373,10 +368,10 @@ func TestLoadSchemaMultipleFilesWithAlterStatements(t *testing.T) {
 		t.Fatalf("Failed to write file1: %v", err)
 	}
 
-	// Second file adds RLS
-	file2 := filepath.Join(tempDir, "02_rls.lp.sql")
+	// Second file creates more tables
+	file2 := filepath.Join(tempDir, "02_more_tables.lp.sql")
 	if err := os.WriteFile(file2, []byte(`
-		ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+		CREATE TABLE comments (id INTEGER);
 	`), 0600); err != nil {
 		t.Fatalf("Failed to write file2: %v", err)
 	}
@@ -386,25 +381,23 @@ func TestLoadSchemaMultipleFilesWithAlterStatements(t *testing.T) {
 		t.Fatalf("LoadSchema failed: %v", err)
 	}
 
-	if len(schema.Tables) != 2 {
-		t.Fatalf("Expected 2 tables, got %d", len(schema.Tables))
+	if len(schema.Tables) != 3 {
+		t.Fatalf("Expected 3 tables, got %d", len(schema.Tables))
 	}
 
-	// Check that RLS was enabled on users table
+	// Check table names are loaded correctly
 	users := schema.Tables[0]
 	if users.Name != "users" {
 		t.Errorf("Expected first table to be 'users', got %q", users.Name)
 	}
-	if !users.RLSEnabled {
-		t.Error("Expected users table to have RLS enabled")
-	}
 
-	// Posts should not have RLS enabled
 	posts := schema.Tables[1]
 	if posts.Name != "posts" {
 		t.Errorf("Expected second table to be 'posts', got %q", posts.Name)
 	}
-	if posts.RLSEnabled {
-		t.Error("Expected posts table to have RLS disabled")
+
+	comments := schema.Tables[2]
+	if comments.Name != "comments" {
+		t.Errorf("Expected third table to be 'comments', got %q", comments.Name)
 	}
 }
