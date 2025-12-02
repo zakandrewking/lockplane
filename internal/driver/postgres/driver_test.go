@@ -877,9 +877,10 @@ func TestGetRLSEnabledIntegrationWithGetTables(t *testing.T) {
 	// Find our test tables
 	var table1, table2 *database.Table
 	for i := range tables {
-		if tables[i].Name == "test_rls_table1" {
+		switch tables[i].Name {
+		case "test_rls_table1":
 			table1 = &tables[i]
-		} else if tables[i].Name == "test_rls_table2" {
+		case "test_rls_table2":
 			table2 = &tables[i]
 		}
 	}
