@@ -204,7 +204,9 @@ var typeMap = map[string]string{
 	"float8": "double precision",
 
 	// Timestamp types
+	"timestamp":   "timestamp without time zone",
 	"timestamptz": "timestamp with time zone",
+	"time":        "time without time zone",
 	"timetz":      "time with time zone",
 
 	// Text (keep as-is, but explicitly map)

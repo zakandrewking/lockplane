@@ -73,7 +73,7 @@ func TestParseTableWithMultipleColumns(t *testing.T) {
 		{"id", "integer"},
 		{"name", "text"},
 		{"price", "numeric"},
-		{"created_at", "timestamp"},
+		{"created_at", "timestamp without time zone"},
 	}
 
 	for i, expected := range expectedColumns {
@@ -234,10 +234,10 @@ func TestParseTimestampTypeNormalization(t *testing.T) {
 		sql          string
 		expectedType string
 	}{
-		{"TIMESTAMP", "CREATE TABLE t (col TIMESTAMP);", "timestamp"},
+		{"TIMESTAMP", "CREATE TABLE t (col TIMESTAMP);", "timestamp without time zone"},
 		{"TIMESTAMPTZ", "CREATE TABLE t (col TIMESTAMPTZ);", "timestamp with time zone"},
 		{"TIMESTAMP_WITH_TIME_ZONE", "CREATE TABLE t (col TIMESTAMP WITH TIME ZONE);", "timestamp with time zone"},
-		{"TIME", "CREATE TABLE t (col TIME);", "time"},
+		{"TIME", "CREATE TABLE t (col TIME);", "time without time zone"},
 		{"TIMETZ", "CREATE TABLE t (col TIMETZ);", "time with time zone"},
 		{"TIME_WITH_TIME_ZONE", "CREATE TABLE t (col TIME WITH TIME ZONE);", "time with time zone"},
 	}
