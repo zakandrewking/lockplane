@@ -2,6 +2,8 @@ package wizard
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -82,12 +84,12 @@ func TestWizardModel_View(t *testing.T) {
 		{
 			name:     "success state shows result",
 			model:    wizardModel{state: StateCreateSucceeded},
-			contains: "File created",
+			contains: "Created lockplane.toml and schema/ directory",
 		},
 		{
 			name:     "failed state shows error",
 			model:    wizardModel{state: StateCreateFailed, finalErr: fmt.Errorf("file already exists")},
-			contains: "Could not create",
+			contains: "Could not initialize",
 		},
 	}
 
@@ -117,4 +119,154 @@ func containsMiddle(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Integration tests for edge cases
+func TestWriteDefaultInit_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name              string
+		setupFunc         func(dir string) error
+		force             bool
+		expectError       bool
+		expectConfigFile  bool
+		expectSchemaDir   bool
+		expectExampleFile bool
+		description       string
+	}{
+		{
+			name: "lockplane.toml exists, schema/ does not",
+			setupFunc: func(dir string) error {
+				// Create lockplane.toml
+				return os.WriteFile(filepath.Join(dir, "lockplane.toml"), []byte("existing"), 0600)
+			},
+			force:             false,
+			expectError:       true,
+			expectConfigFile:  true,
+			expectSchemaDir:   false,
+			expectExampleFile: false,
+			description:       "should error when config exists and force=false",
+		},
+		{
+			name: "lockplane.toml does not exist, schema/ empty",
+			setupFunc: func(dir string) error {
+				// Create empty schema directory
+				return os.Mkdir(filepath.Join(dir, "schema"), 0755)
+			},
+			force:             false,
+			expectError:       false,
+			expectConfigFile:  true,
+			expectSchemaDir:   true,
+			expectExampleFile: true,
+			description:       "should create config and example file in existing empty schema dir",
+		},
+		{
+			name: "lockplane.toml exists, schema/ exists and is empty",
+			setupFunc: func(dir string) error {
+				// Create lockplane.toml and empty schema directory
+				if err := os.WriteFile(filepath.Join(dir, "lockplane.toml"), []byte("existing"), 0600); err != nil {
+					return err
+				}
+				return os.Mkdir(filepath.Join(dir, "schema"), 0755)
+			},
+			force:             true,
+			expectError:       false,
+			expectConfigFile:  true,
+			expectSchemaDir:   true,
+			expectExampleFile: true,
+			description:       "should overwrite config with force=true and add example to empty schema",
+		},
+		{
+			name: "schema/ exists and is not empty",
+			setupFunc: func(dir string) error {
+				// Create schema directory with a file
+				schemaDir := filepath.Join(dir, "schema")
+				if err := os.Mkdir(schemaDir, 0755); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(schemaDir, "001_existing.sql"), []byte("SELECT 1;"), 0644)
+			},
+			force:             false,
+			expectError:       false,
+			expectConfigFile:  true,
+			expectSchemaDir:   true,
+			expectExampleFile: false,
+			description:       "should not create example file when schema dir has files",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary directory
+			tmpDir := t.TempDir()
+
+			// Change to temp directory
+			originalDir, err := os.Getwd()
+			if err != nil {
+				t.Fatalf("failed to get working directory: %v", err)
+			}
+			defer func() {
+				if err := os.Chdir(originalDir); err != nil {
+					t.Errorf("failed to restore working directory: %v", err)
+				}
+			}()
+
+			if err := os.Chdir(tmpDir); err != nil {
+				t.Fatalf("failed to change to temp directory: %v", err)
+			}
+
+			// Setup test scenario
+			if tt.setupFunc != nil {
+				if err := tt.setupFunc(tmpDir); err != nil {
+					t.Fatalf("setup failed: %v", err)
+				}
+			}
+
+			// Execute the command
+			cmd := writeDefaultInit(tt.force)
+			msg := cmd()
+
+			// Check for errors
+			resultMsg, ok := msg.(fileCreationResultMsg)
+			if !ok {
+				t.Fatal("expected fileCreationResultMsg")
+			}
+
+			if tt.expectError && resultMsg.err == nil {
+				t.Error("expected error but got none")
+			}
+			if !tt.expectError && resultMsg.err != nil {
+				t.Errorf("unexpected error: %v", resultMsg.err)
+			}
+
+			// Verify lockplane.toml
+			configPath := filepath.Join(tmpDir, "lockplane.toml")
+			_, err = os.Stat(configPath)
+			configExists := err == nil
+
+			if tt.expectConfigFile && !configExists {
+				t.Error("expected lockplane.toml to exist")
+			}
+
+			// Verify schema directory
+			schemaPath := filepath.Join(tmpDir, "schema")
+			_, err = os.Stat(schemaPath)
+			schemaExists := err == nil
+
+			if tt.expectSchemaDir && !schemaExists {
+				t.Error("expected schema/ directory to exist")
+			}
+
+			// Verify example.lp.sql
+			examplePath := filepath.Join(tmpDir, "schema", "example.lp.sql")
+			_, err = os.Stat(examplePath)
+			exampleExists := err == nil
+
+			if tt.expectExampleFile && !exampleExists {
+				t.Error("expected schema/example.lp.sql to exist")
+			}
+			if !tt.expectExampleFile && exampleExists {
+				t.Error("expected schema/example.lp.sql to NOT exist")
+			}
+		})
+	}
 }

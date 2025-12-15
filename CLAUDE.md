@@ -1,6 +1,9 @@
 # Instructions
 
 - [ ] Always implement and run tests for new code
+- [ ] Run tests: e.g. `go test -v ./...`
+- [ ] Verify tests pass
+- [ ] run `go fmt` and `go vet` and `errcheck` and `staticcheck` to verify valid changes
 - [ ] Always create changes in a new branch and push a pull request using the
   GitHub CLI (`gh pr create`) when ready for review (unless already working on a
   branch).

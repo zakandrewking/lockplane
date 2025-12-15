@@ -2,6 +2,9 @@
 
 Easy postgres schema management.
 
+[![Test](https://github.com/lockplane/lockplane/actions/workflows/test.yml/badge.svg)](https://github.com/lockplane/lockplane/actions/workflows/test.yml)
+[![codecov](https://codecov.io/github/lockplane/lockplane/graph/badge.svg?token=JP0QINP1G1)](https://codecov.io/github/lockplane/lockplane)
+
 ## 1. Install
 
 ```bash
