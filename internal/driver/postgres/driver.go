@@ -141,6 +141,7 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 		SELECT
 			c.column_name,
 			c.data_type,
+			c.udt_name,
 			c.is_nullable,
 			c.column_default,
 			COALESCE(
@@ -172,8 +173,9 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 		var col database.Column
 		var nullable string
 		var defaultVal sql.NullString
+		var udtName string
 
-		if err := rows.Scan(&col.Name, &col.Type, &nullable, &defaultVal, &col.IsPrimaryKey); err != nil {
+		if err := rows.Scan(&col.Name, &col.Type, &udtName, &nullable, &defaultVal, &col.IsPrimaryKey); err != nil {
 			return nil, err
 		}
 
@@ -184,10 +186,39 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 			col.Default = &defaultVal.String
 		}
 
+		// Handle ARRAY types - udt_name has the element type with _ prefix (e.g., "_int4" for integer[])
+		if col.Type == "ARRAY" && strings.HasPrefix(udtName, "_") {
+			elementType := normalizeArrayElementType(udtName[1:]) // Remove _ prefix
+			col.Type = elementType + "[]"
+		}
+
 		columns = append(columns, col)
 	}
 
 	return columns, nil
+}
+
+// normalizeArrayElementType converts PostgreSQL internal array element type names to standard names
+func normalizeArrayElementType(pgType string) string {
+	// Map PostgreSQL internal UDT names to standard SQL types
+	typeMap := map[string]string{
+		"int2":    "smallint",
+		"int4":    "integer",
+		"int8":    "bigint",
+		"bool":    "boolean",
+		"float4":  "real",
+		"float8":  "double precision",
+		"varchar": "character varying",
+		"bpchar":  "character",
+		"numeric": "numeric",
+	}
+
+	if normalized, ok := typeMap[pgType]; ok {
+		return normalized
+	}
+
+	// For types not in the map, return as-is (text, uuid, jsonb, etc.)
+	return pgType
 }
 
 // GetRLSEnabled checks if Row Level Security is enabled for a table

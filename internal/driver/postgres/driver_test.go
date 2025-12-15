@@ -566,9 +566,9 @@ func TestIntrospector_ArrayTypes(t *testing.T) {
 		sqlType      string
 		expectedType string
 	}{
-		{"INTEGER_ARRAY", "INTEGER[]", "ARRAY"},
-		{"TEXT_ARRAY", "TEXT[]", "ARRAY"},
-		{"VARCHAR_ARRAY", "VARCHAR(50)[]", "ARRAY"},
+		{"INTEGER_ARRAY", "INTEGER[]", "integer[]"},
+		{"TEXT_ARRAY", "TEXT[]", "text[]"},
+		{"VARCHAR_ARRAY", "VARCHAR(50)[]", "character varying[]"},
 	}
 
 	for _, tt := range tests {
@@ -762,8 +762,8 @@ func TestIntrospector_ComplexRealWorldTable(t *testing.T) {
 	if tags == nil {
 		t.Fatal("Expected to find 'tags' column")
 	}
-	if tags.Type != "ARRAY" {
-		t.Errorf("Expected tags type 'ARRAY', got %q", tags.Type)
+	if tags.Type != "text[]" {
+		t.Errorf("Expected tags type 'text[]', got %q", tags.Type)
 	}
 
 	// Verify metadata column (JSONB)

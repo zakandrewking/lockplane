@@ -53,11 +53,24 @@ npx lockplane apply
 
 ## Postgres Feature Support
 
-Feature | SQL Parsing | DB Introspection
--- | -- | --
-CREATE TABLE | ✅ | ✅
-Column types: SMALLINT, INTEGER, BIGINT, SMALLSERIAL, SERIAL, BIGSERIAL TIMESTAMP, VARCHAR, CHAR, REAL, DOUBLE PRECISION, TIMESTAMP [WITH TIME ZONE], TIME [WITH TIME ZONE], TEXT, NUMERIC, DECIMAL, BYTEA, JSON, JSONB | ✅ | ✅
-ENABLE/DISABLE ROW LEVEL SECURITY | ✅ | ✅
+Feature | SQL Parsing | DB Introspection | SQL Generation
+-- | -- | -- | --
+CREATE TABLE | ✅ | ✅ | ✅
+DROP TABLE | ✅ | ✅ | ✅
+Integer types (SMALLINT, INT, INTEGER, BIGINT) | ✅ | ✅ | ✅
+Serial types (SMALLSERIAL, SERIAL, BIGSERIAL) | ✅ | ❌ | ✅
+Floating point types (REAL, DOUBLE PRECISION) | ✅ | ✅ | ✅
+Character types (TEXT, VARCHAR, CHAR) | ✅ | ✅ | ✅
+Timestamp types (TIMESTAMP, TIMESTAMPTZ, TIME, TIMETZ) | ✅ | ✅ | ✅
+Numeric types (NUMERIC, DECIMAL) | ✅ | ✅ | ✅
+Boolean type (BOOLEAN) | ✅ | ✅ | ✅
+Special types (UUID, JSON, JSONB, BYTEA) | ✅ | ✅ | ✅
+Array types | ✅ | ✅ | ✅
+NOT NULL constraint | ✅ | ✅ | ✅
+DEFAULT values | ✅ | ✅ | ✅
+PRIMARY KEY constraint | ✅ | ✅ | ✅
+ENABLE/DISABLE ROW LEVEL SECURITY | ✅ | ✅ | ✅
+
 ## TODO: ALTER COLUMN Migration Patterns
 
 PostgreSQL has several scenarios where `ALTER COLUMN` requires special handling beyond a simple type change. Understanding these cases is critical for safe migrations.
