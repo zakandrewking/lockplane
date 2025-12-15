@@ -53,11 +53,66 @@ npx lockplane apply
 
 ## Postgres Feature Support
 
-Feature | SQL Parsing | DB Introspection
--- | -- | --
-CREATE TABLE | ✅ | ✅
-Column types: SMALLINT, INTEGER, BIGINT, SMALLSERIAL, SERIAL, BIGSERIAL TIMESTAMP, VARCHAR, CHAR, REAL, DOUBLE PRECISION, TIMESTAMP [WITH TIME ZONE], TIME [WITH TIME ZONE], TEXT, NUMERIC, DECIMAL, BYTEA, JSON, JSONB | ✅ | ✅
-ENABLE/DISABLE ROW LEVEL SECURITY | ✅ | ✅
+### DDL Operations
+
+Feature | SQL Parsing | DB Introspection | SQL Generation
+-- | -- | -- | --
+CREATE TABLE | ✅ | ✅ | ✅
+DROP TABLE | ✅ | ✅ | ✅
+ALTER TABLE | ❌ | N/A | ❌
+ENABLE/DISABLE ROW LEVEL SECURITY | ✅ | ✅ | ✅
+
+### Constraints
+
+Feature | SQL Parsing | DB Introspection | SQL Generation
+-- | -- | -- | --
+NOT NULL | ✅ | ✅ | ✅
+PRIMARY KEY | ✅ | ✅ | ✅
+UNIQUE | ❌ | ❌ | ❌
+FOREIGN KEY | ❌ | ❌ | ❌
+CHECK | ❌ | ❌ | ❌
+DEFAULT | ✅ | ✅ | ✅
+
+### Data Types
+
+Feature | SQL Parsing | DB Introspection | SQL Generation
+-- | -- | -- | --
+**Numeric** |
+Integer types (SMALLINT, INTEGER, BIGINT) | ✅ | ✅ | ✅
+Serial types (SMALLSERIAL, SERIAL, BIGSERIAL) | ✅ | ❌ | ✅
+Floating point (REAL, DOUBLE PRECISION) | ✅ | ✅ | ✅
+Numeric/Decimal (NUMERIC, DECIMAL) | ✅ | ✅ | ✅
+Money (MONEY) | ❌ | ❌ | ❌
+**Character** |
+Text types (TEXT, VARCHAR, CHAR) | ✅ | ✅ | ✅
+**Date/Time** |
+Date (DATE) | ✅ | ✅ | ✅
+Time (TIME, TIMETZ) | ✅ | ✅ | ✅
+Timestamp (TIMESTAMP, TIMESTAMPTZ) | ✅ | ✅ | ✅
+Interval (INTERVAL) | ❌ | ❌ | ❌
+**Boolean** |
+Boolean (BOOLEAN) | ✅ | ✅ | ✅
+**UUID** |
+UUID (UUID) | ✅ | ✅ | ✅
+**JSON** |
+JSON (JSON, JSONB) | ✅ | ✅ | ✅
+JSONPath (JSONPATH) | ❌ | ❌ | ❌
+**Binary** |
+Binary Data (BYTEA) | ✅ | ✅ | ✅
+**XML** |
+XML (XML) | ❌ | ❌ | ❌
+**Arrays** |
+Array types (INT[], TEXT[], etc.) | ✅ | ❌ | ✅
+**Geometric** |
+Point, Line, Box, Path, Polygon, Circle | ❌ | ❌ | ❌
+**Network** |
+INET, CIDR, MACADDR, MACADDR8 | ❌ | ❌ | ❌
+**Bit Strings** |
+BIT, VARBIT | ❌ | ❌ | ❌
+**Text Search** |
+TSVECTOR, TSQUERY | ❌ | ❌ | ❌
+**Other** |
+PG_LSN, PG_SNAPSHOT | ❌ | ❌ | ❌
 ## TODO: ALTER COLUMN Migration Patterns
 
 PostgreSQL has several scenarios where `ALTER COLUMN` requires special handling beyond a simple type change. Understanding these cases is critical for safe migrations.
