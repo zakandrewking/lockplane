@@ -20,16 +20,22 @@ type wizardModel struct {
 	state    WizardState
 	finalErr error
 	force    bool
+	yes      bool
 }
 
-func initialModel(force bool) wizardModel {
+func initialModel(force bool, yes bool) wizardModel {
 	return wizardModel{
 		state: StateStart,
 		force: force,
+		yes:   yes,
 	}
 }
 
 func (m wizardModel) Init() tea.Cmd {
+	// If --yes flag is set, auto-execute immediately
+	if m.yes {
+		return writeDefaultInit(m.force)
+	}
 	return nil
 }
 
@@ -141,8 +147,26 @@ func (m wizardModel) View() string {
 	}
 }
 
-func Run(force bool) error {
-	p := tea.NewProgram(initialModel(force))
+func Run(force bool, yes bool) error {
+	// If --yes flag is set, bypass the TUI and execute immediately
+	if yes {
+		msg := writeDefaultInit(force)()
+		resultMsg, ok := msg.(fileCreationResultMsg)
+		if !ok {
+			return fmt.Errorf("unexpected message type")
+		}
+		if resultMsg.err != nil {
+			return resultMsg.err
+		}
+		res, err := getResult(wizardModel{state: StateCreateSucceeded})
+		if res != "" {
+			_, _ = fmt.Println(res)
+		}
+		return err
+	}
+
+	// Otherwise, run the interactive TUI
+	p := tea.NewProgram(initialModel(force, yes))
 	m, err := p.Run()
 	if err != nil {
 		return err

@@ -18,11 +18,13 @@ var initCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(initCmd)
 	initCmd.Flags().Bool("force", false, "Overwrite existing lockplane.toml file")
+	initCmd.Flags().Bool("yes", false, "Skip interactive prompt and proceed immediately")
 }
 
 func runInit(cmd *cobra.Command, args []string) {
 	force, _ := cmd.Flags().GetBool("force")
-	if err := wizard.Run(force); err != nil {
+	yes, _ := cmd.Flags().GetBool("yes")
+	if err := wizard.Run(force, yes); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
