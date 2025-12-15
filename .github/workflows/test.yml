@@ -24,7 +24,7 @@ jobs:
         run: go mod download
 
       - name: Run unit tests
-        run: go test -v -race -short -coverprofile=coverage-unit.txt -covermode=atomic ./...
+        run: go test -v -race -short -coverpkg=./... -coverprofile=coverage-unit.txt -covermode=atomic ./...
 
       - name: Upload unit coverage artifact
         uses: actions/upload-artifact@v4
@@ -86,7 +86,7 @@ jobs:
         env:
           POSTGRES_URL: "postgres://lockplane:lockplane@localhost:5432/lockplane"
         run: |
-          go test -v -race -coverprofile=coverage-postgres.txt -covermode=atomic ./internal/driver/postgres
+          go test -v -race -coverpkg=./... -coverprofile=coverage-postgres.txt -covermode=atomic ./internal/driver/postgres
 
       - name: Upload postgres coverage artifact
         uses: actions/upload-artifact@v4
