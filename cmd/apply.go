@@ -32,10 +32,7 @@ func runApply(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	if cfg.ConfigFilePath == "" {
-		fmt.Println(`lockplane.toml not found. Create one that looks like:
-
-[environments.local]
-postgres_url = "postgresql://postgres:postgres@localhost:5432/postgres"`)
+		printConfigNotFound()
 		return
 	}
 
