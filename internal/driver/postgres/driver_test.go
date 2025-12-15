@@ -241,12 +241,12 @@ func TestIntrospector_SerialTypes(t *testing.T) {
 		sqlType      string
 		expectedType string
 	}{
-		{"SMALLSERIAL", "SMALLSERIAL", "smallint"},
-		{"SERIAL", "SERIAL", "integer"},
-		{"BIGSERIAL", "BIGSERIAL", "bigint"},
-		{"SERIAL2", "SERIAL2", "smallint"},
-		{"SERIAL4", "SERIAL4", "integer"},
-		{"SERIAL8", "SERIAL8", "bigint"},
+		{"SMALLSERIAL", "SMALLSERIAL", "smallserial"},
+		{"SERIAL", "SERIAL", "serial"},
+		{"BIGSERIAL", "BIGSERIAL", "bigserial"},
+		{"SERIAL2", "SERIAL2", "smallserial"},
+		{"SERIAL4", "SERIAL4", "serial"},
+		{"SERIAL8", "SERIAL8", "bigserial"},
 	}
 
 	for _, tt := range tests {
@@ -277,10 +277,60 @@ func TestIntrospector_SerialTypes(t *testing.T) {
 			if col.Nullable {
 				t.Error("Expected SERIAL column to be NOT NULL")
 			}
-			if col.Default == nil {
-				t.Error("Expected SERIAL column to have default value")
+			// SERIAL type implies nextval(), so default should be nil
+			if col.Default != nil {
+				t.Errorf("Expected SERIAL column to have no explicit default (type implies sequence), got %v", col.Default)
 			}
 		})
+	}
+}
+
+// TestIntrospector_ManualSequence tests that columns with manual sequences (not owned by the column)
+// are NOT detected as SERIAL types. This validates the stricter SERIAL detection.
+func TestIntrospector_ManualSequence(t *testing.T) {
+	db, _ := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tableName := "test_manual_seq"
+
+	// Create a manual sequence (not owned by any column)
+	_, err := db.ExecContext(ctx, "CREATE SEQUENCE manual_seq")
+	if err != nil {
+		t.Fatalf("Failed to create sequence: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, "DROP SEQUENCE IF EXISTS manual_seq") }()
+
+	// Create table with a column using the manual sequence
+	// This should NOT be detected as SERIAL because the sequence is not owned by the column
+	_, err = db.ExecContext(ctx, "CREATE TABLE "+tableName+" (id INTEGER NOT NULL DEFAULT nextval('manual_seq'::regclass))")
+	if err != nil {
+		t.Fatalf("Failed to create table: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName) }()
+
+	// Introspect
+	columns, err := GetColumns(ctx, db, defaultSchema, tableName)
+	if err != nil {
+		t.Fatalf("GetColumns failed: %v", err)
+	}
+
+	if len(columns) != 1 {
+		t.Fatalf("Expected 1 column, got %d", len(columns))
+	}
+
+	col := columns[0]
+
+	// Should remain as 'integer', NOT 'serial'
+	if col.Type != "integer" {
+		t.Errorf("Expected type 'integer' for manual sequence, got %q", col.Type)
+	}
+
+	// Should have the default value preserved (not nil)
+	if col.Default == nil {
+		t.Error("Expected default value to be preserved for manual sequence")
+	} else if !strings.Contains(*col.Default, "nextval") {
+		t.Errorf("Expected default to contain 'nextval', got %q", *col.Default)
 	}
 }
 
@@ -735,8 +785,8 @@ func TestIntrospector_ComplexRealWorldTable(t *testing.T) {
 	if id == nil {
 		t.Fatal("Expected to find 'id' column")
 	}
-	if id.Type != "integer" {
-		t.Errorf("Expected id type 'integer', got %q", id.Type)
+	if id.Type != "serial" {
+		t.Errorf("Expected id type 'serial', got %q", id.Type)
 	}
 	if !id.IsPrimaryKey {
 		t.Error("Expected id to be PRIMARY KEY")

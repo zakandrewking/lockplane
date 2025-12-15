@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -184,10 +185,81 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 			col.Default = &defaultVal.String
 		}
 
+		// Detect SERIAL types by checking if the column has an owned sequence
+		// SERIAL creates an integer column with default nextval('table_column_seq'::regclass)
+		// and the sequence is owned by the column
+		if defaultVal.Valid && !col.Nullable && isSerialColumn(ctx, db, schemaName, tableName, col.Name, col.Type, defaultVal.String) {
+			switch col.Type {
+			case "smallint":
+				col.Type = "smallserial"
+				col.Default = nil // SERIAL type implies the sequence, don't include default
+			case "integer":
+				col.Type = "serial"
+				col.Default = nil
+			case "bigint":
+				col.Type = "bigserial"
+				col.Default = nil
+			}
+		}
+
 		columns = append(columns, col)
 	}
 
 	return columns, nil
+}
+
+// isSerialColumn checks if a column with a nextval default is actually a SERIAL column
+// by verifying that the sequence is owned by the column.
+// This is stricter than just checking for "nextval" in the default value.
+func isSerialColumn(ctx context.Context, db *sql.DB, schemaName, tableName, columnName, columnType, defaultVal string) bool {
+	// Only check integer types
+	if columnType != "smallint" && columnType != "integer" && columnType != "bigint" {
+		return false
+	}
+
+	// Extract sequence name from default value using regex
+	// Expected pattern: nextval('sequence_name'::regclass) or nextval('"schema"."sequence_name"'::regclass)
+	re := regexp.MustCompile(`nextval\('([^']+)'::regclass\)`)
+	matches := re.FindStringSubmatch(defaultVal)
+	if len(matches) < 2 {
+		return false
+	}
+
+	sequenceName := matches[1]
+
+	// Strip schema qualifier if present (e.g., "public"."users_id_seq" -> users_id_seq)
+	// Handle both quoted and unquoted identifiers
+	if strings.Contains(sequenceName, ".") {
+		parts := strings.Split(sequenceName, ".")
+		sequenceName = parts[len(parts)-1]
+	}
+	// Remove quotes if present
+	sequenceName = strings.Trim(sequenceName, "\"")
+
+	// Query PostgreSQL system catalogs to verify the sequence is owned by this column
+	// This joins pg_class (for sequence), pg_depend (for ownership), and pg_attribute (for column)
+	query := `
+		SELECT a.attname
+		FROM pg_class s
+		JOIN pg_depend d ON d.objid = s.oid AND d.classid = 'pg_class'::regclass
+		JOIN pg_class t ON t.oid = d.refobjid
+		JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+		JOIN pg_namespace n ON n.oid = t.relnamespace
+		WHERE s.relkind = 'S'
+		  AND n.nspname = $1
+		  AND t.relname = $2
+		  AND s.relname = $3
+	`
+
+	var ownerColumn string
+	err := db.QueryRowContext(ctx, query, schemaName, tableName, sequenceName).Scan(&ownerColumn)
+	if err != nil {
+		// If we can't find the sequence ownership, it's not a SERIAL column
+		return false
+	}
+
+	// Check if the sequence is owned by this specific column
+	return ownerColumn == columnName
 }
 
 // GetRLSEnabled checks if Row Level Security is enabled for a table

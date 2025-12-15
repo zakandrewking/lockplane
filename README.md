@@ -79,7 +79,7 @@ Feature | SQL Parsing | DB Introspection | SQL Generation
 -- | -- | -- | --
 **Numeric** |
 Integer types (SMALLINT, INTEGER, BIGINT) | ✅ | ✅ | ✅
-Serial types (SMALLSERIAL, SERIAL, BIGSERIAL) | ✅ | ❌ | ✅
+Serial types (SMALLSERIAL, SERIAL, BIGSERIAL) | ✅ | ✅ | ✅
 Floating point (REAL, DOUBLE PRECISION) | ✅ | ✅ | ✅
 Numeric/Decimal (NUMERIC, DECIMAL) | ✅ | ✅ | ✅
 Money (MONEY) | ❌ | ❌ | ❌
@@ -120,6 +120,8 @@ PostgreSQL has several scenarios where `ALTER COLUMN` requires special handling 
 ### 1. SERIAL/BIGSERIAL/SMALLSERIAL (Pseudo-Types)
 
 **Problem:** `SERIAL` types only work in `CREATE TABLE`. They're shorthand for creating an integer column with a sequence.
+
+**Note:** Lockplane now properly introspects SERIAL columns by verifying sequence ownership through PostgreSQL system catalogs. This ensures your schema files accurately represent SERIAL columns (e.g., `id serial PRIMARY KEY` instead of `id integer NOT NULL DEFAULT nextval(...)`), preventing unnecessary migrations for columns that are already SERIAL.
 
 ❌ **Invalid:**
 ```sql
