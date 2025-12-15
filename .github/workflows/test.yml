@@ -85,7 +85,12 @@ jobs:
       - name: Run PostgreSQL integration tests
         env:
           POSTGRES_URL: "postgres://lockplane:lockplane@localhost:5432/lockplane"
+          GOCOVERDIR: "/tmp/gocoverdir"
         run: |
+          # Create directory for subprocess coverage data
+          mkdir -p /tmp/gocoverdir
+
+          # Run tests with GOCOVERDIR to capture subprocess coverage
           go test -v -race -coverpkg=./... -coverprofile=coverage-postgres.txt -covermode=atomic ./cmd/... ./internal/driver/postgres/...
 
       - name: Upload postgres coverage artifact

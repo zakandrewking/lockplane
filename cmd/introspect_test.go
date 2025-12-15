@@ -87,7 +87,14 @@ postgres_url = "` + dbUrl + `"
 	}
 
 	// Run introspect command in subprocess
-	cmd := exec.Command(os.Args[0], "-test.run=TestRunIntrospect_Success")
+	args := []string{"-test.run=TestRunIntrospect_Success"}
+
+	// Pass coverage directory to subprocess if set
+	if coverDir := os.Getenv("GOCOVERDIR"); coverDir != "" {
+		args = append(args, "-test.gocoverdir="+coverDir)
+	}
+
+	cmd := exec.Command(os.Args[0], args...)
 	cmd.Env = append(os.Environ(), "TEST_RUN_INTROSPECT_SUCCESS=1", "TEST_TMPDIR="+tmpDir)
 
 	output, err := cmd.CombinedOutput()
