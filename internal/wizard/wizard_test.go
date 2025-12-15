@@ -71,35 +71,29 @@ func TestWizardModel_Update(t *testing.T) {
 func TestWizardModel_View(t *testing.T) {
 	tests := []struct {
 		name     string
-		state    WizardState
+		model    wizardModel
 		contains string
 	}{
 		{
 			name:     "start state shows prompt",
-			state:    StateStart,
+			model:    wizardModel{state: StateStart},
 			contains: "Press Enter",
 		},
 		{
-			name:     "creating state shows loading",
-			state:    StateCreating,
-			contains: "Creating file",
-		},
-		{
 			name:     "success state shows result",
-			state:    StateCreateSucceeded,
+			model:    wizardModel{state: StateCreateSucceeded},
 			contains: "File created",
 		},
 		{
 			name:     "failed state shows error",
-			state:    StateCreateFailed,
+			model:    wizardModel{state: StateCreateFailed, finalErr: fmt.Errorf("file already exists")},
 			contains: "Could not create",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := wizardModel{state: tt.state}
-			view := m.View()
+			view := tt.model.View()
 
 			if view == "" {
 				t.Error("expected non-empty view")

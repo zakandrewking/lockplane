@@ -12,13 +12,13 @@ type WizardState int
 
 const (
 	StateStart WizardState = iota
-	StateCreating
 	StateCreateSucceeded
 	StateCreateFailed
 )
 
 type wizardModel struct {
-	state WizardState
+	state    WizardState
+	finalErr error
 }
 
 func initialModel() wizardModel {
@@ -66,6 +66,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = StateCreateSucceeded
 		default:
 			m.state = StateCreateFailed
+			m.finalErr = msg.err
 		}
 		return m, tea.Quit
 	}
@@ -82,14 +83,14 @@ func (m wizardModel) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 // render
-func getResult(m wizardModel) string {
+func getResult(m wizardModel) (string, error) {
 	switch m.state {
 	case StateCreateFailed:
-		return "Could not create the file"
+		return "Could not create the file", m.finalErr
 	case StateCreateSucceeded:
-		return "File created"
+		return "File created", nil
 	default:
-		return ""
+		return "", nil
 	}
 }
 
@@ -97,10 +98,9 @@ func (m wizardModel) View() string {
 	switch m.state {
 	case StateStart:
 		return "Press Enter to create a lockplane.toml in this directory."
-	case StateCreating:
-		return "⏳ Creating file lockplane.toml"
 	default:
-		return getResult(m)
+		res, _ := getResult(m)
+		return res
 	}
 }
 
@@ -111,12 +111,11 @@ func Run() error {
 		return err
 	}
 	if wm, ok := m.(wizardModel); ok {
-		res := getResult((wm))
+		res, err := getResult(wm)
 		if res != "" {
-			_, err = fmt.Println(getResult(wm))
-			return err
+			_, _ = fmt.Println(res)
 		}
-		return nil
+		return err
 	} else {
 		return fmt.Errorf("unexpected model type")
 	}
