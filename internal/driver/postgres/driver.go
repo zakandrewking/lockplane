@@ -280,6 +280,11 @@ func GetRLSEnabled(ctx context.Context, db *sql.DB, schemaName string, tableName
 	var rlsEnabled bool
 	err := db.QueryRowContext(ctx, query, schemaName, tableName).Scan(&rlsEnabled)
 	if err != nil {
+		// If table doesn't exist in pg_class, return false (no RLS)
+		// This can happen in timing/race conditions
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
 		return false, fmt.Errorf("failed to query RLS status: %w", err)
 	}
 

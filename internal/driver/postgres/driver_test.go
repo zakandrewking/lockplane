@@ -1123,6 +1123,15 @@ func TestGetRLSEnabled(t *testing.T) {
 	if rlsEnabled {
 		t.Error("Expected RLS to be disabled, but it was enabled")
 	}
+
+	// Test querying RLS for non-existent table (should return false, nil)
+	rlsEnabled, err = GetRLSEnabled(ctx, db, defaultSchema, "nonexistent_table_xyz")
+	if err != nil {
+		t.Fatalf("GetRLSEnabled should handle non-existent tables gracefully, got error: %v", err)
+	}
+	if rlsEnabled {
+		t.Error("Expected non-existent table to have RLS disabled (false), but got true")
+	}
 }
 
 func TestGetRLSEnabledIntegrationWithGetTables(t *testing.T) {
