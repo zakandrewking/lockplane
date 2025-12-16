@@ -4,6 +4,12 @@
 
 **Always create a Pull Request** for any code changes, even small fixes.
 
+## Repository Setup Note
+
+This repository is **NOT a fork**. We work directly on branches in `origin` (lockplane/lockplane).
+- Branches are created in the main repository, not in a personal fork
+- PRs are created from `branch-name` → `main` within the same repository
+
 ## Checklist for Every Change
 
 ### 1. Create a Branch
