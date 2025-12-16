@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -100,11 +101,11 @@ func runApply(cmd *cobra.Command, args []string) {
 		os.Exit(0)
 	}
 
-	// diffJsonBytes, err := json.MarshalIndent(diff, "", "  ")
-	// if err != nil {
-	// 	log.Fatalf("Failed to marshal schema to JSON: %v", err)
-	// }
-	// fmt.Println(string(diffJsonBytes))
+	diffJsonBytes, err := json.MarshalIndent(diff, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to marshal schema to JSON: %v", err)
+	}
+	fmt.Println(string(diffJsonBytes))
 	fmt.Printf("Found %v added tables, %v modified tables, %v removed tables\n", len(diff.AddedTables), len(diff.ModifiedTables), len(diff.RemovedTables))
 
 	// generate sql

@@ -26,6 +26,18 @@ func (g *Generator) GenerateMigration(diff *schema.SchemaDiff) string {
 		}
 	}
 	for _, tableDiff := range diff.ModifiedTables {
+		// Handle added columns
+		for _, col := range tableDiff.AddedColumns {
+			migration += g.AddColumn(tableDiff.TableName, col) + "\n\n"
+		}
+		// Handle removed columns
+		for _, col := range tableDiff.RemovedColumns {
+			migration += g.DropColumn(tableDiff.TableName, col) + "\n\n"
+		}
+		// Handle modified columns
+		for _, columnDiff := range tableDiff.ModifiedColumns {
+			migration += g.ModifyColumn(tableDiff.TableName, columnDiff) + "\n\n"
+		}
 		// Handle RLS changes
 		if tableDiff.RLSChanged {
 			if tableDiff.RLSEnabled {
@@ -33,10 +45,6 @@ func (g *Generator) GenerateMigration(diff *schema.SchemaDiff) string {
 			} else {
 				migration += fmt.Sprintf("ALTER TABLE %s DISABLE ROW LEVEL SECURITY;\n\n", tableDiff.TableName)
 			}
-		}
-		// Handle column changes
-		for _, columnDiff := range tableDiff.ModifiedColumns {
-			migration += g.ModifyColumn(tableDiff.TableName, columnDiff) + "\n\n"
 		}
 	}
 	for _, table := range diff.RemovedTables {

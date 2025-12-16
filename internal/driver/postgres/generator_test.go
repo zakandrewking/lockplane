@@ -666,3 +666,74 @@ func TestGenerator_GenerateMigration_MultipleTablesWithRLS(t *testing.T) {
 		t.Error("Expected DISABLE RLS for posts table")
 	}
 }
+
+func TestGenerator_GenerateMigration_AddColumns(t *testing.T) {
+	gen := NewGenerator()
+
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName: "users",
+				AddedColumns: []database.Column{
+					{Name: "other_id", Type: "integer", Nullable: true, IsPrimaryKey: false},
+				},
+			},
+		},
+	}
+
+	sql := gen.GenerateMigration(diff)
+	expected := "ALTER TABLE users ADD COLUMN other_id integer;"
+
+	if sql != expected {
+		t.Errorf("Expected:\n%s\n\nGot:\n%s", expected, sql)
+	}
+}
+
+func TestGenerator_GenerateMigration_RemoveColumns(t *testing.T) {
+	gen := NewGenerator()
+
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName: "users",
+				RemovedColumns: []database.Column{
+					{Name: "deprecated_field", Type: "text"},
+				},
+			},
+		},
+	}
+
+	sql := gen.GenerateMigration(diff)
+	expected := "ALTER TABLE users DROP COLUMN deprecated_field;"
+
+	if sql != expected {
+		t.Errorf("Expected:\n%s\n\nGot:\n%s", expected, sql)
+	}
+}
+
+func TestGenerator_GenerateMigration_AddAndRemoveColumns(t *testing.T) {
+	gen := NewGenerator()
+
+	diff := &schema.SchemaDiff{
+		ModifiedTables: []schema.TableDiff{
+			{
+				TableName: "users",
+				AddedColumns: []database.Column{
+					{Name: "new_field", Type: "text", Nullable: false},
+				},
+				RemovedColumns: []database.Column{
+					{Name: "old_field", Type: "integer"},
+				},
+			},
+		},
+	}
+
+	sql := gen.GenerateMigration(diff)
+
+	if !strings.Contains(sql, "ALTER TABLE users ADD COLUMN new_field text NOT NULL") {
+		t.Error("Expected ADD COLUMN statement for new_field")
+	}
+	if !strings.Contains(sql, "ALTER TABLE users DROP COLUMN old_field") {
+		t.Error("Expected DROP COLUMN statement for old_field")
+	}
+}
