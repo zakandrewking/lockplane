@@ -2,6 +2,8 @@
 
 Easy postgres schema management.
 
+Status: Alpha software! this is still a playground for learning golang, postgres & ai tools
+
 [![Test](https://github.com/lockplane/lockplane/actions/workflows/test.yml/badge.svg)](https://github.com/lockplane/lockplane/actions/workflows/test.yml)
 [![codecov](https://codecov.io/github/lockplane/lockplane/graph/badge.svg?token=JP0QINP1G1)](https://codecov.io/github/lockplane/lockplane)
 
@@ -53,9 +55,7 @@ npx lockplane apply
 
 ## PostgreSQL Version Support
 
-Lockplane is tested against **PostgreSQL 17**. While we only run automated tests against version 17, most recent versions of PostgreSQL should work without issues.
-
-If you encounter compatibility issues with other PostgreSQL versions, please [open an issue](https://github.com/lockplane/lockplane/issues).
+Lockplane is tested against **PostgreSQL 17**.
 
 ## Postgres Feature Support
 
