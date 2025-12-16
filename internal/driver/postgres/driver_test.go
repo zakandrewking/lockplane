@@ -457,6 +457,114 @@ func TestIsSerialColumn_EdgeCases(t *testing.T) {
 	}
 }
 
+// TestIntrospector_SerialWithSchemaQualifiedSequence tests that SERIAL detection works
+// with schema-qualified sequence names in various formats (quoted and unquoted).
+func TestIntrospector_SerialWithSchemaQualifiedSequence(t *testing.T) {
+	db, _ := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		setupSQL       string
+		expectedType   string
+		expectedSerial bool
+	}{
+		{
+			name: "unquoted_schema_qualified",
+			setupSQL: `
+				CREATE SEQUENCE public.test_seq_unquoted;
+				CREATE TABLE test_unquoted (
+					id INTEGER NOT NULL DEFAULT nextval('public.test_seq_unquoted'::regclass) PRIMARY KEY
+				);
+				ALTER SEQUENCE public.test_seq_unquoted OWNED BY test_unquoted.id;
+			`,
+			expectedType:   "serial",
+			expectedSerial: true,
+		},
+		{
+			name: "quoted_schema_qualified",
+			setupSQL: `
+				CREATE SEQUENCE public.test_seq_quoted;
+				CREATE TABLE test_quoted (
+					id INTEGER NOT NULL DEFAULT nextval('"public"."test_seq_quoted"'::regclass) PRIMARY KEY
+				);
+				ALTER SEQUENCE public.test_seq_quoted OWNED BY test_quoted.id;
+			`,
+			expectedType:   "serial",
+			expectedSerial: true,
+		},
+		{
+			name: "quoted_identifier_no_schema",
+			setupSQL: `
+				CREATE TABLE test_quoted_no_schema (
+					id SERIAL PRIMARY KEY
+				);
+			`,
+			expectedType:   "serial",
+			expectedSerial: true,
+		},
+		{
+			name: "mixed_quoting",
+			setupSQL: `
+				CREATE SEQUENCE public.test_seq_mixed;
+				CREATE TABLE test_mixed (
+					id INTEGER NOT NULL DEFAULT nextval('public."test_seq_mixed"'::regclass) PRIMARY KEY
+				);
+				ALTER SEQUENCE public.test_seq_mixed OWNED BY test_mixed.id;
+			`,
+			expectedType:   "serial",
+			expectedSerial: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Extract table name from setup SQL
+			var tableName string
+			if strings.Contains(tt.setupSQL, "test_unquoted") {
+				tableName = "test_unquoted"
+			} else if strings.Contains(tt.setupSQL, "test_quoted (") {
+				tableName = "test_quoted"
+			} else if strings.Contains(tt.setupSQL, "test_quoted_no_schema") {
+				tableName = "test_quoted_no_schema"
+			} else if strings.Contains(tt.setupSQL, "test_mixed") {
+				tableName = "test_mixed"
+			}
+
+			// Setup
+			_, err := db.ExecContext(ctx, tt.setupSQL)
+			if err != nil {
+				t.Fatalf("Failed to setup: %v", err)
+			}
+			defer func() {
+				_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName+" CASCADE")
+			}()
+
+			// Introspect
+			columns, err := GetColumns(ctx, db, defaultSchema, tableName)
+			if err != nil {
+				t.Fatalf("GetColumns failed: %v", err)
+			}
+
+			if len(columns) != 1 {
+				t.Fatalf("Expected 1 column, got %d", len(columns))
+			}
+
+			col := columns[0]
+			if col.Type != tt.expectedType {
+				t.Errorf("Expected type %q, got %q", tt.expectedType, col.Type)
+			}
+
+			if tt.expectedSerial {
+				if col.Default != nil {
+					t.Errorf("Expected SERIAL to have no explicit default, got %v", col.Default)
+				}
+			}
+		})
+	}
+}
+
 func TestIntrospector_FloatingPointTypes(t *testing.T) {
 	db, _ := getTestDb(t)
 	defer func() { _ = db.Close() }()
