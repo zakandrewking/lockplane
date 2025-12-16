@@ -51,6 +51,12 @@ npx lockplane check-schema
 npx lockplane apply
 ```
 
+## PostgreSQL Version Support
+
+Lockplane is tested against **PostgreSQL 17**. While we only run automated tests against version 17, most recent versions of PostgreSQL should work without issues.
+
+If you encounter compatibility issues with other PostgreSQL versions, please [open an issue](https://github.com/lockplane/lockplane/issues).
+
 ## Postgres Feature Support
 
 ### DDL Operations
