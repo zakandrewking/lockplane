@@ -241,12 +241,12 @@ func TestIntrospector_SerialTypes(t *testing.T) {
 		sqlType      string
 		expectedType string
 	}{
-		{"SMALLSERIAL", "SMALLSERIAL", "smallint"},
-		{"SERIAL", "SERIAL", "integer"},
-		{"BIGSERIAL", "BIGSERIAL", "bigint"},
-		{"SERIAL2", "SERIAL2", "smallint"},
-		{"SERIAL4", "SERIAL4", "integer"},
-		{"SERIAL8", "SERIAL8", "bigint"},
+		{"SMALLSERIAL", "SMALLSERIAL", "smallserial"},
+		{"SERIAL", "SERIAL", "serial"},
+		{"BIGSERIAL", "BIGSERIAL", "bigserial"},
+		{"SERIAL2", "SERIAL2", "smallserial"},
+		{"SERIAL4", "SERIAL4", "serial"},
+		{"SERIAL8", "SERIAL8", "bigserial"},
 	}
 
 	for _, tt := range tests {
@@ -277,8 +277,289 @@ func TestIntrospector_SerialTypes(t *testing.T) {
 			if col.Nullable {
 				t.Error("Expected SERIAL column to be NOT NULL")
 			}
-			if col.Default == nil {
-				t.Error("Expected SERIAL column to have default value")
+			// SERIAL type implies nextval(), so default should be nil
+			if col.Default != nil {
+				t.Errorf("Expected SERIAL column to have no explicit default (type implies sequence), got %v", col.Default)
+			}
+		})
+	}
+}
+
+// TestIntrospector_ManualSequence tests that columns with manual sequences (not owned by the column)
+// are NOT detected as SERIAL types. This validates the stricter SERIAL detection.
+func TestIntrospector_ManualSequence(t *testing.T) {
+	db, _ := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tableName := "test_manual_seq"
+
+	// Create a manual sequence (not owned by any column)
+	_, err := db.ExecContext(ctx, "CREATE SEQUENCE manual_seq")
+	if err != nil {
+		t.Fatalf("Failed to create sequence: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, "DROP SEQUENCE IF EXISTS manual_seq") }()
+
+	// Create table with a column using the manual sequence
+	// This should NOT be detected as SERIAL because the sequence is not owned by the column
+	_, err = db.ExecContext(ctx, "CREATE TABLE "+tableName+" (id INTEGER NOT NULL DEFAULT nextval('manual_seq'::regclass))")
+	if err != nil {
+		t.Fatalf("Failed to create table: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName) }()
+
+	// Introspect
+	columns, err := GetColumns(ctx, db, defaultSchema, tableName)
+	if err != nil {
+		t.Fatalf("GetColumns failed: %v", err)
+	}
+
+	if len(columns) != 1 {
+		t.Fatalf("Expected 1 column, got %d", len(columns))
+	}
+
+	col := columns[0]
+
+	// Should remain as 'integer', NOT 'serial'
+	if col.Type != "integer" {
+		t.Errorf("Expected type 'integer' for manual sequence, got %q", col.Type)
+	}
+
+	// Should have the default value preserved (not nil)
+	if col.Default == nil {
+		t.Error("Expected default value to be preserved for manual sequence")
+	} else if !strings.Contains(*col.Default, "nextval") {
+		t.Errorf("Expected default to contain 'nextval', got %q", *col.Default)
+	}
+}
+
+// TestIntrospector_DroppedSequence tests the scenario where a SERIAL column's sequence
+// is dropped, converting it back to a regular integer column with no default.
+// Per PostgreSQL docs: "Dropping a serial-column's sequence also drops the column default"
+func TestIntrospector_DroppedSequence(t *testing.T) {
+	db, _ := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tableName := "test_dropped_seq"
+
+	// Create a table with SERIAL column
+	_, err := db.ExecContext(ctx, "CREATE TABLE "+tableName+" (id SERIAL PRIMARY KEY)")
+	if err != nil {
+		t.Fatalf("Failed to create table: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName) }()
+
+	// Introspect initially - should see serial
+	columns, err := GetColumns(ctx, db, defaultSchema, tableName)
+	if err != nil {
+		t.Fatalf("GetColumns failed: %v", err)
+	}
+	if len(columns) != 1 {
+		t.Fatalf("Expected 1 column, got %d", len(columns))
+	}
+	if columns[0].Type != "serial" {
+		t.Errorf("Expected initial type 'serial', got %q", columns[0].Type)
+	}
+
+	// Drop the sequence (this also removes the column default per PostgreSQL behavior)
+	_, err = db.ExecContext(ctx, "DROP SEQUENCE "+tableName+"_id_seq CASCADE")
+	if err != nil {
+		t.Fatalf("Failed to drop sequence: %v", err)
+	}
+
+	// Introspect again - should now see integer with no default
+	columns, err = GetColumns(ctx, db, defaultSchema, tableName)
+	if err != nil {
+		t.Fatalf("GetColumns failed after dropping sequence: %v", err)
+	}
+
+	if len(columns) != 1 {
+		t.Fatalf("Expected 1 column, got %d", len(columns))
+	}
+
+	col := columns[0]
+	if col.Type != "integer" {
+		t.Errorf("Expected type 'integer' after dropping sequence, got %q", col.Type)
+	}
+	if col.Default != nil {
+		t.Errorf("Expected no default after dropping sequence, got %v", col.Default)
+	}
+	if !col.IsPrimaryKey {
+		t.Error("Expected column to still be PRIMARY KEY")
+	}
+}
+
+// TestIsSerialColumn_EdgeCases tests edge cases for the isSerialColumn function
+func TestIsSerialColumn_EdgeCases(t *testing.T) {
+	db, _ := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		columnType     string
+		nullable       bool
+		defaultVal     sql.NullString
+		expectedSerial bool
+		description    string
+	}{
+		{
+			name:           "nullable_integer_with_nextval",
+			columnType:     "integer",
+			nullable:       true,
+			defaultVal:     sql.NullString{String: "nextval('seq'::regclass)", Valid: true},
+			expectedSerial: false,
+			description:    "Nullable columns cannot be SERIAL",
+		},
+		{
+			name:           "integer_without_default",
+			columnType:     "integer",
+			nullable:       false,
+			defaultVal:     sql.NullString{Valid: false},
+			expectedSerial: false,
+			description:    "Columns without default cannot be SERIAL",
+		},
+		{
+			name:           "text_with_nextval",
+			columnType:     "text",
+			nullable:       false,
+			defaultVal:     sql.NullString{String: "nextval('seq'::regclass)", Valid: true},
+			expectedSerial: false,
+			description:    "Non-integer types cannot be SERIAL",
+		},
+		{
+			name:           "integer_with_non_nextval_default",
+			columnType:     "integer",
+			nullable:       false,
+			defaultVal:     sql.NullString{String: "42", Valid: true},
+			expectedSerial: false,
+			description:    "Defaults without nextval() are not SERIAL",
+		},
+		{
+			name:           "integer_with_malformed_nextval",
+			columnType:     "integer",
+			nullable:       false,
+			defaultVal:     sql.NullString{String: "nextval('seq')", Valid: true},
+			expectedSerial: false,
+			description:    "Malformed nextval (missing ::regclass) should not match",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isSerialColumn(ctx, db, defaultSchema, "dummy_table", "dummy_col", tt.columnType, tt.nullable, tt.defaultVal)
+			if result != tt.expectedSerial {
+				t.Errorf("%s: expected %v, got %v", tt.description, tt.expectedSerial, result)
+			}
+		})
+	}
+}
+
+// TestIntrospector_SerialWithSchemaQualifiedSequence tests that SERIAL detection works
+// with schema-qualified sequence names in various formats (quoted and unquoted).
+func TestIntrospector_SerialWithSchemaQualifiedSequence(t *testing.T) {
+	db, _ := getTestDb(t)
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		setupSQL       string
+		expectedType   string
+		expectedSerial bool
+	}{
+		{
+			name: "unquoted_schema_qualified",
+			setupSQL: `
+				CREATE SEQUENCE public.test_seq_unquoted;
+				CREATE TABLE test_unquoted (
+					id INTEGER NOT NULL DEFAULT nextval('public.test_seq_unquoted'::regclass) PRIMARY KEY
+				);
+				ALTER SEQUENCE public.test_seq_unquoted OWNED BY test_unquoted.id;
+			`,
+			expectedType:   "serial",
+			expectedSerial: true,
+		},
+		{
+			name: "quoted_schema_qualified",
+			setupSQL: `
+				CREATE SEQUENCE public.test_seq_quoted;
+				CREATE TABLE test_quoted (
+					id INTEGER NOT NULL DEFAULT nextval('"public"."test_seq_quoted"'::regclass) PRIMARY KEY
+				);
+				ALTER SEQUENCE public.test_seq_quoted OWNED BY test_quoted.id;
+			`,
+			expectedType:   "serial",
+			expectedSerial: true,
+		},
+		{
+			name: "quoted_identifier_no_schema",
+			setupSQL: `
+				CREATE TABLE test_quoted_no_schema (
+					id SERIAL PRIMARY KEY
+				);
+			`,
+			expectedType:   "serial",
+			expectedSerial: true,
+		},
+		{
+			name: "mixed_quoting",
+			setupSQL: `
+				CREATE SEQUENCE public.test_seq_mixed;
+				CREATE TABLE test_mixed (
+					id INTEGER NOT NULL DEFAULT nextval('public."test_seq_mixed"'::regclass) PRIMARY KEY
+				);
+				ALTER SEQUENCE public.test_seq_mixed OWNED BY test_mixed.id;
+			`,
+			expectedType:   "serial",
+			expectedSerial: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Extract table name from setup SQL
+			var tableName string
+			if strings.Contains(tt.setupSQL, "test_unquoted") {
+				tableName = "test_unquoted"
+			} else if strings.Contains(tt.setupSQL, "test_quoted (") {
+				tableName = "test_quoted"
+			} else if strings.Contains(tt.setupSQL, "test_quoted_no_schema") {
+				tableName = "test_quoted_no_schema"
+			} else if strings.Contains(tt.setupSQL, "test_mixed") {
+				tableName = "test_mixed"
+			}
+
+			// Setup
+			_, err := db.ExecContext(ctx, tt.setupSQL)
+			if err != nil {
+				t.Fatalf("Failed to setup: %v", err)
+			}
+			defer func() {
+				_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+tableName+" CASCADE")
+			}()
+
+			// Introspect
+			columns, err := GetColumns(ctx, db, defaultSchema, tableName)
+			if err != nil {
+				t.Fatalf("GetColumns failed: %v", err)
+			}
+
+			if len(columns) != 1 {
+				t.Fatalf("Expected 1 column, got %d", len(columns))
+			}
+
+			col := columns[0]
+			if col.Type != tt.expectedType {
+				t.Errorf("Expected type %q, got %q", tt.expectedType, col.Type)
+			}
+
+			if tt.expectedSerial {
+				if col.Default != nil {
+					t.Errorf("Expected SERIAL to have no explicit default, got %v", col.Default)
+				}
 			}
 		})
 	}
@@ -735,8 +1016,8 @@ func TestIntrospector_ComplexRealWorldTable(t *testing.T) {
 	if id == nil {
 		t.Fatal("Expected to find 'id' column")
 	}
-	if id.Type != "integer" {
-		t.Errorf("Expected id type 'integer', got %q", id.Type)
+	if id.Type != "serial" {
+		t.Errorf("Expected id type 'serial', got %q", id.Type)
 	}
 	if !id.IsPrimaryKey {
 		t.Error("Expected id to be PRIMARY KEY")
