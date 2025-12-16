@@ -91,7 +91,8 @@ jobs:
           mkdir -p /tmp/gocoverdir
 
           # Run tests with GOCOVERDIR to capture subprocess coverage
-          go test -v -race -coverpkg=./... -coverprofile=coverage-postgres.txt -covermode=atomic ./cmd/... ./internal/driver/postgres/...
+          # Use -p 1 to run packages sequentially to avoid race conditions on shared database
+          go test -p 1 -v -race -coverpkg=./... -coverprofile=coverage-postgres.txt -covermode=atomic ./cmd/... ./internal/driver/postgres/...
 
       - name: Upload postgres coverage artifact
         uses: actions/upload-artifact@v4
