@@ -1,5 +1,5 @@
-import * as cp from "child_process";
-import * as vscode from "vscode";
+import * as cp from 'child_process';
+import * as vscode from 'vscode';
 
 export interface CheckResult {
   file: string;
@@ -60,7 +60,7 @@ export async function checkSchema(schemaPath: string): Promise<CheckResult[]> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const cwd = workspaceFolders ? workspaceFolders[0].uri.fsPath : undefined;
 
-    const cmd = `${lockplanePath} check-schema --output json "${schemaPath}"`;
+    const cmd = `${lockplanePath} check --output json "${schemaPath}"`;
 
     console.log(`[Lockplane] Running command: ${cmd}`);
     console.log(`[Lockplane] Working directory: ${cwd}`);

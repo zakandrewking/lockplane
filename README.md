@@ -39,10 +39,15 @@ end in `.lp.sql`.
 
 ## 4. Check the schema for issues
 
+Check a `.lp.sql` file or a directory of schema files for issues:
+
 ```bash
-# TODO
-npx lockplane check-schema
+npx lockplane check
 ```
+
+Issues that are currently checked for:
+- ALTER TABLE statements ... TODO explanation
+- ALTER COLUMN statements ... TODO explanation
 
 ## 4. Apply changes
 

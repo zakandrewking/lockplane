@@ -14,7 +14,7 @@ func init() {
 }
 
 var checkSchemaCmd = &cobra.Command{
-	Use:   "check-schema [schema dir or .lp.sql file]",
+	Use:   "check [schema dir or .lp.sql file]",
 	Short: "Check .lp.sql schema files for errors",
 	Long: `Check .lp.sql schema files for errors and print a JSON summary
 
@@ -22,9 +22,9 @@ When provided a directory, lockplane will check all .lp.sql files in the root
 of that directory.
 
 Examples:
-lockplane check-schema schema/
-lockplane check-schema my-schema.lp.sql
-lockplane check-schema my-schema.lp.sql > report.json
+lockplane check schema/
+lockplane check my-schema.lp.sql
+lockplane check my-schema.lp.sql > report.json
 `,
 	Run: runCheckSchema,
 }
@@ -33,8 +33,8 @@ func runCheckSchema(cmd *cobra.Command, args []string) {
 	if len(args) != 1 {
 		fmt.Printf(`Missing a schema file.
 
-Usage: lockplane check-schema [schema dir or .lp.sql file]
-Help: lockplane check-schema --help
+Usage: lockplane check [schema dir or .lp.sql file]
+Help: lockplane check --help
 `)
 		os.Exit(1)
 	}
