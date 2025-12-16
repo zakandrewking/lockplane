@@ -31,11 +31,16 @@ This repository is **NOT a fork**. We work directly on branches in `origin` (loc
 - [ ] Push branch: `git push -u origin branch-name`
 
 ### 4. Create Pull Request
-- [ ] **ALWAYS** create PR: `gh pr create --web`
-- [ ] Fill in PR description with:
-  - What changed
+- [ ] **ALWAYS** create PR with flags (NOT --web):
+  ```bash
+  gh pr create --title "Clear title" --body "Detailed description"
+  ```
+- [ ] **NEVER** use `--web` flag (makes user enter details manually)
+- [ ] Include in PR body:
+  - Summary of what changed
   - Why it changed
   - Test coverage
+  - Examples if applicable
 - [ ] **NEVER** push directly to main (even for small fixes)
 
 ### 5. Monitor CI and Fix Issues
