@@ -188,7 +188,7 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 		// Detect SERIAL types by checking if the column has an owned sequence
 		// SERIAL creates an integer column with default nextval('table_column_seq'::regclass)
 		// and the sequence is owned by the column
-		if defaultVal.Valid && !col.Nullable && isSerialColumn(ctx, db, schemaName, tableName, col.Name, col.Type, defaultVal.String) {
+		if isSerialColumn(ctx, db, schemaName, tableName, col.Name, col.Type, col.Nullable, defaultVal) {
 			switch col.Type {
 			case "smallint":
 				col.Type = "smallserial"
@@ -211,7 +211,12 @@ func GetColumns(ctx context.Context, db *sql.DB, schemaName string, tableName st
 // isSerialColumn checks if a column with a nextval default is actually a SERIAL column
 // by verifying that the sequence is owned by the column.
 // This is stricter than just checking for "nextval" in the default value.
-func isSerialColumn(ctx context.Context, db *sql.DB, schemaName, tableName, columnName, columnType, defaultVal string) bool {
+func isSerialColumn(ctx context.Context, db *sql.DB, schemaName, tableName, columnName, columnType string, nullable bool, defaultVal sql.NullString) bool {
+	// SERIAL columns must be NOT NULL and have a default value
+	if nullable || !defaultVal.Valid {
+		return false
+	}
+
 	// Only check integer types
 	if columnType != "smallint" && columnType != "integer" && columnType != "bigint" {
 		return false
@@ -220,7 +225,7 @@ func isSerialColumn(ctx context.Context, db *sql.DB, schemaName, tableName, colu
 	// Extract sequence name from default value using regex
 	// Expected pattern: nextval('sequence_name'::regclass) or nextval('"schema"."sequence_name"'::regclass)
 	re := regexp.MustCompile(`nextval\('([^']+)'::regclass\)`)
-	matches := re.FindStringSubmatch(defaultVal)
+	matches := re.FindStringSubmatch(defaultVal.String)
 	if len(matches) < 2 {
 		return false
 	}
