@@ -60,7 +60,7 @@ export async function checkSchema(schemaPath: string): Promise<CheckResult[]> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const cwd = workspaceFolders ? workspaceFolders[0].uri.fsPath : undefined;
 
-    const cmd = `${lockplanePath} check --output json "${schemaPath}"`;
+    const cmd = `${lockplanePath} check "${schemaPath}"`;
 
     console.log(`[Lockplane] Running command: ${cmd}`);
     console.log(`[Lockplane] Working directory: ${cwd}`);
